@@ -43,6 +43,7 @@ function ProductList({ products, heading }: Props) {
             <th scope="col">SKU</th>
             <th scope="col">Brand</th>
             <th scope="col">Item Name</th>
+            <th scope="col">Shade/Variant</th>
             <th scope="col">Location</th>
           </tr>
         </thead>
@@ -59,10 +60,10 @@ function ProductList({ products, heading }: Props) {
               <td>{product.sku}</td>
               <td>{product.brand}</td>
               <td>{product.itemName}</td>
+              <td>{product.shade}</td>
               <td>{product.location}</td>
             </tr>
           ))}
-          ;
         </tbody>
       </table>
     </>
