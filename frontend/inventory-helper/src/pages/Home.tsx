@@ -39,7 +39,7 @@ function Home() {
       axios
         .get(`http://localhost:3001/products/search/${searchQuery}`)
         .then((response) => {
-          console.log(response.data);
+          // console.log(response.data);
           setListOfProducts(response.data);
         });
     } else {
