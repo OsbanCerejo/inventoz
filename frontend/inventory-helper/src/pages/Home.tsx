@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
 import ProductList from "../components/ProductList";
+import { TextField, Button, Box } from "@mui/material";
 
 // export interface Products {
 //   sku: string;
@@ -22,6 +23,7 @@ import ProductList from "../components/ProductList";
 
 function Home() {
   const [listOfProducts, setListOfProducts] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
   let heading = "Products";
 
   useEffect(() => {
@@ -29,22 +31,42 @@ function Home() {
       setListOfProducts(response.data);
     });
   }, []);
+
+  const handleSearch = () => {
+    // Move this to Search.tsx eventually
+    console.log("Clicked Search ", searchQuery);
+    if (searchQuery.length != 0) {
+      axios
+        .get(`http://localhost:3001/products/search/${searchQuery}`)
+        .then((response) => {
+          console.log(response.data);
+          setListOfProducts(response.data);
+        });
+    } else {
+      // Fix this to reduce API GET calls and make it so empty string just resets the table state
+      axios.get("http://localhost:3001/products").then((response) => {
+        setListOfProducts(response.data);
+      });
+    }
+  };
+
   return (
     <div>
-      <br></br>
-      <form className="form-inline">
-        <input
-          className="form-control mr-sm-2"
-          type="text"
-          placeholder="Search"
-          aria-label="Search"
-          name="search"
+      <Box alignItems="center" my={4} p={2}>
+        <TextField
+          fullWidth
+          label="Search Item Name"
+          id="fullWidth"
+          value={searchQuery}
+          onChange={(event) => {
+            setSearchQuery(event.target.value);
+          }}
         />
-        <button className="btn btn-outline-success my-2 my-sm-0" type="submit">
+        <Button variant="contained" color="success" onClick={handleSearch}>
           Search
-        </button>
-      </form>
-      <ProductList products={listOfProducts} heading={heading}></ProductList>z
+        </Button>
+      </Box>
+      <ProductList products={listOfProducts} heading={heading}></ProductList>
     </div>
   );
 }
