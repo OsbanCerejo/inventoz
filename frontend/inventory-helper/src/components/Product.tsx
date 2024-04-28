@@ -1,6 +1,7 @@
 import {
   Box,
   Button,
+  Grid,
   Paper,
   Table,
   TableBody,
@@ -13,6 +14,8 @@ import { Container } from "@mui/system";
 import axios from "axios";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
 
 function Product() {
   let { id } = useParams();
@@ -27,6 +30,13 @@ function Product() {
   const handleEditOnClick = () => {
     console.log("Sending Product Object", productObject);
     navigate("/editProduct", { state: { productObject } });
+  };
+
+  const handleDeleteClick = () => {
+    console.log("Deleting...");
+    axios.delete(`http://localhost:3001/products/delete/${productObject.sku}`);
+    console.log("Deleted");
+    navigate("/");
   };
   return (
     // <div>
@@ -139,44 +149,66 @@ function Product() {
           <TableBody></TableBody>
         </Table>
       </TableContainer>
-      <Box
+      <Box display="flex" alignItems="center">
+        <Grid container spacing={0} justifyContent="center">
+          <Grid item xs={4}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                p: 1,
+                m: 1,
+              }}
+            >
+              <Button
+                variant="contained"
+                color="success"
+                startIcon={<EditIcon />}
+                onClick={handleEditOnClick}
+              >
+                Edit
+              </Button>
+            </Box>
+          </Grid>
+          <Grid item xs={4}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                p: 1,
+                m: 1,
+              }}
+            >
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={handleDeleteClick}
+              >
+                Delete
+              </Button>
+            </Box>
+          </Grid>
+        </Grid>
+      </Box>
+      {/* <Box
         display="flex"
         justifyContent="center"
         alignItems="center"
         minHeight="10vh"
       >
-        <Button variant="contained" color="success" onClick={handleEditOnClick}>
+        <Button
+          variant="contained"
+          color="success"
+          startIcon={<EditIcon />}
+          onClick={handleEditOnClick}
+        >
           Edit
         </Button>
-      </Box>
-
-      {/* <Card sx={{ maxWidth: 345 }}>
-        <CardActionArea>
-          <CardMedia
-            component="img"
-            height="140"
-            image=""
-            alt="Product Image"
-          />
-          <CardContent>
-            <Typography gutterBottom variant="h5" component="div">
-              {productObject.sku}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {productObject.brand}
-              <br></br>
-              {productObject.itemName}
-              <br></br>
-              {productObject.category} {productObject.condition}
-            </Typography>
-          </CardContent>
-        </CardActionArea>
-        <CardActions>
-          <Button size="small" color="primary">
-            Edit
-          </Button>
-        </CardActions>
-      </Card> */}
+        <Button variant="contained" color="error" startIcon={<DeleteIcon />}>
+          Delete
+        </Button>
+      </Box> */}
     </Container>
   );
 }
