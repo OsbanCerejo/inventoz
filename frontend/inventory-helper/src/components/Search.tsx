@@ -1,4 +1,3 @@
-import React from "react";
 import { useParams } from "react-router-dom";
 
 function Search() {
@@ -12,3 +11,5 @@ function Search() {
 }
 
 export default Search;
+
+//Eventually move the search functionality from Home.tsx to here

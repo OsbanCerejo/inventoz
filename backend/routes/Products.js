@@ -49,4 +49,13 @@ router.put("/", async (req, res) => {
     res.json(product);
 });
 
+router.delete("/delete/:id", async(req, res) => {
+    const id = req.params.id;
+    const status = await Products.destroy({
+        where: {
+            sku: id
+        }
+    })
+})
+
 module.exports = router;
