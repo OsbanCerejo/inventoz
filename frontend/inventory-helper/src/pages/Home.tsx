@@ -33,7 +33,7 @@ function Home() {
   }, []);
 
   const handleSearch = () => {
-    // Move this to Search.tsx eventually
+    // TODO: Move this to Search.tsx eventually
     console.log("Clicked Search ", searchQuery);
     if (searchQuery.length != 0) {
       axios
@@ -43,7 +43,7 @@ function Home() {
           setListOfProducts(response.data);
         });
     } else {
-      // Fix this to reduce API GET calls and make it so empty string just resets the table state
+      // TODO: Fix this to reduce API GET calls and make it so empty string just resets the table state
       axios.get("http://localhost:3001/products").then((response) => {
         setListOfProducts(response.data);
       });
