@@ -50,6 +50,10 @@ function Product() {
       setCanDelete(false);
     }
   };
+
+  const handleInboundClick = () => {
+    navigate("/inbound", { state: { productObject } });
+  };
   return (
     <Container>
       {!canDelete && (
@@ -191,7 +195,7 @@ function Product() {
                 variant="contained"
                 color="secondary"
                 startIcon={<WarehouseIcon />}
-                // onClick={handleDeleteClick}
+                onClick={handleInboundClick}
               >
                 Inbound
               </Button>
@@ -218,24 +222,6 @@ function Product() {
           </Grid>
         </Grid>
       </Box>
-      {/* <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="10vh"
-      >
-        <Button
-          variant="contained"
-          color="success"
-          startIcon={<EditIcon />}
-          onClick={handleEditOnClick}
-        >
-          Edit
-        </Button>
-        <Button variant="contained" color="error" startIcon={<DeleteIcon />}>
-          Delete
-        </Button>
-      </Box> */}
     </Container>
   );
 }

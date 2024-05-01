@@ -25,8 +25,17 @@ router.get("/search/:itemName", async (req, res) => {
 
 router.post("/", async (req, res) => {
     const product = req.body;
-    await Products.create(product);
-    res.json(product);
+    // await Products.create(product);
+    const [found, created] = await Products.findOrCreate({
+        where: { sku: product.sku},
+        defaults: product
+    });
+    if(created) {
+        console.log("Created New")
+    } else {
+        console.log("Already Exists")
+    }
+    res.json(created ? "Created New" : "Already Exists");
 });
 
 router.put("/", async (req, res) => {

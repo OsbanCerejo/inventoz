@@ -4,64 +4,24 @@ module.exports = (sequelize, DataTypes) => {
         sku: {
             type: DataTypes.STRING,
             allowNull: false,
-            primaryKey: true
         },
-        brand: {
+        vendor: {
             type: DataTypes.STRING,
-            allowNull: false
-        },
-        itemName: {
-            type: DataTypes.STRING,
-            allowNull: false
+            allowNull: true
         },
         quantity: {
-            type: DataTypes.INTEGER,
-            allowNull: true
-        },
-        location: {
-            type: DataTypes.STRING,
-            allowNull: true
-        },
-        sizeOz: {
-            type: DataTypes.INTEGER,
-            allowNull: false
-        },
-        sizeMl: {
-            type: DataTypes.INTEGER,
-            allowNull: false
-        },
-        strength: {
-            type: DataTypes.STRING,
-            allowNull: true
-        },
-        shade: {
-            type: DataTypes.STRING,
-            allowNull: true
-        },
-        formulation: {
-            type: DataTypes.STRING,
-            allowNull: true
-        },
-        category: {
             type: DataTypes.STRING,
             allowNull: false
         },
-        type: {
+        date: {
+            type: DataTypes.DATE,
+            allowNull: false,
+        },
+        compositeSku: {
             type: DataTypes.STRING,
-            allowNull: true
-        },
-        upc: {
-            type: DataTypes.INTEGER,
-            allowNull: true
-        },
-        batch: {
-            type: DataTypes.STRING,
-            allowNull: true
-        },
-        condition: {
-            type: DataTypes.STRING,
-            allowNull: true
-        },
+            allowNull: false,
+            primaryKey: true
+        }
     }, {
         timestamps: false
     });
