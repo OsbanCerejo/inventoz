@@ -27,6 +27,7 @@ function Home() {
   let heading = "Products";
 
   useEffect(() => {
+    // console.log("Called Useeffect");
     axios.get("http://localhost:3001/products").then((response) => {
       setListOfProducts(response.data);
     });
@@ -49,6 +50,12 @@ function Home() {
       });
     }
   };
+  const handleKeypress = (e: any) => {
+    //it triggers by pressing the enter key
+    if (e.keyCode === 13) {
+      handleSearch();
+    }
+  };
 
   return (
     <div>
@@ -61,6 +68,7 @@ function Home() {
           onChange={(event) => {
             setSearchQuery(event.target.value);
           }}
+          onKeyDown={handleKeypress}
         />
         <Button variant="contained" color="success" onClick={handleSearch}>
           Search
