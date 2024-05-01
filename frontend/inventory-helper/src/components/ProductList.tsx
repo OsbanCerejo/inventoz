@@ -1,3 +1,4 @@
+import { green } from "@mui/material/colors";
 import { useNavigate } from "react-router-dom";
 // export interface Product {
 //   sku: string;
@@ -30,8 +31,10 @@ function ProductList({ products, heading }: Props) {
   const handleSelect = (product: any) => {
     console.log("Inside handleSelect in product list component");
     console.log(product);
+    console.log(product.verified);
     navigate(`/products/${product.sku}`);
   };
+
   return (
     <>
       <h1>{heading}</h1>
@@ -45,6 +48,7 @@ function ProductList({ products, heading }: Props) {
             <th scope="col">Item Name</th>
             <th scope="col">Shade/Variant</th>
             <th scope="col">Location</th>
+            <th scope="col">Verified</th>
           </tr>
         </thead>
         <tbody>
@@ -62,6 +66,13 @@ function ProductList({ products, heading }: Props) {
               <td>{product.itemName}</td>
               <td>{product.shade}</td>
               <td>{product.location}</td>
+              <td
+                style={{
+                  backgroundColor: product.verified ? "#B2FF59" : "#FF5252",
+                }}
+              >
+                {product.verified ? "Yes" : "No"}
+              </td>
             </tr>
           ))}
         </tbody>

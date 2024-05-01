@@ -40,7 +40,8 @@ router.post("/", async (req, res) => {
 
 router.put("/", async (req, res) => {
     const product = req.body;
-    await Products.update({brand: product.brand, 
+    await Products.update({
+        brand: product.brand, 
         itemName : product.itemName, 
         quantity: product.quantity,
         location: product.location,
@@ -53,7 +54,9 @@ router.put("/", async (req, res) => {
         type: product.type,
         upc: product.upc,
         batch: product.batch,
-        condition: product.condition,}, 
+        condition: product.condition,
+        verified: product.verified
+    }, 
         {where: {sku: product.sku}});
     res.json(product);
 });
