@@ -3,6 +3,7 @@ import { useFormik } from "formik";
 import * as Yup from "yup";
 import Button from "@mui/material/Button";
 import {
+  Alert,
   Box,
   Container,
   FormControlLabel,
@@ -12,10 +13,32 @@ import {
   TextField,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 function AddProduct() {
   const navigate = useNavigate();
-  // const [selectedCondition, setSelectedCondition] = useState("Unboxed");
+  const [productExists, setProductExists] = useState(false);
+  const [generatedSku, setGeneratedSku] = useState("");
+  const [skuArray, setSkuArray] = useState([
+    "*",
+    "*",
+    "-",
+    "*",
+    "*",
+    "-",
+    "*",
+    "*",
+    "-",
+    "0000",
+  ]);
+
+  const brandMap = new Map<string, string>();
+  brandMap.set("tom ford", "TF");
+  brandMap.set("clinique", "CQ");
+  brandMap.set("becca", "BE");
+  brandMap.set("aerin", "AE");
+  brandMap.set("estee lauder", "EL");
+  brandMap.set("azzaro", "AZ");
 
   const formikInitialValues = {
     sku: "",
@@ -64,28 +87,75 @@ function AddProduct() {
     initialValues: formikInitialValues,
     validationSchema: formikValidationSchema,
     onSubmit: (data) => {
-      // alert(JSON.stringify(values, null, 2));
       console.log(data);
-      axios.post("http://localhost:3001/products", data).then(() => {
-        console.log("Product Inserted");
+      axios.post("http://localhost:3001/products", data).then((response) => {
+        console.log(response);
+        if (response.data === "Already Exists") {
+          console.log("Exists");
+          setProductExists(true);
+        } else if (response.data === "Created New") {
+          console.log("New Product");
+          setProductExists(false);
+          navigate("/");
+        }
       });
-      navigate("/");
     },
   });
 
-  // const handleConditionChange = (condition: any) => {
-  //   setSelectedCondition(condition.target.value);
-  //   console.log(condition.target.value);
-  // };
+  const generateSku = (fieldValue: string, factor: string) => {
+    // console.log(skuBuilder);
+    if (factor === "1") {
+      if (brandMap.has(fieldValue)) {
+        const brandForSku = brandMap.get(fieldValue);
+        skuArray[0] = brandForSku ? brandForSku.charAt(0) : "N";
+        skuArray[1] = brandForSku ? brandForSku.charAt(1) : "A";
+      } else {
+        skuArray[0] = "*";
+        skuArray[1] = "*";
+      }
+    } else if (factor === "2") {
+      if (fieldValue === "perfume") {
+        skuArray[3] = "P";
+        skuArray[4] = "F";
+      } else if (fieldValue === "cosmetic") {
+        skuArray[3] = "C";
+        skuArray[4] = "O";
+      } else if (fieldValue === "other") {
+        skuArray[3] = "O";
+        skuArray[4] = "T";
+      } else {
+        skuArray[3] = "*";
+        skuArray[4] = "*";
+      }
+    } else if (factor === "3") {
+      if (fieldValue === "") {
+        skuArray[6] = "N";
+        skuArray[7] = "A";
+      } else {
+        const locationForSku = fieldValue.charAt(0).toUpperCase();
+        skuArray[6] = "0";
+        skuArray[7] = locationForSku;
+      }
+    } else {
+    }
+    setGeneratedSku(skuArray.join(""));
+    // console.log(skuArray);
+  };
 
   return (
     <div>
+      {productExists && (
+        <Alert variant="filled" severity="error">
+          Product Already Exists. Try Searching Item Name on Home Page.
+        </Alert>
+      )}
       <form onSubmit={formik.handleSubmit}>
         <Container component="main" maxWidth="sm" sx={{ mb: 4 }}>
           <Paper
             variant="outlined"
-            sx={{ my: { xs: 3, md: 6 }, p: { xs: 2, md: 3 } }}
+            sx={{ my: { xs: 3, md: 3 }, p: { xs: 1, md: 4 } }}
           >
+            <label>Generated SKU : </label> {generatedSku}
             <Box m={2} pt={3}>
               <TextField
                 fullWidth
@@ -106,7 +176,10 @@ function AddProduct() {
                 name="brand"
                 label="Brand"
                 value={formik.values.brand}
-                onChange={formik.handleChange}
+                onChange={(event) => {
+                  formik.setFieldValue("brand", event.currentTarget.value);
+                  generateSku(event.currentTarget.value.toLowerCase(), "1");
+                }}
                 onBlur={formik.handleBlur}
                 error={formik.touched.brand && Boolean(formik.errors.brand)}
                 helperText={formik.touched.brand && formik.errors.brand}
@@ -177,7 +250,10 @@ function AddProduct() {
                 name="location"
                 label="Location"
                 value={formik.values.location}
-                onChange={formik.handleChange}
+                onChange={(event) => {
+                  formik.setFieldValue("location", event.currentTarget.value);
+                  generateSku(event.currentTarget.value.toLowerCase(), "3");
+                }}
                 onBlur={formik.handleBlur}
                 error={
                   formik.touched.location && Boolean(formik.errors.location)
@@ -192,7 +268,10 @@ function AddProduct() {
                 name="category"
                 label="Category"
                 value={formik.values.category}
-                onChange={formik.handleChange}
+                onChange={(event) => {
+                  formik.setFieldValue("category", event.currentTarget.value);
+                  generateSku(event.currentTarget.value.toLowerCase(), "2");
+                }}
                 onBlur={formik.handleBlur}
                 error={
                   formik.touched.category && Boolean(formik.errors.category)

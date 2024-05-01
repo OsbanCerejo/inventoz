@@ -57,7 +57,7 @@ function ProductList({ products, heading }: Props) {
               }}
             >
               <th scope="row">{index + 1}</th>
-              <td>{product.sku}</td>
+              <td style={{ width: "12%" }}>{product.sku}</td>
               <td>{product.brand}</td>
               <td>{product.itemName}</td>
               <td>{product.shade}</td>
