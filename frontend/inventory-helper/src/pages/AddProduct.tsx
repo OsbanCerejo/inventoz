@@ -10,10 +10,12 @@ import {
   Paper,
   Radio,
   RadioGroup,
+  Switch,
   TextField,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { Verified } from "@mui/icons-material";
 
 function AddProduct() {
   const navigate = useNavigate();
@@ -56,6 +58,7 @@ function AddProduct() {
     upc: "",
     batch: "",
     condition: "Unboxed",
+    verified: false,
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -74,6 +77,7 @@ function AddProduct() {
     upc: Yup.string(),
     batch: Yup.string(),
     condition: Yup.string().required(),
+    verified: Yup.boolean(),
   });
 
   // const onSubmit = (data: any) => {
@@ -155,6 +159,15 @@ function AddProduct() {
             variant="outlined"
             sx={{ my: { xs: 3, md: 3 }, p: { xs: 1, md: 4 } }}
           >
+            Verified
+            <Switch
+              // checked={checked}
+              id="verified"
+              name="verified"
+              checked={formik.values.verified}
+              onChange={formik.handleChange}
+              inputProps={{ "aria-label": "controlled" }}
+            />
             <label>Generated SKU : </label> {generatedSku}
             <Box m={2} pt={3}>
               <TextField

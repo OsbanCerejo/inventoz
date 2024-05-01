@@ -7,6 +7,7 @@ import {
   FormControlLabel,
   Radio,
   Button,
+  Switch,
 } from "@mui/material";
 import axios from "axios";
 import * as Yup from "yup";
@@ -34,6 +35,7 @@ function EditProduct() {
     upc: "" + productObject.upc,
     batch: "" + productObject.batch,
     condition: "" + productObject.condition,
+    verified: productObject.verified,
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -52,6 +54,7 @@ function EditProduct() {
     upc: Yup.string(),
     batch: Yup.string(),
     condition: Yup.string().required(),
+    verified: Yup.boolean(),
   });
 
   const formik = useFormik({
@@ -74,6 +77,15 @@ function EditProduct() {
             variant="outlined"
             sx={{ my: { xs: 3, md: 6 }, p: { xs: 2, md: 3 } }}
           >
+            Verified
+            <Switch
+              // checked={checked}
+              id="verified"
+              name="verified"
+              checked={formik.values.verified}
+              onChange={formik.handleChange}
+              inputProps={{ "aria-label": "controlled" }}
+            />
             <Box m={2} pt={3}>
               <TextField
                 fullWidth

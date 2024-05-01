@@ -32,8 +32,13 @@ function Product() {
   }, []);
 
   const handleEditOnClick = () => {
-    console.log("Sending Product Object", productObject);
-    navigate("/editProduct", { state: { productObject } });
+    if (productObject.verified) {
+      if (confirm("This is a verified entry. Do you want to edit?")) {
+        navigate("/editProduct", { state: { productObject } });
+      }
+    } else {
+      navigate("/editProduct", { state: { productObject } });
+    }
   };
 
   const handleDeleteClick = () => {
