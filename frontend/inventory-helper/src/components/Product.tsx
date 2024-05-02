@@ -19,6 +19,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import WarehouseIcon from "@mui/icons-material/Warehouse";
+import SellIcon from "@mui/icons-material/Sell";
+import { green } from "@mui/material/colors";
 
 function Product() {
   let { id } = useParams();
@@ -58,6 +60,10 @@ function Product() {
 
   const handleInboundClick = () => {
     navigate("/inbound", { state: { productObject } });
+  };
+
+  const handleSalesClick = () => {
+    navigate("/sales", { state: { productObject } });
   };
   return (
     <Container>
@@ -168,7 +174,7 @@ function Product() {
       </TableContainer>
       <Box display="flex" alignItems="center">
         <Grid container spacing={0} justifyContent="center">
-          <Grid item xs={4}>
+          <Grid item xs={3}>
             <Box
               sx={{
                 display: "flex",
@@ -187,7 +193,25 @@ function Product() {
               </Button>
             </Box>
           </Grid>
-          <Grid item xs={4}>
+          <Grid item xs={3}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                p: 1,
+                m: 1,
+              }}
+            >
+              <Button
+                variant="contained"
+                startIcon={<SellIcon />}
+                onClick={handleSalesClick}
+              >
+                Sales
+              </Button>
+            </Box>
+          </Grid>
+          <Grid item xs={3}>
             <Box
               sx={{
                 display: "flex",
@@ -206,7 +230,7 @@ function Product() {
               </Button>
             </Box>
           </Grid>
-          <Grid item xs={4}>
+          <Grid item xs={3}>
             <Box
               sx={{
                 display: "flex",
