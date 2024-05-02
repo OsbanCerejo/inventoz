@@ -7,6 +7,7 @@ import NavBar from "./components/NavBar";
 import EditProduct from "./pages/EditProduct";
 import { Search } from "@mui/icons-material";
 import Inbound from "./pages/Inbound";
+import Sales from "./pages/Sales";
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
           <Route path="/editProduct" Component={EditProduct}></Route>
           <Route path="/search/:query" Component={Search}></Route>
           <Route path="/inbound" Component={Inbound}></Route>
+          <Route path="/sales" Component={Sales}></Route>
         </Routes>
       </Router>
     </Container>

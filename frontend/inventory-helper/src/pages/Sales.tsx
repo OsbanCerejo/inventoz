@@ -1,36 +1,34 @@
 import {
-  Box,
-  Button,
   Container,
   Paper,
-  TextField,
+  Box,
   Typography,
+  TextField,
+  Button,
 } from "@mui/material";
+import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
 import axios from "axios";
+import dayjs from "dayjs";
 import { useFormik } from "formik";
+import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import * as Yup from "yup";
 
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
-import dayjs from "dayjs";
-import { useState } from "react";
-
-function Inbound() {
+function Sales() {
   const location = useLocation();
   const navigate = useNavigate();
-
   const productObject = location.state.productObject;
   const today = new Date();
   const [newDate, setNewDate] = useState(dayjs(today.toLocaleString()));
+
   const formikInitialValues = {
     sku: "" + productObject.sku,
     vendor: "",
     quantity: "",
     date: newDate,
-    compositeSku: "", //
+    compositeSalesSku: "",
   };
 
   //   console.log(newDate);
@@ -46,7 +44,7 @@ function Inbound() {
     validationSchema: formikValidationSchema,
     onSubmit: (data) => {
       //   console.log(productObject);
-      const compositeInboundKey =
+      const compositeSalesKey =
         data.sku +
         "-" +
         data.date.month() +
@@ -54,22 +52,21 @@ function Inbound() {
         data.date.date() +
         "-" +
         data.date.year();
-      data.compositeSku = compositeInboundKey; //Change compositeSKU in data to compositeInboundSku
-      axios
-        .put("http://localhost:3001/inbound", {
-          quantity: parseInt(productObject.quantity) + parseInt(data.quantity),
-          sku: productObject.sku,
-        })
-        .then(() => {
-          console.log("Quantity Updated in Inventory Table");
-        });
-      axios.post("http://localhost:3001/inbound", data).then((response) => {
-        console.log(response);
-      });
-      navigate("/");
+      data.compositeSalesSku = compositeSalesKey;
+      //   axios
+      //     .put("http://localhost:3001/inbound", {
+      //       quantity: parseInt(productObject.quantity) + parseInt(data.quantity),
+      //       sku: productObject.sku,
+      //     })
+      //     .then(() => {
+      //       console.log("Quantity Updated in Inventory Table");
+      //     });
+      //   axios.post("http://localhost:3001/inbound", data).then((response) => {
+      //     console.log(response);
+      //   });
+      //   navigate("/");
     },
   });
-
   return (
     <Container>
       <form onSubmit={formik.handleSubmit}>
@@ -135,4 +132,4 @@ function Inbound() {
   );
 }
 
-export default Inbound;
+export default Sales;
