@@ -13,7 +13,7 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.DATE,
             allowNull: false,
         },
-        compositeSalesSku: {
+        compositeSku: {
             type: DataTypes.STRING,
             allowNull: false,
             primaryKey: true
