@@ -113,7 +113,7 @@ function Inbound() {
               <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <DemoContainer components={["DatePicker"]}>
                   <DatePicker
-                    label="Controlled picker"
+                    label="Inbound Date"
                     value={newDate}
                     onChange={(event) => {
                       if (event) {

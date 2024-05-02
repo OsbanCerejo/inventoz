@@ -5,10 +5,6 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.STRING,
             allowNull: false,
         },
-        vendor: {
-            type: DataTypes.STRING,
-            allowNull: true
-        },
         quantity: {
             type: DataTypes.STRING,
             allowNull: false
@@ -17,7 +13,7 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.DATE,
             allowNull: false,
         },
-        compositeSku: {
+        compositeSalesSku: {
             type: DataTypes.STRING,
             allowNull: false,
             primaryKey: true
