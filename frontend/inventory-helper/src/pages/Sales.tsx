@@ -53,18 +53,18 @@ function Sales() {
         "-" +
         data.date.year();
       data.compositeSalesSku = compositeSalesKey;
-      //   axios
-      //     .put("http://localhost:3001/inbound", {
-      //       quantity: parseInt(productObject.quantity) + parseInt(data.quantity),
-      //       sku: productObject.sku,
-      //     })
-      //     .then(() => {
-      //       console.log("Quantity Updated in Inventory Table");
-      //     });
-      //   axios.post("http://localhost:3001/inbound", data).then((response) => {
-      //     console.log(response);
-      //   });
-      //   navigate("/");
+      axios
+        .put("http://localhost:3001/sales", {
+          quantity: parseInt(productObject.quantity) - parseInt(data.quantity),
+          sku: productObject.sku,
+        })
+        .then(() => {
+          console.log("Quantity Updated in Inventory Table");
+        });
+      axios.post("http://localhost:3001/sales", data).then((response) => {
+        console.log(response);
+      });
+      navigate("/");
     },
   });
   return (
@@ -78,25 +78,13 @@ function Sales() {
             <Box m={2} pt={3}>
               <Typography variant="h4"> SKU: {productObject.sku}</Typography>
             </Box>
-            <Box m={2} pt={3}>
-              <TextField
-                fullWidth
-                id="vendor"
-                name="vendor"
-                label="Vendor"
-                value={formik.values.vendor}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.vendor && Boolean(formik.errors.vendor)}
-                helperText={formik.touched.vendor && formik.errors.vendor}
-              />
-            </Box>
+
             <Box m={2} pt={3}>
               <TextField
                 fullWidth
                 id="quantity"
                 name="quantity"
-                label="Quantity"
+                label="Quantity Sold"
                 value={formik.values.quantity}
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
@@ -110,7 +98,7 @@ function Sales() {
               <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <DemoContainer components={["DatePicker"]}>
                   <DatePicker
-                    label="Controlled picker"
+                    label="Date of Sale"
                     value={newDate}
                     onChange={(event) => {
                       if (event) {

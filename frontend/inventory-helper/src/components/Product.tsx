@@ -20,7 +20,6 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import WarehouseIcon from "@mui/icons-material/Warehouse";
 import SellIcon from "@mui/icons-material/Sell";
-import { green } from "@mui/material/colors";
 
 function Product() {
   let { id } = useParams();

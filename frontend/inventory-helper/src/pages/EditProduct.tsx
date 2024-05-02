@@ -53,7 +53,7 @@ function EditProduct() {
     type: Yup.string(),
     upc: Yup.string(),
     batch: Yup.string(),
-    condition: Yup.string().required(),
+    condition: Yup.string(),
     verified: Yup.boolean(),
   });
 
