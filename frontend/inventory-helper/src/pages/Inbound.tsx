@@ -30,10 +30,9 @@ function Inbound() {
     vendor: "",
     quantity: "",
     date: newDate,
-    compositeSku: "", //
+    compositeSku: "",
   };
 
-  //   console.log(newDate);
   const formikValidationSchema = Yup.object().shape({
     sku: Yup.string(),
     vendor: Yup.string(),

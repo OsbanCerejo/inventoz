@@ -15,12 +15,14 @@ import {
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { Verified } from "@mui/icons-material";
+import dayjs from "dayjs";
 
 function AddProduct() {
   const navigate = useNavigate();
   const [productExists, setProductExists] = useState(false);
   const [generatedSku, setGeneratedSku] = useState("");
+  const today = new Date();
+  const [newDate, setNewDate] = useState(dayjs(today.toLocaleString()));
   const [skuArray, setSkuArray] = useState([
     "*",
     "*",
@@ -59,6 +61,7 @@ function AddProduct() {
     batch: "",
     condition: "Unboxed",
     verified: false,
+    inbound: false,
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -78,6 +81,7 @@ function AddProduct() {
     batch: Yup.string(),
     condition: Yup.string().required(),
     verified: Yup.boolean(),
+    inbound: Yup.boolean(),
   });
 
   // const onSubmit = (data: any) => {
@@ -100,9 +104,34 @@ function AddProduct() {
         } else if (response.data === "Created New") {
           console.log("New Product");
           setProductExists(false);
-          navigate("/");
+          // navigate("/");
         }
       });
+      if (formik.values.inbound) {
+        console.log("Inside if Is inbound");
+        const compositeInboundKey =
+          data.sku +
+          "-" +
+          newDate.month() +
+          "-" +
+          newDate.date() +
+          "-" +
+          newDate.year();
+
+        const inboundObject = {
+          sku: data.sku,
+          vendor: "temp vendor", // Implement vendor input field on toggle of inbound in add product
+          quantity: data.quantity,
+          date: newDate,
+          compositeSku: compositeInboundKey,
+          //TODO : ADd composite SKU field here
+        };
+        axios
+          .post("http://localhost:3001/inbound", inboundObject)
+          .then((response) => {
+            console.log(response);
+          });
+      }
     },
   });
 
@@ -165,6 +194,16 @@ function AddProduct() {
               id="verified"
               name="verified"
               checked={formik.values.verified}
+              onChange={formik.handleChange}
+              inputProps={{ "aria-label": "controlled" }}
+            />
+            <br></br>
+            Inbound
+            <Switch
+              // checked={checked}
+              id="inbound"
+              name="inbound"
+              checked={formik.values.inbound}
               onChange={formik.handleChange}
               inputProps={{ "aria-label": "controlled" }}
             />

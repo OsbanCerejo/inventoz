@@ -79,7 +79,6 @@ function EditProduct() {
           >
             Verified
             <Switch
-              // checked={checked}
               id="verified"
               name="verified"
               checked={formik.values.verified}

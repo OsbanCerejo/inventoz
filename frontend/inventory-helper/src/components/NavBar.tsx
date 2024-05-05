@@ -29,6 +29,11 @@ function NavBar() {
                 Add Product
               </a>
             </li>
+            <li className="nav-item">
+              <a className="nav-link" href="/listings">
+                Listings
+              </a>
+            </li>
           </ul>
         </div>
       </nav>
