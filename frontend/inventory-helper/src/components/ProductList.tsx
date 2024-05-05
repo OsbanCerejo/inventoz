@@ -1,4 +1,3 @@
-import { green } from "@mui/material/colors";
 import { useNavigate } from "react-router-dom";
 // export interface Product {
 //   sku: string;
