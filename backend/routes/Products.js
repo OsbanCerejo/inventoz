@@ -18,10 +18,14 @@ router.get("/byId/:id", async (req, res) => {
 router.get("/search/:itemName", async (req, res) => {
     const searchQuery = req.params.itemName;
     const searchResults = await Products.findAll({
-        where: { itemName: {[Op.like]: '%' + searchQuery + '%'}}
+        where: { 
+            itemName: {
+                [Op.like]: '%' + searchQuery + '%'
+            }
+        }
     })
     res.json(searchResults);
-})
+});
 
 router.post("/", async (req, res) => {
     const product = req.body;
@@ -68,6 +72,23 @@ router.delete("/delete/:id", async(req, res) => {
             sku: id
         }
     })
-})
+});
+
+router.get("/findAndCount/:skuPrefix", async (req, res) => {
+    console.log("Here inside find and count all in backend");
+    const skuPrefix = req.params.skuPrefix;
+    const { count, rows } = await Products.findAndCountAll({
+        where: {
+            sku: {
+                [Op.like]: skuPrefix + '-' + '%'
+            }
+        },
+        // offset: 10,
+        // limit: 2,
+      });
+      console.log(count);
+      res.json(count + 1);
+    //   console.log(rows);
+});
 
 module.exports = router;
