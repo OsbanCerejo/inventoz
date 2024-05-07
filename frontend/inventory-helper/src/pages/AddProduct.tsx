@@ -16,14 +16,17 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import dayjs from "dayjs";
+import skuData from "../../../data/skuData.json";
 
 function AddProduct() {
   const navigate = useNavigate();
   const [productExists, setProductExists] = useState(false);
   const [generatedSku, setGeneratedSku] = useState("");
+  const [skuPrefixCount, setskuPrefixCount] = useState(0);
   const today = new Date();
   const [newDate, setNewDate] = useState(dayjs(today.toLocaleString()));
   const [skuArray, setSkuArray] = useState([
+    "*",
     "*",
     "*",
     "-",
@@ -36,13 +39,13 @@ function AddProduct() {
     "0000",
   ]);
 
-  const brandMap = new Map<string, string>();
-  brandMap.set("tom ford", "TF");
-  brandMap.set("clinique", "CQ");
-  brandMap.set("becca", "BE");
-  brandMap.set("aerin", "AE");
-  brandMap.set("estee lauder", "EL");
-  brandMap.set("azzaro", "AZ");
+  // const brandMap = new Map<string, string>();
+  // brandMap.set("tom ford", "TF");
+  // brandMap.set("clinique", "CQ");
+  // brandMap.set("becca", "BE");
+  // brandMap.set("aerin", "AE");
+  // brandMap.set("estee lauder", "EL");
+  // brandMap.set("azzaro", "AZ");
 
   const formikInitialValues = {
     sku: "",
@@ -135,44 +138,67 @@ function AddProduct() {
     },
   });
 
+  // var jsonBrandObject = skuData.BRANDS;
+  var dataBrandMap = new Map(Object.entries(skuData.BRANDS));
+  var dataCategoryMap = new Map(Object.entries(skuData.CATEGORY));
+  var brandMap = new Map();
+  for (const brand of dataBrandMap) {
+    brandMap.set(brand[0].toLowerCase(), brand[1]);
+  }
+  var categoryMap = new Map();
+  for (const category of dataCategoryMap) {
+    categoryMap.set(category[0].toLowerCase(), category[1]);
+  }
+
   const generateSku = (fieldValue: string, factor: string) => {
     // console.log(skuBuilder);
     if (factor === "1") {
       if (brandMap.has(fieldValue)) {
         const brandForSku = brandMap.get(fieldValue);
-        skuArray[0] = brandForSku ? brandForSku.charAt(0) : "N";
-        skuArray[1] = brandForSku ? brandForSku.charAt(1) : "A";
+        console.log("brandForSku", brandForSku);
+
+        axios
+          .get(`http://localhost:3001/products/findAndCount/${brandForSku}`)
+          .then((response) => {
+            setskuPrefixCount(response.data);
+            skuArray[10] =
+              "0".repeat(4 - response.data.toString().length) +
+              response.data.toString();
+            setGeneratedSku(skuArray.join(""));
+          });
+
+        skuArray[0] = brandForSku ? brandForSku.charAt(0) : "@";
+        skuArray[1] = brandForSku ? brandForSku.charAt(1) : "@";
+        skuArray[2] = brandForSku ? brandForSku.charAt(2) : "@";
       } else {
         skuArray[0] = "*";
         skuArray[1] = "*";
+        skuArray[2] = "*";
       }
     } else if (factor === "2") {
-      if (fieldValue === "perfume") {
-        skuArray[3] = "P";
-        skuArray[4] = "F";
-      } else if (fieldValue === "cosmetic") {
-        skuArray[3] = "C";
-        skuArray[4] = "O";
-      } else if (fieldValue === "other") {
-        skuArray[3] = "O";
-        skuArray[4] = "T";
+      if (categoryMap.has(fieldValue)) {
+        const categoryForSku = categoryMap.get(fieldValue);
+        console.log("categoryForSku", categoryForSku);
+        // skuArray[3] = categoryForSku ? categoryForSku.charAt(0) : "N";
+        skuArray[4] = categoryForSku.charAt(0);
+        skuArray[5] = categoryForSku.charAt(1);
       } else {
-        skuArray[3] = "*";
-        skuArray[4] = "*";
+        skuArray[4] = "N";
+        skuArray[5] = "A";
       }
     } else if (factor === "3") {
       if (fieldValue === "") {
-        skuArray[6] = "N";
-        skuArray[7] = "A";
+        skuArray[7] = "N";
+        skuArray[8] = "A";
       } else {
         const locationForSku = fieldValue.charAt(0).toUpperCase();
-        skuArray[6] = "0";
-        skuArray[7] = locationForSku;
+        skuArray[7] = "0";
+        skuArray[8] = locationForSku;
       }
     } else {
     }
+
     setGeneratedSku(skuArray.join(""));
-    // console.log(skuArray);
   };
 
   return (
@@ -207,6 +233,7 @@ function AddProduct() {
               onChange={formik.handleChange}
               inputProps={{ "aria-label": "controlled" }}
             />
+            <br></br>
             <label>Generated SKU : </label> {generatedSku}
             <Box m={2} pt={3}>
               <TextField
