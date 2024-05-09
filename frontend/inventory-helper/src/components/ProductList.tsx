@@ -42,9 +42,10 @@ function ProductList({ products, heading }: Props) {
         <thead>
           <tr>
             <th scope="col">#</th>
-            {/* <th scope="col">SKU</th> */}
+            <th scope="col">SKU</th>
             <th scope="col">Brand</th>
             <th scope="col">Item Name</th>
+            <th scope="col">Size</th>
             <th scope="col">Shade/Variant</th>
             <th scope="col">Location</th>
             <th scope="col">Verified</th>
@@ -61,9 +62,10 @@ function ProductList({ products, heading }: Props) {
               }}
             >
               <th scope="row">{index + 1}</th>
-              {/* <td style={{ width: "12%" }}>{product.sku}</td> */}
+              <td style={{ width: "12%" }}>{product.sku}</td>
               <td>{product.brand}</td>
               <td>{product.itemName}</td>
+              <td>{product.sizeOz}</td>
               <td>{product.shade}</td>
               <td>{product.location}</td>
               <td
