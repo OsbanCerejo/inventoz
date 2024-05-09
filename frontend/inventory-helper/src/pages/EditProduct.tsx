@@ -36,6 +36,7 @@ function EditProduct() {
     batch: "" + productObject.batch,
     condition: "" + productObject.condition,
     verified: productObject.verified,
+    listed: productObject.listed,
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -55,6 +56,7 @@ function EditProduct() {
     batch: Yup.string(),
     condition: Yup.string(),
     verified: Yup.boolean(),
+    listed: Yup.boolean(),
   });
 
   const formik = useFormik({
@@ -85,6 +87,16 @@ function EditProduct() {
               onChange={formik.handleChange}
               inputProps={{ "aria-label": "controlled" }}
             />
+            Listed
+            <Switch
+              // checked={checked}
+              id="listed"
+              name="listed"
+              checked={formik.values.listed}
+              onChange={formik.handleChange}
+              inputProps={{ "aria-label": "controlled" }}
+            />
+            <br></br>
             <Box m={2} pt={3}>
               <TextField
                 fullWidth

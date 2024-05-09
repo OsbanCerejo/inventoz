@@ -59,7 +59,8 @@ router.put("/", async (req, res) => {
         upc: product.upc,
         batch: product.batch,
         condition: product.condition,
-        verified: product.verified
+        verified: product.verified,
+        listed: product.listed
     }, 
         {where: {sku: product.sku}});
     res.json(product);

@@ -42,12 +42,13 @@ function ProductList({ products, heading }: Props) {
         <thead>
           <tr>
             <th scope="col">#</th>
-            <th scope="col">SKU</th>
+            {/* <th scope="col">SKU</th> */}
             <th scope="col">Brand</th>
             <th scope="col">Item Name</th>
             <th scope="col">Shade/Variant</th>
             <th scope="col">Location</th>
             <th scope="col">Verified</th>
+            <th scope="col">Listed</th>
           </tr>
         </thead>
         <tbody>
@@ -60,7 +61,7 @@ function ProductList({ products, heading }: Props) {
               }}
             >
               <th scope="row">{index + 1}</th>
-              <td style={{ width: "12%" }}>{product.sku}</td>
+              {/* <td style={{ width: "12%" }}>{product.sku}</td> */}
               <td>{product.brand}</td>
               <td>{product.itemName}</td>
               <td>{product.shade}</td>
@@ -68,9 +69,18 @@ function ProductList({ products, heading }: Props) {
               <td
                 style={{
                   backgroundColor: product.verified ? "#B2FF59" : "#FF5252",
+                  width: "5%",
                 }}
               >
                 {product.verified ? "Yes" : "No"}
+              </td>
+              <td
+                style={{
+                  backgroundColor: product.listed ? "#B2FF59" : "#FF5252",
+                  width: "5%",
+                }}
+              >
+                {product.listed ? "Yes" : "No"}
               </td>
             </tr>
           ))}

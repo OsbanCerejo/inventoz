@@ -39,14 +39,6 @@ function AddProduct() {
     "0000",
   ]);
 
-  // const brandMap = new Map<string, string>();
-  // brandMap.set("tom ford", "TF");
-  // brandMap.set("clinique", "CQ");
-  // brandMap.set("becca", "BE");
-  // brandMap.set("aerin", "AE");
-  // brandMap.set("estee lauder", "EL");
-  // brandMap.set("azzaro", "AZ");
-
   const formikInitialValues = {
     sku: "",
     brand: "",
@@ -65,6 +57,7 @@ function AddProduct() {
     condition: "Unboxed",
     verified: false,
     inbound: false,
+    listed: false,
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -85,6 +78,7 @@ function AddProduct() {
     condition: Yup.string().required(),
     verified: Yup.boolean(),
     inbound: Yup.boolean(),
+    listed: Yup.boolean(),
   });
 
   // const onSubmit = (data: any) => {
@@ -107,7 +101,7 @@ function AddProduct() {
         } else if (response.data === "Created New") {
           console.log("New Product");
           setProductExists(false);
-          // navigate("/");
+          navigate("/");
         }
       });
       if (formik.values.inbound) {
@@ -201,6 +195,11 @@ function AddProduct() {
     setGeneratedSku(skuArray.join(""));
   };
 
+  const handleSkuApprove = () => {
+    console.log(generatedSku);
+    formik.setFieldValue("sku", generatedSku);
+  };
+
   return (
     <div>
       {productExists && (
@@ -223,6 +222,15 @@ function AddProduct() {
               onChange={formik.handleChange}
               inputProps={{ "aria-label": "controlled" }}
             />
+            Listed
+            <Switch
+              // checked={checked}
+              id="listed"
+              name="listed"
+              checked={formik.values.listed}
+              onChange={formik.handleChange}
+              inputProps={{ "aria-label": "controlled" }}
+            />
             <br></br>
             Inbound
             <Switch
@@ -234,7 +242,10 @@ function AddProduct() {
               inputProps={{ "aria-label": "controlled" }}
             />
             <br></br>
-            <label>Generated SKU : </label> {generatedSku}
+            <label>Generated SKU : </label> {generatedSku}{" "}
+            <Button style={{ float: "right" }} onClick={handleSkuApprove}>
+              Approve
+            </Button>
             <Box m={2} pt={3}>
               <TextField
                 fullWidth
@@ -330,8 +341,11 @@ function AddProduct() {
                 label="Location"
                 value={formik.values.location}
                 onChange={(event) => {
-                  formik.setFieldValue("location", event.currentTarget.value);
-                  generateSku(event.currentTarget.value.toLowerCase(), "3");
+                  formik.setFieldValue(
+                    "location",
+                    event.currentTarget.value.toUpperCase()
+                  );
+                  generateSku(event.currentTarget.value, "3");
                 }}
                 onBlur={formik.handleBlur}
                 error={
