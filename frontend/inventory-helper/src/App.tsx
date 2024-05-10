@@ -6,9 +6,11 @@ import { Container } from "@mui/system";
 import NavBar from "./components/NavBar";
 import EditProduct from "./pages/EditProduct";
 import { Search } from "@mui/icons-material";
-import Inbound from "./pages/Inbound";
 import Sales from "./pages/Sales";
 import Listings from "./pages/Listings";
+import InboundProduct from "./pages/InboundProduct";
+import InboundData from "./pages/InboundData";
+import { ToastContainer, toast } from "react-toastify";
 
 function App() {
   return (
@@ -21,11 +23,13 @@ function App() {
           <Route path="/products/:id" Component={Product}></Route>
           <Route path="/editProduct" Component={EditProduct}></Route>
           <Route path="/search/:query" Component={Search}></Route>
-          <Route path="/inbound" Component={Inbound}></Route>
+          <Route path="/inbound" Component={InboundProduct}></Route>
+          <Route path="/inbound/showAll" Component={InboundData}></Route>
           <Route path="/sales" Component={Sales}></Route>
           <Route path="/listings" Component={Listings}></Route>
         </Routes>
       </Router>
+      <ToastContainer />
     </Container>
   );
 }

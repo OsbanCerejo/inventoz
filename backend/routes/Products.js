@@ -73,6 +73,7 @@ router.delete("/delete/:id", async(req, res) => {
             sku: id
         }
     })
+    res.json(status);
 });
 
 router.get("/findAndCount/:skuPrefix", async (req, res) => {

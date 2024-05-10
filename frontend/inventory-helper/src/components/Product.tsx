@@ -1,10 +1,8 @@
 import {
-  Alert,
   Box,
   Button,
   Grid,
   Paper,
-  Stack,
   Table,
   TableBody,
   TableCell,
@@ -20,12 +18,12 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import WarehouseIcon from "@mui/icons-material/Warehouse";
 import SellIcon from "@mui/icons-material/Sell";
+import { toast } from "react-toastify";
 
 function Product() {
   let { id } = useParams();
   const navigate = useNavigate();
   const [productObject, setProductObject]: any = useState({});
-  const [canDelete, setCanDelete] = useState(true);
   useEffect(() => {
     axios.get(`http://localhost:3001/products/byId/${id}`).then((response) => {
       setProductObject(response.data);
@@ -46,14 +44,16 @@ function Product() {
     const passwordToDelete = prompt("Enter Password to delete");
     if (passwordToDelete === "1998") {
       console.log("Deleting...");
-      axios.delete(
-        `http://localhost:3001/products/delete/${productObject.sku}`
-      );
-      console.log("Deleted");
-      navigate("/");
-      setCanDelete(true);
+      axios
+        .delete(`http://localhost:3001/products/delete/${productObject.sku}`)
+        .then(() => {
+          console.log("Deleted");
+          toast.success("Deleted Succesfully!", {
+            position: "top-right",
+          });
+          navigate("/");
+        });
     } else {
-      setCanDelete(false);
     }
   };
 
@@ -66,11 +66,6 @@ function Product() {
   };
   return (
     <Container>
-      {!canDelete && (
-        <Alert variant="filled" severity="error">
-          Wrong Password.. Cannot Delete
-        </Alert>
-      )}
       <TableContainer component={Paper}>
         <Table sx={{ minWidth: 650 }} aria-label="simple table">
           <TableHead>

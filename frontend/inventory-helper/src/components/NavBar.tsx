@@ -34,6 +34,11 @@ function NavBar() {
                 Listings
               </a>
             </li>
+            <li className="nav-item">
+              <a className="nav-link" href="/inbound/showAll">
+                Inbound
+              </a>
+            </li>
           </ul>
         </div>
       </nav>
