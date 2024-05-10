@@ -2,8 +2,11 @@
     "CATEGORY": {
         "Perfume": "PF",
         "Cosmetic": "CO",
+        "Skin Care": "SC",
+        "Hair Care": "HC",
         "Bath & Body": "BB",
         "Home": "HO",
+        "Electronics": "ET",
         "Other": "OT"
     },
     "condition": {
@@ -17,7 +20,6 @@
         "Aerin": "AEN",
         "Azzaro": "AZO",
         "Aramis": "ARA",
-        "Origins": "AGN",
         "Abercrombie & Fitch": "ABE",
         "Acqua Di Parma": "ACQ",
         "Adam Levine": "ADA",
@@ -33,6 +35,7 @@
         "Banana Republic": "BAN",
         "Bath & Bodyworks": "BAT",
         "Becca": "BEC",
+        "Bella": "BLA",
         "Benefit": "BEN",
         "Betsey Johnson": "BET",
         "Bijan": "BIJ",
@@ -161,6 +164,7 @@
         "Odori": "ODO",
         "Olay": "OLA",
         "One Direction": "ONE",
+        "Origins": "OGN",
         "Paco Rabanne": "PAC",
         "Paloma Picasso": "PAL",
         "Parfum Blaze": "PBZ",

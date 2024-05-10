@@ -13,6 +13,10 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.DATE,
             allowNull: false,
         },
+        batch: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
         compositeSku: {
             type: DataTypes.STRING,
             allowNull: false,

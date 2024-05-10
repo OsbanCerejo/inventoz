@@ -8,11 +8,16 @@ import {
   Radio,
   Button,
   Switch,
+  InputLabel,
+  MenuItem,
+  OutlinedInput,
+  Select,
 } from "@mui/material";
 import axios from "axios";
 import * as Yup from "yup";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
+import skuData from "../../../data/skuData.json";
 
 function EditProduct() {
   const location = useLocation();
@@ -197,19 +202,26 @@ function EditProduct() {
               />
             </Box>
             <Box m={2} pt={3}>
-              <TextField
-                fullWidth
+              <InputLabel id="categoryLabel">Category</InputLabel>
+              <Select
+                labelId="categoryLabel"
                 id="category"
                 name="category"
+                fullWidth
                 label="Category"
                 value={formik.values.category}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={
-                  formik.touched.category && Boolean(formik.errors.category)
-                }
-                helperText={formik.touched.category && formik.errors.category}
-              />
+                onChange={(event) => {
+                  formik.setFieldValue("category", event.target.value);
+                  console.log(event.target);
+                }}
+                input={<OutlinedInput label="Category" />}
+              >
+                {Object.entries(skuData.CATEGORY).map(([value, key]) => (
+                  <MenuItem key={key} value={value}>
+                    {value}
+                  </MenuItem>
+                ))}
+              </Select>
             </Box>
             <Box m={2} pt={3}>
               <TextField
