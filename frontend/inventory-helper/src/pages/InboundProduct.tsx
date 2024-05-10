@@ -10,7 +10,8 @@ import axios from "axios";
 import { useFormik } from "formik";
 import { useLocation, useNavigate } from "react-router-dom";
 import * as Yup from "yup";
-
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
@@ -18,7 +19,7 @@ import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
 import dayjs from "dayjs";
 import { useState } from "react";
 
-function Inbound() {
+function InboundProduct() {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -30,6 +31,7 @@ function Inbound() {
     vendor: "",
     quantity: "",
     date: newDate,
+    batch: "",
     compositeSku: "",
   };
 
@@ -38,6 +40,7 @@ function Inbound() {
     vendor: Yup.string(),
     quantity: Yup.string().required(),
     date: Yup.date().required(),
+    batch: Yup.string(),
   });
 
   const formik = useFormik({
@@ -52,7 +55,9 @@ function Inbound() {
         "-" +
         data.date.date() +
         "-" +
-        data.date.year();
+        data.date.year() +
+        "-" +
+        data.batch;
       data.compositeSku = compositeInboundKey; //Change compositeSKU in data to compositeInboundSku
       axios
         .put("http://localhost:3001/inbound", {
@@ -61,11 +66,22 @@ function Inbound() {
         })
         .then(() => {
           console.log("Quantity Updated in Inventory Table");
+          // showToastMessage();
         });
       axios.post("http://localhost:3001/inbound", data).then((response) => {
         console.log(response);
+        if (response.data === "Created New") {
+          toast.success("Success Notification !", {
+            position: "top-right",
+          });
+          console.log("Created New");
+        } else {
+          toast.error("Inbound Entry Already Exists!", {
+            position: "top-right",
+          });
+          console.log("Already Exists");
+        }
       });
-      navigate("/");
     },
   });
 
@@ -109,6 +125,19 @@ function Inbound() {
               />
             </Box>
             <Box m={2} pt={3}>
+              <TextField
+                fullWidth
+                id="batch"
+                name="batch"
+                label="Batch Code"
+                value={formik.values.batch}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                error={formik.touched.batch && Boolean(formik.errors.batch)}
+                helperText={formik.touched.batch && formik.errors.batch}
+              />
+            </Box>
+            <Box m={2} pt={3}>
               <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <DemoContainer components={["DatePicker"]}>
                   <DatePicker
@@ -134,4 +163,4 @@ function Inbound() {
   );
 }
 
-export default Inbound;
+export default InboundProduct;

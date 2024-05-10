@@ -6,6 +6,7 @@ const Op = Sequelize.Op;
 
 router.post("/", async (req, res) => {
     const inboundItem = req.body;
+    console.log("Inbound object in backend is : ", inboundItem)
     const [found, created] = await Inbound.findOrCreate({
         where: { compositeSku: inboundItem.compositeSku},
         defaults: inboundItem
@@ -26,5 +27,18 @@ router.put("/", async (req, res) => {
         {where: {sku: req.body.sku}});
     res.json("Updated");
 });
+
+router.get("/", async (req, res) => {
+    const listOfInbound = await Inbound.findAll();
+    res.json(listOfInbound);
+});
+
+router.get("/search/:itemName", async (req, res) => {
+    const searchQuery = req.params.itemName;
+    const searchResults = await Inbound.findAll({
+        where: { sku: {[Op.like]: searchQuery + '%'}}
+    })
+    res.json(searchResults);
+})
 
 module.exports = router;

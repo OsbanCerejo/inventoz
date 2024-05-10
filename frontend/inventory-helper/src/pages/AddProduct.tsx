@@ -7,22 +7,24 @@ import {
   Box,
   Container,
   FormControlLabel,
+  InputLabel,
+  MenuItem,
+  OutlinedInput,
   Paper,
   Radio,
   RadioGroup,
+  Select,
   Switch,
   TextField,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import dayjs from "dayjs";
 import skuData from "../../../data/skuData.json";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 function AddProduct() {
-  const navigate = useNavigate();
-  const [productExists, setProductExists] = useState(false);
   const [generatedSku, setGeneratedSku] = useState("");
-  const [skuPrefixCount, setskuPrefixCount] = useState(0);
   const today = new Date();
   const [newDate, setNewDate] = useState(dayjs(today.toLocaleString()));
   const [skuArray, setSkuArray] = useState([
@@ -53,7 +55,7 @@ function AddProduct() {
     category: "",
     type: "",
     upc: "",
-    batch: "",
+    batch: "NA",
     condition: "Unboxed",
     verified: false,
     inbound: false,
@@ -81,13 +83,6 @@ function AddProduct() {
     listed: Yup.boolean(),
   });
 
-  // const onSubmit = (data: any) => {
-  //   console.log(data);
-  //   axios.post("http://localhost:3001/products", data).then(() => {
-  //     console.log("Product Inserted");
-  //   });
-  // };
-
   const formik = useFormik({
     initialValues: formikInitialValues,
     validationSchema: formikValidationSchema,
@@ -97,11 +92,14 @@ function AddProduct() {
         console.log(response);
         if (response.data === "Already Exists") {
           console.log("Exists");
-          setProductExists(true);
+          toast.error("Product Already Exists!", {
+            position: "top-right",
+          });
         } else if (response.data === "Created New") {
           console.log("New Product");
-          setProductExists(false);
-          navigate("/");
+          toast.success("Product Added!", {
+            position: "top-right",
+          });
         }
       });
       if (formik.values.inbound) {
@@ -113,16 +111,20 @@ function AddProduct() {
           "-" +
           newDate.date() +
           "-" +
-          newDate.year();
+          newDate.year() +
+          "-" +
+          data.batch;
 
         const inboundObject = {
           sku: data.sku,
           vendor: "temp vendor", // Implement vendor input field on toggle of inbound in add product
           quantity: data.quantity,
           date: newDate,
+          batch: data.batch,
           compositeSku: compositeInboundKey,
           //TODO : ADd composite SKU field here
         };
+        console.log("Inbound object is : ", inboundObject);
         axios
           .post("http://localhost:3001/inbound", inboundObject)
           .then((response) => {
@@ -154,7 +156,6 @@ function AddProduct() {
         axios
           .get(`http://localhost:3001/products/findAndCount/${brandForSku}`)
           .then((response) => {
-            setskuPrefixCount(response.data);
             skuArray[10] =
               "0".repeat(4 - response.data.toString().length) +
               response.data.toString();
@@ -202,11 +203,6 @@ function AddProduct() {
 
   return (
     <div>
-      {productExists && (
-        <Alert variant="filled" severity="error">
-          Product Already Exists. Try Searching Item Name on Home Page.
-        </Alert>
-      )}
       <form onSubmit={formik.handleSubmit}>
         <Container component="main" maxWidth="sm" sx={{ mb: 4 }}>
           <Paper
@@ -357,6 +353,19 @@ function AddProduct() {
             <Box m={2} pt={3}>
               <TextField
                 fullWidth
+                id="size"
+                name="size"
+                label="Size in Oz."
+                value={formik.values.sizeOz}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                error={formik.touched.sizeOz && Boolean(formik.errors.sizeOz)}
+                helperText={formik.touched.sizeOz && formik.errors.sizeOz}
+              />
+            </Box>
+            <Box m={2} pt={3}>
+              {/* <TextField
+                fullWidth
                 id="category"
                 name="category"
                 label="Category"
@@ -370,7 +379,27 @@ function AddProduct() {
                   formik.touched.category && Boolean(formik.errors.category)
                 }
                 helperText={formik.touched.category && formik.errors.category}
-              />
+              /> */}
+              <InputLabel id="categoryLabel">Category</InputLabel>
+              <Select
+                labelId="categoryLabel"
+                id="category"
+                name="category"
+                fullWidth
+                label="Category"
+                value={formik.values.category}
+                onChange={(event) => {
+                  formik.setFieldValue("category", event.target.value);
+                  console.log(event.target);
+                }}
+                input={<OutlinedInput label="Category" />}
+              >
+                {Object.entries(skuData.CATEGORY).map(([value, key]) => (
+                  <MenuItem key={key} value={value}>
+                    {value}
+                  </MenuItem>
+                ))}
+              </Select>
             </Box>
             <Box m={2} pt={3}>
               <TextField
