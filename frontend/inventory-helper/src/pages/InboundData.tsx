@@ -1,12 +1,10 @@
 import { Box, TextField, Button } from "@mui/material";
 import axios from "axios";
-import React, { useEffect, useState } from "react";
-import ProductList from "../components/ProductList";
+import { useEffect, useState } from "react";
 
 function InboundData() {
   const [listOfInbound, setListOfInbound] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
-  let heading = "Inbound";
 
   useEffect(() => {
     axios.get("http://localhost:3001/inbound").then((response) => {

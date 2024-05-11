@@ -22,7 +22,7 @@ function App() {
           <Route path="/addProduct" Component={AddProduct}></Route>
           <Route path="/products/:id" Component={Product}></Route>
           <Route path="/editProduct" Component={EditProduct}></Route>
-          <Route path="/search/:query" Component={Search}></Route>
+          <Route path="/search" Component={Search}></Route>
           <Route path="/inbound" Component={InboundProduct}></Route>
           <Route path="/inbound/showAll" Component={InboundData}></Route>
           <Route path="/sales" Component={Sales}></Route>

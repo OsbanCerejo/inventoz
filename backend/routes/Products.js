@@ -15,12 +15,13 @@ router.get("/byId/:id", async (req, res) => {
     res.json(product);
 });
 
-router.get("/search/:itemName", async (req, res) => {
-    const searchQuery = req.params.itemName;
+router.get("/search", async (req, res) => {
+    const {searchString , searchType} = req.query;
+    console.log(searchType)
     const searchResults = await Products.findAll({
         where: { 
-            itemName: {
-                [Op.like]: '%' + searchQuery + '%'
+            [searchType]: {
+                [Op.like]: '%' + searchString + '%'
             }
         }
     })

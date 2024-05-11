@@ -23,7 +23,10 @@ import { TextField, Button, Box, MenuItem, Select } from "@mui/material";
 
 function Home() {
   const [listOfProducts, setListOfProducts] = useState([]);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchObject, setSearchObject] = useState({
+    searchString: "",
+    searchType: "itemName",
+  });
   const [selectedColumn, setSelectedColumn] = useState("");
   let heading = "Products";
 
@@ -36,16 +39,25 @@ function Home() {
 
   const handleSearch = () => {
     // TODO: Move this to Search.tsx eventually
-    console.log("Clicked Search ", searchQuery);
+    console.log("Clicked Search ", searchObject);
     console.log("Selected Column ", selectedColumn);
-    if (searchQuery.length != 0) {
+    if (searchObject.searchString.length != 0) {
       if (selectedColumn === "SKU") {
         console.log("Something selected");
+        setSearchObject({
+          searchString: searchObject.searchString,
+          searchType: "sku",
+        });
       }
       axios
-        .get(`http://localhost:3001/products/search/${searchQuery}`)
+        .get("http://localhost:3001/products/search", {
+          params: {
+            searchString: searchObject.searchString,
+            searchType: searchObject.searchType,
+          },
+        })
         .then((response) => {
-          // console.log(response.data);
+          console.log("Response after search: ", response.data);
           setListOfProducts(response.data);
         });
     } else {
@@ -70,9 +82,12 @@ function Home() {
           style={{ width: "85%" }}
           label="Search Item Name"
           id="search"
-          value={searchQuery}
+          value={searchObject.searchString}
           onChange={(event) => {
-            setSearchQuery(event.target.value);
+            setSearchObject({
+              searchString: event.target.value,
+              searchType: searchObject.searchType,
+            });
           }}
           onKeyDown={handleKeypress}
         />
