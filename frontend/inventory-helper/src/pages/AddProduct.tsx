@@ -430,14 +430,14 @@ function AddProduct() {
                   onChange={() => (formik.values.condition = "Unboxed")}
                 />
                 <FormControlLabel
-                  value="unsealed"
+                  value="sealed"
                   control={<Radio />}
                   label="Sealed"
                   checked={formik.values.condition === "Sealed"}
                   onChange={() => (formik.values.condition = "Sealed")}
                 />
                 <FormControlLabel
-                  value="sealed"
+                  value="unsealed"
                   control={<Radio />}
                   label="Unsealed"
                   checked={formik.values.condition === "Unsealed"}
