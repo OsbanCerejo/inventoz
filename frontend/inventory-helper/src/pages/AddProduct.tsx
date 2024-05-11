@@ -38,6 +38,9 @@ function AddProduct() {
     "*",
     "*",
     "-",
+    "U",
+    "B",
+    "-",
     "0000",
   ]);
 
@@ -137,6 +140,7 @@ function AddProduct() {
   // var jsonBrandObject = skuData.BRANDS;
   var dataBrandMap = new Map(Object.entries(skuData.BRANDS));
   var dataCategoryMap = new Map(Object.entries(skuData.CATEGORY));
+  var dataConditionMap = new Map(Object.entries(skuData.CONDITION));
   var brandMap = new Map();
   for (const brand of dataBrandMap) {
     brandMap.set(brand[0].toLowerCase(), brand[1]);
@@ -144,6 +148,10 @@ function AddProduct() {
   var categoryMap = new Map();
   for (const category of dataCategoryMap) {
     categoryMap.set(category[0].toLowerCase(), category[1]);
+  }
+  var conditionMap = new Map();
+  for (const condition of dataConditionMap) {
+    conditionMap.set(condition[0].toLowerCase(), condition[1]);
   }
 
   const generateSku = (fieldValue: string, factor: string) => {
@@ -156,7 +164,7 @@ function AddProduct() {
         axios
           .get(`http://localhost:3001/products/findAndCount/${brandForSku}`)
           .then((response) => {
-            skuArray[10] =
+            skuArray[13] =
               "0".repeat(4 - response.data.toString().length) +
               response.data.toString();
             setGeneratedSku(skuArray.join(""));
@@ -190,6 +198,17 @@ function AddProduct() {
         skuArray[7] = "0";
         skuArray[8] = locationForSku;
       }
+    } else if (factor === "4") {
+      console.log("Inside factor 4 : ", fieldValue);
+      if (fieldValue === "") {
+        skuArray[10] = "N";
+        skuArray[11] = "A";
+      } else {
+        const conditionForSku = conditionMap.get(fieldValue.toLowerCase());
+        console.log("Condition for SKU :", conditionForSku);
+        skuArray[10] = conditionForSku.charAt(0);
+        skuArray[11] = conditionForSku.charAt(1);
+      }
     } else {
     }
 
@@ -211,7 +230,6 @@ function AddProduct() {
           >
             Verified
             <Switch
-              // checked={checked}
               id="verified"
               name="verified"
               checked={formik.values.verified}
@@ -220,7 +238,6 @@ function AddProduct() {
             />
             Listed
             <Switch
-              // checked={checked}
               id="listed"
               name="listed"
               checked={formik.values.listed}
@@ -230,7 +247,6 @@ function AddProduct() {
             <br></br>
             Inbound
             <Switch
-              // checked={checked}
               id="inbound"
               name="inbound"
               checked={formik.values.inbound}
@@ -364,22 +380,6 @@ function AddProduct() {
               />
             </Box>
             <Box m={2} pt={3}>
-              {/* <TextField
-                fullWidth
-                id="category"
-                name="category"
-                label="Category"
-                value={formik.values.category}
-                onChange={(event) => {
-                  formik.setFieldValue("category", event.currentTarget.value);
-                  generateSku(event.currentTarget.value.toLowerCase(), "2");
-                }}
-                onBlur={formik.handleBlur}
-                error={
-                  formik.touched.category && Boolean(formik.errors.category)
-                }
-                helperText={formik.touched.category && formik.errors.category}
-              /> */}
               <InputLabel id="categoryLabel">Category</InputLabel>
               <Select
                 labelId="categoryLabel"
@@ -390,7 +390,6 @@ function AddProduct() {
                 value={formik.values.category}
                 onChange={(event) => {
                   formik.setFieldValue("category", event.target.value);
-                  console.log(event.target);
                   generateSku(event.target.value, "2");
                 }}
                 input={<OutlinedInput label="Category" />}
@@ -417,7 +416,10 @@ function AddProduct() {
             </Box>
             <Box m={2} pt={3}>
               <RadioGroup
-                onChange={formik.handleChange}
+                onChange={(event) => {
+                  formik.handleChange;
+                  generateSku(event.target.value, "4");
+                }}
                 value={formik.values.condition}
               >
                 <FormControlLabel
@@ -440,6 +442,20 @@ function AddProduct() {
                   label="Unsealed"
                   checked={formik.values.condition === "Unsealed"}
                   onChange={() => (formik.values.condition = "Unsealed")}
+                />
+                <FormControlLabel
+                  value="damaged"
+                  control={<Radio />}
+                  label="Damaged"
+                  checked={formik.values.condition === "Damaged"}
+                  onChange={() => (formik.values.condition = "Damaged")}
+                />
+                <FormControlLabel
+                  value="other"
+                  control={<Radio />}
+                  label="Other"
+                  checked={formik.values.condition === "Other"}
+                  onChange={() => (formik.values.condition = "Other")}
                 />
               </RadioGroup>
             </Box>

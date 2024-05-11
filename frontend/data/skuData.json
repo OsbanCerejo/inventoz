@@ -9,7 +9,7 @@
         "Electronics": "ET",
         "Other": "OT"
     },
-    "condition": {
+    "CONDITION": {
         "Sealed": "SE",
         "Unboxed": "UB",
         "Unsealed": "US",
