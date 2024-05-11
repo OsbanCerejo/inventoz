@@ -147,7 +147,7 @@ function AddProduct() {
   }
 
   const generateSku = (fieldValue: string, factor: string) => {
-    // console.log(skuBuilder);
+    console.log("Generate SKU fieold value", fieldValue);
     if (factor === "1") {
       if (brandMap.has(fieldValue)) {
         const brandForSku = brandMap.get(fieldValue);
@@ -171,8 +171,8 @@ function AddProduct() {
         skuArray[2] = "*";
       }
     } else if (factor === "2") {
-      if (categoryMap.has(fieldValue)) {
-        const categoryForSku = categoryMap.get(fieldValue);
+      if (categoryMap.has(fieldValue.toLowerCase())) {
+        const categoryForSku = categoryMap.get(fieldValue.toLowerCase());
         console.log("categoryForSku", categoryForSku);
         // skuArray[3] = categoryForSku ? categoryForSku.charAt(0) : "N";
         skuArray[4] = categoryForSku.charAt(0);
@@ -353,8 +353,8 @@ function AddProduct() {
             <Box m={2} pt={3}>
               <TextField
                 fullWidth
-                id="size"
-                name="size"
+                id="sizeOz"
+                name="sizeOz"
                 label="Size in Oz."
                 value={formik.values.sizeOz}
                 onChange={formik.handleChange}
@@ -391,6 +391,7 @@ function AddProduct() {
                 onChange={(event) => {
                   formik.setFieldValue("category", event.target.value);
                   console.log(event.target);
+                  generateSku(event.target.value, "2");
                 }}
                 input={<OutlinedInput label="Category" />}
               >

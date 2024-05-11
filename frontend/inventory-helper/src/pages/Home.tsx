@@ -1,7 +1,7 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
 import ProductList from "../components/ProductList";
-import { TextField, Button, Box } from "@mui/material";
+import { TextField, Button, Box, MenuItem, Select } from "@mui/material";
 
 // export interface Products {
 //   sku: string;
@@ -24,6 +24,7 @@ import { TextField, Button, Box } from "@mui/material";
 function Home() {
   const [listOfProducts, setListOfProducts] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedColumn, setSelectedColumn] = useState("");
   let heading = "Products";
 
   useEffect(() => {
@@ -36,7 +37,11 @@ function Home() {
   const handleSearch = () => {
     // TODO: Move this to Search.tsx eventually
     console.log("Clicked Search ", searchQuery);
+    console.log("Selected Column ", selectedColumn);
     if (searchQuery.length != 0) {
+      if (selectedColumn === "SKU") {
+        console.log("Something selected");
+      }
       axios
         .get(`http://localhost:3001/products/search/${searchQuery}`)
         .then((response) => {
@@ -56,20 +61,36 @@ function Home() {
       handleSearch();
     }
   };
+  const columns = ["SKU", "Brand", "Location"];
 
   return (
     <div>
       <Box alignItems="center" my={4} p={2}>
         <TextField
-          fullWidth
+          style={{ width: "85%" }}
           label="Search Item Name"
-          id="fullWidth"
+          id="search"
           value={searchQuery}
           onChange={(event) => {
             setSearchQuery(event.target.value);
           }}
           onKeyDown={handleKeypress}
         />
+        <Select
+          value={selectedColumn}
+          onChange={(event) => setSelectedColumn(event.target.value)}
+          displayEmpty
+          style={{ width: "15%" }}
+        >
+          <MenuItem value="" disabled>
+            Search By
+          </MenuItem>
+          {columns.map((column, index) => (
+            <MenuItem key={index} value={column}>
+              {column}
+            </MenuItem>
+          ))}
+        </Select>
         <Button variant="contained" color="success" onClick={handleSearch}>
           Search
         </Button>
