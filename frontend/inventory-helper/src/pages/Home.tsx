@@ -23,12 +23,15 @@ import { TextField, Button, Box, MenuItem, Select } from "@mui/material";
 
 function Home() {
   const [listOfProducts, setListOfProducts] = useState([]);
-  const [searchObject, setSearchObject] = useState({
-    searchString: "",
-    searchType: "itemName",
-  });
+  const [searchString, setSearchString] = useState("");
   const [selectedColumn, setSelectedColumn] = useState("");
   let heading = "Products";
+  const columns = ["Item Name", "SKU", "Brand", "Location"];
+  const columnMap = new Map();
+  columnMap.set("Item Name", "itemName");
+  columnMap.set("SKU", "sku");
+  columnMap.set("Brand", "brand");
+  columnMap.set("Location", "location");
 
   useEffect(() => {
     // console.log("Called Useeffect");
@@ -39,21 +42,16 @@ function Home() {
 
   const handleSearch = () => {
     // TODO: Move this to Search.tsx eventually
-    console.log("Clicked Search ", searchObject);
     console.log("Selected Column ", selectedColumn);
-    if (searchObject.searchString.length != 0) {
-      if (selectedColumn === "SKU") {
-        console.log("Something selected");
-        setSearchObject({
-          searchString: searchObject.searchString,
-          searchType: "sku",
-        });
-      }
+    console.log(columnMap.get(selectedColumn));
+    if (searchString.length != 0) {
       axios
         .get("http://localhost:3001/products/search", {
           params: {
-            searchString: searchObject.searchString,
-            searchType: searchObject.searchType,
+            searchString: searchString,
+            searchType: columnMap.has(selectedColumn)
+              ? columnMap.get(selectedColumn)
+              : "itemName",
           },
         })
         .then((response) => {
@@ -73,7 +71,6 @@ function Home() {
       handleSearch();
     }
   };
-  const columns = ["SKU", "Brand", "Location"];
 
   return (
     <div>
@@ -82,12 +79,9 @@ function Home() {
           style={{ width: "85%" }}
           label="Search Item Name"
           id="search"
-          value={searchObject.searchString}
+          value={searchString}
           onChange={(event) => {
-            setSearchObject({
-              searchString: event.target.value,
-              searchType: searchObject.searchType,
-            });
+            setSearchString(event.target.value);
           }}
           onKeyDown={handleKeypress}
         />
