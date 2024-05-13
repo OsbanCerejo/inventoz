@@ -281,20 +281,26 @@ function AddProduct() {
               />
             </Box>
             <Box m={2} pt={3}>
-              <TextField
-                fullWidth
+              <InputLabel id="brandLabel">Brand</InputLabel>
+              <Select
+                labelId="brandLabel"
                 id="brand"
                 name="brand"
+                fullWidth
                 label="Brand"
                 value={formik.values.brand}
                 onChange={(event) => {
-                  formik.setFieldValue("brand", event.currentTarget.value);
-                  generateSku(event.currentTarget.value.toLowerCase(), "1");
+                  formik.setFieldValue("brand", event.target.value);
+                  generateSku(event.target.value.toLowerCase(), "1");
                 }}
-                onBlur={formik.handleBlur}
-                error={formik.touched.brand && Boolean(formik.errors.brand)}
-                helperText={formik.touched.brand && formik.errors.brand}
-              />
+                input={<OutlinedInput label="Brand" />}
+              >
+                {Object.entries(skuData.BRANDS).map(([value, key]) => (
+                  <MenuItem key={key} value={value}>
+                    {value}
+                  </MenuItem>
+                ))}
+              </Select>
             </Box>
             <Box m={2} pt={3}>
               <TextField
@@ -451,20 +457,6 @@ function AddProduct() {
                   label="Unsealed"
                   checked={formik.values.condition === "Unsealed"}
                   onChange={() => (formik.values.condition = "Unsealed")}
-                />
-                <FormControlLabel
-                  value="damaged"
-                  control={<Radio />}
-                  label="Damaged"
-                  checked={formik.values.condition === "Damaged"}
-                  onChange={() => (formik.values.condition = "Damaged")}
-                />
-                <FormControlLabel
-                  value="other"
-                  control={<Radio />}
-                  label="Other"
-                  checked={formik.values.condition === "Other"}
-                  onChange={() => (formik.values.condition = "Other")}
                 />
               </RadioGroup>
             </Box>

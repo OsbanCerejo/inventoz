@@ -34,7 +34,6 @@ function Home() {
   columnMap.set("Location", "location");
 
   useEffect(() => {
-    // console.log("Called Useeffect");
     axios.get("http://localhost:3001/products").then((response) => {
       setListOfProducts(response.data);
     });
