@@ -21,7 +21,6 @@ import { useState } from "react";
 
 function InboundProduct() {
   const location = useLocation();
-  const navigate = useNavigate();
 
   const productObject = location.state.productObject;
   const today = new Date();
@@ -66,7 +65,6 @@ function InboundProduct() {
         })
         .then(() => {
           console.log("Quantity Updated in Inventory Table");
-          // showToastMessage();
         });
       axios.post("http://localhost:3001/inbound", data).then((response) => {
         console.log(response);

@@ -68,9 +68,9 @@ function EditProduct() {
     initialValues: formikInitialValues,
     validationSchema: formikValidationSchema,
     onSubmit: (data) => {
-      console.log(data);
-      axios.put("http://localhost:3001/products", data).then(() => {
-        console.log("Product Updated");
+      console.log("Inside EditProduct OnSubmit: ", data);
+      axios.put("http://localhost:3001/products", data).then((response) => {
+        console.log("Product Updated to : ", response);
       });
       navigate("/");
     },

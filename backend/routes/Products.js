@@ -45,6 +45,7 @@ router.post("/", async (req, res) => {
 
 router.put("/", async (req, res) => {
     const product = req.body;
+    console.log("Edited Product Value in Server : " , product);
     await Products.update({
         brand: product.brand, 
         itemName : product.itemName, 
@@ -91,7 +92,6 @@ router.get("/findAndCount/:skuPrefix", async (req, res) => {
       });
       console.log(count);
       res.json(count + 1);
-    //   console.log(rows);
 });
 
 module.exports = router;
