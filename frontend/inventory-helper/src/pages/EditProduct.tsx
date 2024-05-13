@@ -114,17 +114,7 @@ function EditProduct() {
             />
             <br></br>
             <Box m={2} pt={3}>
-              <TextField
-                fullWidth
-                id="sku"
-                name="sku"
-                label="SKU"
-                value={formik.values.sku}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.sku && Boolean(formik.errors.sku)}
-                helperText={formik.touched.sku && formik.errors.sku}
-              />
+              SKU : {formik.values.sku}
             </Box>
             <Box m={2} pt={3}>
               <TextField
