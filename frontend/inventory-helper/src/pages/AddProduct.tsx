@@ -62,6 +62,7 @@ function AddProduct() {
     verified: false,
     inbound: false,
     listed: false,
+    final: false,
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -83,6 +84,7 @@ function AddProduct() {
     verified: Yup.boolean(),
     inbound: Yup.boolean(),
     listed: Yup.boolean(),
+    final: Yup.boolean(),
   });
 
   const formik = useFormik({
@@ -249,6 +251,14 @@ function AddProduct() {
               id="inbound"
               name="inbound"
               checked={formik.values.inbound}
+              onChange={formik.handleChange}
+              inputProps={{ "aria-label": "controlled" }}
+            />
+            Final
+            <Switch
+              id="final"
+              name="final"
+              checked={formik.values.final}
               onChange={formik.handleChange}
               inputProps={{ "aria-label": "controlled" }}
             />

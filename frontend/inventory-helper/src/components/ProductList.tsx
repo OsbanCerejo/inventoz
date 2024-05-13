@@ -48,8 +48,9 @@ function ProductList({ products, heading }: Props) {
             <th scope="col">Size</th>
             <th scope="col">Shade/Variant</th>
             <th scope="col">Location</th>
-            <th scope="col">Verified</th>
+            <th scope="col">Quantity Verified</th>
             <th scope="col">Listed</th>
+            <th scope="col">Final</th>
           </tr>
         </thead>
         <tbody>
@@ -83,6 +84,14 @@ function ProductList({ products, heading }: Props) {
                 }}
               >
                 {product.listed ? "Yes" : "No"}
+              </td>
+              <td
+                style={{
+                  backgroundColor: product.final ? "#B2FF59" : "#FF5252",
+                  width: "5%",
+                }}
+              >
+                {product.final ? "Yes" : "No"}
               </td>
             </tr>
           ))}

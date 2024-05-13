@@ -30,7 +30,7 @@ function InboundData() {
     }
   };
   const handleKeypress = (e: any) => {
-    //it triggers by pressing the enter key
+    //It triggers by pressing the enter key
     if (e.keyCode === 13) {
       handleSearch();
     }
