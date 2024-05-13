@@ -34,9 +34,6 @@ function AddProduct() {
     "*",
     "*",
     "-",
-    "*",
-    "*",
-    "-",
     "U",
     "B",
     "-",
@@ -165,7 +162,7 @@ function AddProduct() {
         axios
           .get(`http://localhost:3001/products/findAndCount/${brandForSku}`)
           .then((response) => {
-            skuArray[13] =
+            skuArray[10] =
               "0".repeat(4 - response.data.toString().length) +
               response.data.toString();
             setGeneratedSku(skuArray.join(""));
@@ -190,25 +187,16 @@ function AddProduct() {
         skuArray[4] = "N";
         skuArray[5] = "A";
       }
-    } else if (factor === "3") {
+    } else if (factor === "4") {
+      console.log("Inside factor 4 : ", fieldValue);
       if (fieldValue === "") {
         skuArray[7] = "N";
         skuArray[8] = "A";
       } else {
-        const locationForSku = fieldValue.charAt(0).toUpperCase();
-        skuArray[7] = "0";
-        skuArray[8] = locationForSku;
-      }
-    } else if (factor === "4") {
-      console.log("Inside factor 4 : ", fieldValue);
-      if (fieldValue === "") {
-        skuArray[10] = "N";
-        skuArray[11] = "A";
-      } else {
         const conditionForSku = conditionMap.get(fieldValue.toLowerCase());
         console.log("Condition for SKU :", conditionForSku);
-        skuArray[10] = conditionForSku.charAt(0);
-        skuArray[11] = conditionForSku.charAt(1);
+        skuArray[7] = conditionForSku.charAt(0);
+        skuArray[8] = conditionForSku.charAt(1);
       }
     } else {
     }
@@ -367,13 +355,7 @@ function AddProduct() {
                 name="location"
                 label="Location"
                 value={formik.values.location}
-                onChange={(event) => {
-                  formik.setFieldValue(
-                    "location",
-                    event.currentTarget.value.toUpperCase()
-                  );
-                  generateSku(event.currentTarget.value, "3");
-                }}
+                onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
                 error={
                   formik.touched.location && Boolean(formik.errors.location)
@@ -430,7 +412,7 @@ function AddProduct() {
               />
             </Box>
             <Box m={2} pt={3}>
-              // Change the radio group buttons to dynamicallly
+              {/* // Change the radio group buttons to dynamicallly */}
               <RadioGroup
                 onChange={(event) => {
                   formik.handleChange;
