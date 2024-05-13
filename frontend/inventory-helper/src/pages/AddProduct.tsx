@@ -430,6 +430,7 @@ function AddProduct() {
               />
             </Box>
             <Box m={2} pt={3}>
+              // Change the radio group buttons to dynamicallly
               <RadioGroup
                 onChange={(event) => {
                   formik.handleChange;
