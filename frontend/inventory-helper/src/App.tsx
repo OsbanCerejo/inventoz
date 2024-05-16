@@ -11,6 +11,7 @@ import Listings from "./pages/Listings";
 import InboundProduct from "./pages/InboundProduct";
 import InboundData from "./pages/InboundData";
 import { ToastContainer, toast } from "react-toastify";
+import AllOrders from "./pages/AllOrders";
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
           <Route path="/inbound/showAll" Component={InboundData}></Route>
           <Route path="/sales" Component={Sales}></Route>
           <Route path="/listings" Component={Listings}></Route>
+          <Route path="/orders/showAll" Component={AllOrders}></Route>
         </Routes>
       </Router>
       <ToastContainer />
