@@ -27,6 +27,7 @@
     "yup": "^1.4.0"
   },
   "devDependencies": {
+    "@types/ebay-oauth-nodejs-client": "^1.2.4",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "@typescript-eslint/eslint-plugin": "^7.2.0",
