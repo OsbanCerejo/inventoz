@@ -1,27 +1,29 @@
 import { useEffect, useState } from "react";
+import EbayAuthToken from "ebay-oauth-nodejs-client";
+import axios from "axios";
 
 function AllOrders() {
   const [orders, setOrders] = useState([]);
 
-  //   useEffect(() => {
-  //     // Fetch sandbox orders when component mounts
-  //     fetchSandboxOrders();
-  //   }, []);
+  useEffect(() => {
+    // Fetch sandbox orders when component mounts
+    fetchSandboxOrders();
+  }, []);
 
-  //   const fetchSandboxOrders = async () => {
-  //     try {
-  //       // Make a request to your backend server
-  //       console.log("Succesful until here front end 1");
-  //       //   authenticate();
-  //       console.log("Succesful until here front end 2");
-  //       const response = await axios.get(
-  //         "http://localhost:3001/orders/allOrders"
-  //       );
-  //       setOrders(response.data.orders);
-  //     } catch (error) {
-  //       console.error("Fetch sandbox orders error:", error);
-  //     }
-  //   };
+  const fetchSandboxOrders = async () => {
+    try {
+      // Make a request to your backend server
+      console.log("Succesful until here front end 1");
+      //   authenticate();
+      console.log("Succesful until here front end 2");
+      const response = await axios.get(
+        "http://localhost:3001/orders/allOrders"
+      );
+      setOrders(response.data.orders);
+    } catch (error) {
+      console.error("Fetch sandbox orders error:", error);
+    }
+  };
 
   //   async function authenticate() {
   //     try {
