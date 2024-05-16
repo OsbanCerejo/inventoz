@@ -39,6 +39,11 @@ function NavBar() {
                 Inbound
               </a>
             </li>
+            <li className="nav-item">
+              <a className="nav-link" href="/orders/showAll">
+                Orders
+              </a>
+            </li>
           </ul>
         </div>
       </nav>

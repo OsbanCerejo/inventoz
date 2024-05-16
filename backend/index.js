@@ -20,6 +20,9 @@ app.use("/sales", salesRouter);
 const listingsRouter = require('./routes/Listings');
 app.use("/listings", listingsRouter);
 
+const ordersRouter = require('./routes/Orders');
+app.use("/orders", ordersRouter);
+
 db.sequelize.sync().then(() => {
     app.listen(3001, () => {
         console.log("Server is running on http://localhost:3001");
