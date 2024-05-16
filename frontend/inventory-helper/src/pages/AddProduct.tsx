@@ -162,8 +162,13 @@ function AddProduct() {
         axios
           .get(`http://localhost:3001/products/findAndCount/${brandForSku}`)
           .then((response) => {
+            console.log(response.data);
+            // let prev = 0;
+            // response.data.forEach((row: any) => {
+            //   console.log(parseInt(row.sku.split("-")[3]));
+            // });
             skuArray[10] =
-              "0".repeat(4 - response.data.toString().length) +
+              "0".repeat(5 - response.data.toString().length) +
               response.data.toString();
             setGeneratedSku(skuArray.join(""));
           });
