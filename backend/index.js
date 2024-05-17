@@ -20,6 +20,9 @@ app.use("/sales", salesRouter);
 const listingsRouter = require('./routes/Listings');
 app.use("/listings", listingsRouter);
 
+const brandsRouter = require('./routes/Brands');
+app.use("/brands", brandsRouter);
+
 const ordersRouter = require('./routes/Orders');
 app.use("/orders", ordersRouter);
 
