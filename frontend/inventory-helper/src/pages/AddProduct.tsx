@@ -4,9 +4,14 @@ import * as Yup from "yup";
 import Button from "@mui/material/Button";
 import {
   Box,
+  Collapse,
   Container,
+  Divider,
+  FormControl,
   FormControlLabel,
+  FormHelperText,
   Grid,
+  IconButton,
   InputLabel,
   MenuItem,
   OutlinedInput,
@@ -16,6 +21,7 @@ import {
   Select,
   Switch,
   TextField,
+  Typography,
 } from "@mui/material";
 import { useState } from "react";
 import dayjs from "dayjs";
@@ -25,11 +31,18 @@ import "react-toastify/dist/ReactToastify.css";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 
 function AddProduct() {
   const [generatedSku, setGeneratedSku] = useState("");
   const today = new Date();
   const [newDate, setNewDate] = useState(dayjs(today.toLocaleString()));
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
+
+  const toggleMoreDetails = () => {
+    setShowMoreDetails(!showMoreDetails);
+  };
   const [skuArray, setSkuArray] = useState([
     "*",
     "*",
@@ -68,8 +81,8 @@ function AddProduct() {
 
   const formikValidationSchema = Yup.object().shape({
     sku: Yup.string().required("Please enter a valid SKU"),
-    brand: Yup.string().required("Please enter a Brand"),
-    itemName: Yup.string().required(),
+    brand: Yup.string().required("Please select a Brand"),
+    itemName: Yup.string().required("Please enter a Valid Item Name"),
     quantity: Yup.string(),
     location: Yup.string(),
     sizeOz: Yup.string(),
@@ -77,7 +90,7 @@ function AddProduct() {
     strength: Yup.string(),
     shade: Yup.string(),
     formulation: Yup.string(),
-    category: Yup.string().required(),
+    category: Yup.string().required("Please select a Category"),
     type: Yup.string(),
     upc: Yup.string(),
     batch: Yup.string(),
@@ -263,212 +276,352 @@ function AddProduct() {
                 variant="outlined"
                 sx={{ my: { xs: 3, md: 3 }, p: { xs: 1, md: 3 } }}
               >
-                <Box m={2} pt={3}>
-                  <TextField
-                    fullWidth
-                    id="sku"
-                    name="sku"
-                    label="SKU"
-                    value={formik.values.sku}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    error={formik.touched.sku && Boolean(formik.errors.sku)}
-                    helperText={formik.touched.sku && formik.errors.sku}
-                  />
-                </Box>
-                <Box m={2} pt={3}>
-                  <InputLabel id="brandLabel">Brand</InputLabel>
-                  <Select
-                    labelId="brandLabel"
-                    id="brand"
-                    name="brand"
-                    fullWidth
-                    label="Brand"
-                    value={formik.values.brand}
-                    onChange={(event) => {
-                      formik.setFieldValue("brand", event.target.value);
-                      generateSku(event.target.value.toLowerCase(), "1");
-                    }}
-                    input={<OutlinedInput label="Brand" />}
-                  >
-                    {Object.entries(skuData.BRANDS).map(([value, key]) => (
-                      <MenuItem key={key} value={value}>
-                        {value}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </Box>
-                <Box m={2} pt={3}>
-                  <TextField
-                    fullWidth
-                    id="itemName"
-                    name="itemName"
-                    label="Item Name"
-                    value={formik.values.itemName}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    error={
-                      formik.touched.itemName && Boolean(formik.errors.itemName)
-                    }
-                    helperText={
-                      formik.touched.itemName && formik.errors.itemName
-                    }
-                  />
-                </Box>
-                <Box m={2} pt={3}>
-                  <TextField
-                    fullWidth
-                    id="strength"
-                    name="strength"
-                    label="Strength"
-                    value={formik.values.strength}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    error={
-                      formik.touched.strength && Boolean(formik.errors.strength)
-                    }
-                    helperText={
-                      formik.touched.strength && formik.errors.strength
-                    }
-                  />
-                </Box>
-                <Box m={2} pt={3}>
-                  <TextField
-                    fullWidth
-                    id="shade"
-                    name="shade"
-                    label="Shade"
-                    value={formik.values.shade}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    error={formik.touched.shade && Boolean(formik.errors.shade)}
-                    helperText={formik.touched.shade && formik.errors.shade}
-                  />
-                </Box>
-                <Box m={2} pt={3}>
-                  <TextField
-                    fullWidth
-                    id="quantity"
-                    name="quantity"
-                    label="Quantity"
-                    value={formik.values.quantity}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    error={
-                      formik.touched.quantity && Boolean(formik.errors.quantity)
-                    }
-                    helperText={
-                      formik.touched.quantity && formik.errors.quantity
-                    }
-                  />
-                </Box>
-                <Box m={2} pt={3}>
-                  <TextField
-                    fullWidth
-                    id="location"
-                    name="location"
-                    label="Location"
-                    value={formik.values.location}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    error={
-                      formik.touched.location && Boolean(formik.errors.location)
-                    }
-                    helperText={
-                      formik.touched.location && formik.errors.location
-                    }
-                  />
-                </Box>
-                <Box m={2} pt={3}>
-                  <TextField
-                    fullWidth
-                    id="sizeOz"
-                    name="sizeOz"
-                    label="Size in Oz."
-                    value={formik.values.sizeOz}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    error={
-                      formik.touched.sizeOz && Boolean(formik.errors.sizeOz)
-                    }
-                    helperText={formik.touched.sizeOz && formik.errors.sizeOz}
-                  />
-                </Box>
-                <Box m={2} pt={3}>
-                  <InputLabel id="categoryLabel">Category</InputLabel>
-                  <Select
-                    labelId="categoryLabel"
-                    id="category"
-                    name="category"
-                    fullWidth
-                    label="Category"
-                    value={formik.values.category}
-                    onChange={(event) => {
-                      formik.setFieldValue("category", event.target.value);
-                      generateSku(event.target.value, "2");
-                    }}
-                    input={<OutlinedInput label="Category" />}
-                  >
-                    {Object.entries(skuData.CATEGORY).map(([value, key]) => (
-                      <MenuItem key={key} value={value}>
-                        {value}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </Box>
-                <Box m={2} pt={3}>
-                  <TextField
-                    fullWidth
-                    id="upc"
-                    name="upc"
-                    label="UPC Code"
-                    value={formik.values.upc}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    error={formik.touched.upc && Boolean(formik.errors.upc)}
-                    helperText={formik.touched.upc && formik.errors.upc}
-                  />
-                </Box>
-                <Box m={2} pt={3}>
-                  {/* // Change the radio group buttons to dynamicallly */}
-                  <RadioGroup
-                    onChange={(event) => {
-                      formik.handleChange;
-                      generateSku(event.target.value, "4");
-                    }}
-                    value={formik.values.condition}
-                  >
-                    <FormControlLabel
-                      value="unboxed"
-                      control={<Radio />}
-                      label="Unboxed"
-                      checked={formik.values.condition === "Unboxed"}
-                      onChange={() => (formik.values.condition = "Unboxed")}
-                    />
-                    <FormControlLabel
-                      value="sealed"
-                      control={<Radio />}
-                      label="Sealed"
-                      checked={formik.values.condition === "Sealed"}
-                      onChange={() => (formik.values.condition = "Sealed")}
-                    />
-                    <FormControlLabel
-                      value="unsealed"
-                      control={<Radio />}
-                      label="Unsealed"
-                      checked={formik.values.condition === "Unsealed"}
-                      onChange={() => (formik.values.condition = "Unsealed")}
-                    />
-                  </RadioGroup>
-                </Box>
-                <Button
-                  color="primary"
-                  variant="contained"
-                  fullWidth
-                  type="submit"
-                >
-                  Submit
-                </Button>
+                <Grid container spacing={0} justifyContent="center">
+                  <Grid item xs={12}>
+                    <Box m={2}>
+                      <TextField
+                        fullWidth
+                        id="sku"
+                        name="sku"
+                        label="SKU"
+                        value={formik.values.sku}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        error={formik.touched.sku && Boolean(formik.errors.sku)}
+                        helperText={formik.touched.sku && formik.errors.sku}
+                      />
+                    </Box>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <Box m={2}>
+                      <FormControl
+                        fullWidth
+                        variant="outlined"
+                        error={
+                          formik.touched.brand && Boolean(formik.errors.brand)
+                        }
+                      >
+                        <InputLabel id="brandLabel">Brand</InputLabel>
+                        <Select
+                          labelId="brandLabel"
+                          id="brand"
+                          name="brand"
+                          fullWidth
+                          label="Brand"
+                          value={formik.values.brand}
+                          onChange={(event) => {
+                            formik.setFieldValue("brand", event.target.value);
+                            generateSku(event.target.value.toLowerCase(), "1");
+                          }}
+                          input={<OutlinedInput label="Brand" />}
+                        >
+                          {Object.entries(skuData.BRANDS).map(
+                            ([value, key]) => (
+                              <MenuItem key={key} value={value}>
+                                {value}
+                              </MenuItem>
+                            )
+                          )}
+                        </Select>
+                        <FormHelperText>
+                          {formik.touched.brand && formik.errors.brand}
+                        </FormHelperText>
+                      </FormControl>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Box m={2}>
+                      <TextField
+                        fullWidth
+                        id="itemName"
+                        name="itemName"
+                        label="Item Name"
+                        value={formik.values.itemName}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        error={
+                          formik.touched.itemName &&
+                          Boolean(formik.errors.itemName)
+                        }
+                        helperText={
+                          formik.touched.itemName && formik.errors.itemName
+                        }
+                      />
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Box m={2}>
+                      <TextField
+                        fullWidth
+                        id="strength"
+                        name="strength"
+                        label="Strength"
+                        value={formik.values.strength}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        error={
+                          formik.touched.strength &&
+                          Boolean(formik.errors.strength)
+                        }
+                        helperText={
+                          formik.touched.strength && formik.errors.strength
+                        }
+                      />
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Box m={2}>
+                      <TextField
+                        fullWidth
+                        id="shade"
+                        name="shade"
+                        label="Shade"
+                        value={formik.values.shade}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        error={
+                          formik.touched.shade && Boolean(formik.errors.shade)
+                        }
+                        helperText={formik.touched.shade && formik.errors.shade}
+                      />
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Grid container spacing={0}>
+                      <Grid item xs={6}>
+                        <Box m={2}>
+                          <TextField
+                            fullWidth
+                            id="quantity"
+                            name="quantity"
+                            label="Quantity"
+                            value={formik.values.quantity}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
+                            error={
+                              formik.touched.quantity &&
+                              Boolean(formik.errors.quantity)
+                            }
+                            helperText={
+                              formik.touched.quantity && formik.errors.quantity
+                            }
+                          />
+                        </Box>
+                        <Box m={2}>
+                          <TextField
+                            fullWidth
+                            id="location"
+                            name="location"
+                            label="Location"
+                            value={formik.values.location}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
+                            error={
+                              formik.touched.location &&
+                              Boolean(formik.errors.location)
+                            }
+                            helperText={
+                              formik.touched.location && formik.errors.location
+                            }
+                          />
+                        </Box>
+                        <Box m={2}>
+                          <TextField
+                            fullWidth
+                            id="sizeOz"
+                            name="sizeOz"
+                            label="Size in Oz."
+                            value={formik.values.sizeOz}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
+                            error={
+                              formik.touched.sizeOz &&
+                              Boolean(formik.errors.sizeOz)
+                            }
+                            helperText={
+                              formik.touched.sizeOz && formik.errors.sizeOz
+                            }
+                          />
+                        </Box>
+                      </Grid>
+                      <Grid item xs={6} display="flex" justifyContent="center">
+                        <Paper
+                          variant="outlined"
+                          sx={{ my: { xs: 1 }, p: { xs: 1 } }}
+                        >
+                          <Box m={2}>
+                            <p>Packaging Condition :</p>
+                            <RadioGroup
+                              onChange={(event) => {
+                                formik.handleChange;
+                                generateSku(event.target.value, "4");
+                              }}
+                              value={formik.values.condition}
+                            >
+                              <FormControlLabel
+                                value="unboxed"
+                                control={<Radio />}
+                                label="Unboxed"
+                                checked={formik.values.condition === "Unboxed"}
+                                onChange={() =>
+                                  (formik.values.condition = "Unboxed")
+                                }
+                              />
+                              <FormControlLabel
+                                value="sealed"
+                                control={<Radio />}
+                                label="Sealed"
+                                checked={formik.values.condition === "Sealed"}
+                                onChange={() =>
+                                  (formik.values.condition = "Sealed")
+                                }
+                              />
+                              <FormControlLabel
+                                value="unsealed"
+                                control={<Radio />}
+                                label="Unsealed"
+                                checked={formik.values.condition === "Unsealed"}
+                                onChange={() =>
+                                  (formik.values.condition = "Unsealed")
+                                }
+                              />
+                            </RadioGroup>
+                          </Box>
+                        </Paper>
+                      </Grid>
+                    </Grid>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Box m={2}>
+                      <FormControl
+                        fullWidth
+                        variant="outlined"
+                        error={
+                          formik.touched.category &&
+                          Boolean(formik.errors.category)
+                        }
+                      >
+                        <InputLabel id="categoryLabel">Category</InputLabel>
+                        <Select
+                          labelId="categoryLabel"
+                          id="category"
+                          name="category"
+                          fullWidth
+                          label="Category"
+                          value={formik.values.category}
+                          onChange={(event) => {
+                            formik.setFieldValue(
+                              "category",
+                              event.target.value
+                            );
+                            generateSku(event.target.value, "2");
+                          }}
+                          input={<OutlinedInput label="Category" />}
+                        >
+                          {Object.entries(skuData.CATEGORY).map(
+                            ([value, key]) => (
+                              <MenuItem key={key} value={value}>
+                                {value}
+                              </MenuItem>
+                            )
+                          )}
+                        </Select>
+                        <FormHelperText>
+                          {formik.touched.category && formik.errors.category}
+                        </FormHelperText>
+                      </FormControl>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Box m={2}>
+                      <TextField
+                        fullWidth
+                        id="upc"
+                        name="upc"
+                        label="UPC Code"
+                        value={formik.values.upc}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        error={formik.touched.upc && Boolean(formik.errors.upc)}
+                        helperText={formik.touched.upc && formik.errors.upc}
+                      />
+                    </Box>
+                  </Grid>
+                </Grid>
+
+                <Divider sx={{ borderColor: "gray", borderWidth: 1 }}></Divider>
+
+                <Grid container spacing={0} justifyContent="center">
+                  <Grid item xs={12}>
+                    <Box m={1}>
+                      <Typography
+                        onClick={toggleMoreDetails}
+                        variant="h6"
+                        component="div"
+                        sx={{ cursor: "pointer" }}
+                      >
+                        <IconButton size="small">
+                          {showMoreDetails ? (
+                            <ExpandLessIcon />
+                          ) : (
+                            <ExpandMoreIcon />
+                          )}
+                        </IconButton>
+                        More Details
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12}>
+                    {showMoreDetails && (
+                      <Collapse in={showMoreDetails}>
+                        <Grid container spacing={0}>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField fullWidth />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField fullWidth />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField fullWidth />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField fullWidth />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField fullWidth />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField fullWidth />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField fullWidth />
+                            </Box>
+                          </Grid>
+                        </Grid>
+                      </Collapse>
+                    )}
+                  </Grid>
+                </Grid>
+                <Divider sx={{ borderColor: "gray", borderWidth: 1 }}></Divider>
+                <Grid item xs={12} m={1} display="flex" justifyContent="center">
+                  <Button color="primary" variant="contained" type="submit">
+                    Submit
+                  </Button>
+                </Grid>
               </Paper>
             </Container>
           </Grid>
