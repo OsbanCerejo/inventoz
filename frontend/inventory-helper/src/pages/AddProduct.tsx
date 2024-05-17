@@ -225,7 +225,7 @@ function AddProduct() {
     <div>
       <form onSubmit={formik.handleSubmit}>
         <Grid container spacing={0} justifyContent="center">
-          <Grid item xs={3} border={1}>
+          <Grid item xs={3}>
             <Container>
               <Paper
                 variant="outlined"
@@ -257,7 +257,7 @@ function AddProduct() {
               </Paper>
             </Container>
           </Grid>
-          <Grid item xs={6} border={1}>
+          <Grid item xs={6}>
             <Container component="main" maxWidth="sm" sx={{ mb: 4 }}>
               <Paper
                 variant="outlined"
@@ -472,7 +472,7 @@ function AddProduct() {
               </Paper>
             </Container>
           </Grid>
-          <Grid item xs={3} border={1}>
+          <Grid item xs={3}>
             <Container>
               <Paper
                 variant="outlined"
