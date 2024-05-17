@@ -43,7 +43,7 @@ function AddProduct() {
   const toggleMoreDetails = () => {
     setShowMoreDetails(!showMoreDetails);
   };
-  const [skuArray, setSkuArray] = useState([
+  const [skuArray] = useState([
     "*",
     "*",
     "*",
@@ -77,6 +77,7 @@ function AddProduct() {
     inbound: false,
     listed: false,
     final: false,
+    vendor: "",
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -99,26 +100,32 @@ function AddProduct() {
     inbound: Yup.boolean(),
     listed: Yup.boolean(),
     final: Yup.boolean(),
+    vendor: Yup.string(),
   });
 
   const formik = useFormik({
     initialValues: formikInitialValues,
     validationSchema: formikValidationSchema,
-    onSubmit: (data, { resetForm }) => {
-      console.log(data);
+    onSubmit: async (data, { resetForm }) => {
+      // Set the batch value to "NA" if inbound is false
       formik.values.batch = formik.values.inbound ? formik.values.batch : "NA";
-      axios.post("http://localhost:3001/products", data).then((response) => {
-        console.log(response);
-        if (response.data === "Already Exists") {
-          console.log("Exists");
-          toast.error("Product Already Exists!", {
-            position: "top-right",
-          });
-        } else if (response.data === "Created New") {
-          console.log("New Product");
+
+      try {
+        // Attempt to add the new product into Products table
+        const addProductresponse = await axios.post(
+          "http://localhost:3001/products",
+          data
+        );
+        console.log("Level 1 OnSubmit");
+
+        // Handle response for product creation
+        if (addProductresponse.data === "Already Exists") {
+          toast.error("Product Already Exists!", { position: "top-right" });
+        } else if (addProductresponse.data === "Created New") {
+          // Handle inbound logic if inbound is true
           if (formik.values.inbound) {
-            console.log("Inside if Is inbound");
             data.batch = data.batch.length === 0 ? "NA" : data.batch;
+            // Creation of composite key for Inbound Table
             const compositeInboundKey =
               data.sku +
               "-" +
@@ -132,100 +139,114 @@ function AddProduct() {
 
             const inboundObject = {
               sku: data.sku,
-              vendor: "temp vendor", // Implement vendor input field on toggle of inbound in add product
+              vendor: data.vendor,
               quantity: data.quantity,
               date: newDate,
               batch: data.batch,
               compositeSku: compositeInboundKey,
-              //TODO : ADd composite SKU field here
             };
-            console.log("Inbound object is : ", inboundObject);
-            axios
-              .post("http://localhost:3001/inbound", inboundObject)
-              .then((response) => {
-                console.log(response);
-              });
+            // Add the product to Inbound table along with the new composite Inbound key
+            const inboundResponse = await axios.post(
+              "http://localhost:3001/inbound",
+              inboundObject
+            );
+            console.log(inboundResponse);
           }
-          toast.success("Product Added!", {
-            position: "top-right",
-          });
+
+          // Fetch the brand object and update nextNumber
+          const brandResponse = await axios.get(
+            "http://localhost:3001/brands",
+            {
+              params: { brandName: data.brand },
+            }
+          );
+          const brandObjectOnSubmit = brandResponse.data[0];
+          brandObjectOnSubmit.nextNumber =
+            parseInt(brandObjectOnSubmit.nextNumber) + 1;
+
+          // Update the brand table with the next number for future
+          await axios.put("http://localhost:3001/brands", brandObjectOnSubmit);
+          toast.success("Product Added!", { position: "top-right" });
           resetForm();
         }
-      });
+      } catch (error) {
+        console.error("Error during form submission:", error);
+      }
     },
   });
 
-  // var jsonBrandObject = skuData.BRANDS;
-  var dataBrandMap = new Map(Object.entries(skuData.BRANDS));
-  var dataCategoryMap = new Map(Object.entries(skuData.CATEGORY));
-  var dataConditionMap = new Map(Object.entries(skuData.CONDITION));
-  var brandMap = new Map();
-  for (const brand of dataBrandMap) {
-    brandMap.set(brand[0].toLowerCase(), brand[1]);
-  }
-  var categoryMap = new Map();
-  for (const category of dataCategoryMap) {
-    categoryMap.set(category[0].toLowerCase(), category[1]);
-  }
-  var conditionMap = new Map();
-  for (const condition of dataConditionMap) {
-    conditionMap.set(condition[0].toLowerCase(), condition[1]);
-  }
+  // Function to convert an object to a Map with lowercase keys
+  const createJsonDataMap = (data: any) => {
+    const map = new Map();
+    for (const [key, value] of Object.entries(data)) {
+      map.set(key.toLowerCase(), value);
+    }
+    return map;
+  };
 
-  const generateSku = (fieldValue: string, factor: string) => {
-    console.log("Generate SKU fieold value", fieldValue);
+  // Convert skuData.BRANDS, skuData.CATEGORY, and skuData.CONDITION to maps with lowercase keys
+  const brandMap = createJsonDataMap(skuData.BRANDS);
+  const categoryMap = createJsonDataMap(skuData.CATEGORY);
+  const conditionMap = createJsonDataMap(skuData.CONDITION);
+
+  const generateSku = async (fieldValue: string, factor: string) => {
+    // Check if the factor is "1" to process brand-related SKU generation
     if (factor === "1") {
+      // Check if the brand exists in the brandMap
       if (brandMap.has(fieldValue)) {
         const brandForSku = brandMap.get(fieldValue);
-        console.log("brandForSku", brandForSku);
+        console.log("Level 1: Brand found for SKU - ", brandForSku);
+        // Fetch the brand object from the server
+        const brandResponse = await axios.get("http://localhost:3001/brands", {
+          params: { brandName: fieldValue },
+        });
+        const brandObject = brandResponse.data[0];
+        console.log("Level 2: Brand object - ", brandObject);
 
-        axios
-          .get(`http://localhost:3001/products/findAndCount/${brandForSku}`)
-          .then((response) => {
-            console.log(response.data);
-            // let prev = 0;
-            // response.data.forEach((row: any) => {
-            //   console.log(parseInt(row.sku.split("-")[3]));
-            // });
-            skuArray[10] =
-              "0".repeat(5 - response.data.toString().length) +
-              response.data.toString();
-            setGeneratedSku(skuArray.join(""));
-          });
-
+        // If the nextNumber is not set, fetch the product count and update it
+        if (brandObject.nextNumber.length === 0) {
+          const productResponse = await axios.get(
+            `http://localhost:3001/products/findAndCount/${brandForSku}`
+          );
+          console.log("Level 3: Product count - ", productResponse.data);
+          // Update the brand object's nextNumber with the product count
+          brandObject.nextNumber = productResponse.data.toString();
+          await axios.put("http://localhost:3001/brands", brandObject);
+          console.log("Level 4");
+        }
+        // Set the 10th position of the SKU with the formatted nextNumber
+        skuArray[10] =
+          "0".repeat(5 - brandObject.nextNumber.toString().length) +
+          brandObject.nextNumber.toString();
+        setGeneratedSku(skuArray.join(""));
+        // Set the first three characters of the SKU based on the brand initials
         skuArray[0] = brandForSku ? brandForSku.charAt(0) : "@";
         skuArray[1] = brandForSku ? brandForSku.charAt(1) : "@";
         skuArray[2] = brandForSku ? brandForSku.charAt(2) : "@";
       } else {
-        skuArray[0] = "*";
-        skuArray[1] = "*";
-        skuArray[2] = "*";
+        // If the brand is not found, set the first three characters of SKU to "*"
+        console.log("Brand not found for SKU");
+        skuArray.fill("*", 0, 3);
       }
+      // Check if the factor is "2" to process category-related SKU generation
     } else if (factor === "2") {
       if (categoryMap.has(fieldValue.toLowerCase())) {
-        const categoryForSku = categoryMap.get(fieldValue.toLowerCase());
-        console.log("categoryForSku", categoryForSku);
-        // skuArray[3] = categoryForSku ? categoryForSku.charAt(0) : "N";
+        const categoryForSku =
+          categoryMap.get(fieldValue.toLowerCase()) || "NA";
+        console.log("Category for SKU:", categoryForSku);
+        // Set the 4th and 5th position of the SKU based on the category initials
         skuArray[4] = categoryForSku.charAt(0);
         skuArray[5] = categoryForSku.charAt(1);
-      } else {
-        skuArray[4] = "N";
-        skuArray[5] = "A";
       }
+      // Check if the factor is "4" to process condition-related SKU generation
     } else if (factor === "4") {
-      console.log("Inside factor 4 : ", fieldValue);
-      if (fieldValue === "") {
-        skuArray[7] = "N";
-        skuArray[8] = "A";
-      } else {
-        const conditionForSku = conditionMap.get(fieldValue.toLowerCase());
-        console.log("Condition for SKU :", conditionForSku);
-        skuArray[7] = conditionForSku.charAt(0);
-        skuArray[8] = conditionForSku.charAt(1);
-      }
-    } else {
+      const conditionForSku =
+        fieldValue === "" ? "NA" : conditionMap.get(fieldValue.toLowerCase());
+      // Set the 7th and 8th position of the SKU based on the condition initials
+      skuArray[7] = conditionForSku.charAt(0);
+      skuArray[8] = conditionForSku.charAt(1);
     }
-
+    // Update the generated SKU with the final skuArray
     setGeneratedSku(skuArray.join(""));
   };
 
@@ -352,24 +373,67 @@ function AddProduct() {
                   </Grid>
                   <Grid item xs={12}>
                     <Box m={2}>
-                      <TextField
+                      <FormControl
                         fullWidth
-                        id="strength"
-                        name="strength"
-                        label="Strength"
-                        value={formik.values.strength}
-                        onChange={formik.handleChange}
-                        onBlur={formik.handleBlur}
+                        variant="outlined"
                         error={
-                          formik.touched.strength &&
-                          Boolean(formik.errors.strength)
+                          formik.touched.category &&
+                          Boolean(formik.errors.category)
                         }
-                        helperText={
-                          formik.touched.strength && formik.errors.strength
-                        }
-                      />
+                      >
+                        <InputLabel id="categoryLabel">Category</InputLabel>
+                        <Select
+                          labelId="categoryLabel"
+                          id="category"
+                          name="category"
+                          fullWidth
+                          label="Category"
+                          value={formik.values.category}
+                          onChange={(event) => {
+                            formik.setFieldValue(
+                              "category",
+                              event.target.value
+                            );
+                            generateSku(event.target.value, "2");
+                          }}
+                          input={<OutlinedInput label="Category" />}
+                        >
+                          {Object.entries(skuData.CATEGORY).map(
+                            ([value, key]) => (
+                              <MenuItem key={key} value={value}>
+                                {value}
+                              </MenuItem>
+                            )
+                          )}
+                        </Select>
+                        <FormHelperText>
+                          {formik.touched.category && formik.errors.category}
+                        </FormHelperText>
+                      </FormControl>
                     </Box>
                   </Grid>
+                  {formik.values.category === "Fragrance" && (
+                    <Grid item xs={12}>
+                      <Box m={2}>
+                        <TextField
+                          fullWidth
+                          id="strength"
+                          name="strength"
+                          label="Strength"
+                          value={formik.values.strength}
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                          error={
+                            formik.touched.strength &&
+                            Boolean(formik.errors.strength)
+                          }
+                          helperText={
+                            formik.touched.strength && formik.errors.strength
+                          }
+                        />
+                      </Box>
+                    </Grid>
+                  )}
                   <Grid item xs={12}>
                     <Box m={2}>
                       <TextField
@@ -492,47 +556,7 @@ function AddProduct() {
                       </Grid>
                     </Grid>
                   </Grid>
-                  <Grid item xs={12}>
-                    <Box m={2}>
-                      <FormControl
-                        fullWidth
-                        variant="outlined"
-                        error={
-                          formik.touched.category &&
-                          Boolean(formik.errors.category)
-                        }
-                      >
-                        <InputLabel id="categoryLabel">Category</InputLabel>
-                        <Select
-                          labelId="categoryLabel"
-                          id="category"
-                          name="category"
-                          fullWidth
-                          label="Category"
-                          value={formik.values.category}
-                          onChange={(event) => {
-                            formik.setFieldValue(
-                              "category",
-                              event.target.value
-                            );
-                            generateSku(event.target.value, "2");
-                          }}
-                          input={<OutlinedInput label="Category" />}
-                        >
-                          {Object.entries(skuData.CATEGORY).map(
-                            ([value, key]) => (
-                              <MenuItem key={key} value={value}>
-                                {value}
-                              </MenuItem>
-                            )
-                          )}
-                        </Select>
-                        <FormHelperText>
-                          {formik.touched.category && formik.errors.category}
-                        </FormHelperText>
-                      </FormControl>
-                    </Box>
-                  </Grid>
+
                   <Grid item xs={12}>
                     <Box m={2}>
                       <TextField
@@ -717,6 +741,26 @@ function AddProduct() {
                           }
                           helperText={
                             formik.touched.batch && formik.errors.batch
+                          }
+                        />
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Box pt={4}>
+                        <TextField
+                          fullWidth
+                          id="vendor"
+                          name="vendor"
+                          label="Vendor Name"
+                          value={formik.values.vendor}
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                          error={
+                            formik.touched.vendor &&
+                            Boolean(formik.errors.vendor)
+                          }
+                          helperText={
+                            formik.touched.vendor && formik.errors.vendor
                           }
                         />
                       </Box>

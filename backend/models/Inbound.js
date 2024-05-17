@@ -17,6 +17,10 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.STRING,
             allowNull: true
         },
+        vendor: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
         compositeSku: {
             type: DataTypes.STRING,
             allowNull: false,
