@@ -6,6 +6,7 @@ import {
   Box,
   Container,
   FormControlLabel,
+  Grid,
   InputLabel,
   MenuItem,
   OutlinedInput,
@@ -21,6 +22,9 @@ import dayjs from "dayjs";
 import skuData from "../../../data/skuData.json";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
 
 function AddProduct() {
   const [generatedSku, setGeneratedSku] = useState("");
@@ -87,8 +91,9 @@ function AddProduct() {
   const formik = useFormik({
     initialValues: formikInitialValues,
     validationSchema: formikValidationSchema,
-    onSubmit: (data) => {
+    onSubmit: (data, { resetForm }) => {
       console.log(data);
+      formik.values.batch = formik.values.inbound ? formik.values.batch : "NA";
       axios.post("http://localhost:3001/products", data).then((response) => {
         console.log(response);
         if (response.data === "Already Exists") {
@@ -98,40 +103,42 @@ function AddProduct() {
           });
         } else if (response.data === "Created New") {
           console.log("New Product");
+          if (formik.values.inbound) {
+            console.log("Inside if Is inbound");
+            data.batch = data.batch.length === 0 ? "NA" : data.batch;
+            const compositeInboundKey =
+              data.sku +
+              "-" +
+              newDate.month() +
+              "-" +
+              newDate.date() +
+              "-" +
+              newDate.year() +
+              "-" +
+              data.batch;
+
+            const inboundObject = {
+              sku: data.sku,
+              vendor: "temp vendor", // Implement vendor input field on toggle of inbound in add product
+              quantity: data.quantity,
+              date: newDate,
+              batch: data.batch,
+              compositeSku: compositeInboundKey,
+              //TODO : ADd composite SKU field here
+            };
+            console.log("Inbound object is : ", inboundObject);
+            axios
+              .post("http://localhost:3001/inbound", inboundObject)
+              .then((response) => {
+                console.log(response);
+              });
+          }
           toast.success("Product Added!", {
             position: "top-right",
           });
+          resetForm();
         }
       });
-      if (formik.values.inbound) {
-        console.log("Inside if Is inbound");
-        const compositeInboundKey =
-          data.sku +
-          "-" +
-          newDate.month() +
-          "-" +
-          newDate.date() +
-          "-" +
-          newDate.year() +
-          "-" +
-          data.batch;
-
-        const inboundObject = {
-          sku: data.sku,
-          vendor: "temp vendor", // Implement vendor input field on toggle of inbound in add product
-          quantity: data.quantity,
-          date: newDate,
-          batch: data.batch,
-          compositeSku: compositeInboundKey,
-          //TODO : ADd composite SKU field here
-        };
-        console.log("Inbound object is : ", inboundObject);
-        axios
-          .post("http://localhost:3001/inbound", inboundObject)
-          .then((response) => {
-            console.log(response);
-          });
-      }
     },
   });
 
@@ -217,242 +224,374 @@ function AddProduct() {
   return (
     <div>
       <form onSubmit={formik.handleSubmit}>
-        <Container component="main" maxWidth="sm" sx={{ mb: 4 }}>
-          <Paper
-            variant="outlined"
-            sx={{ my: { xs: 3, md: 3 }, p: { xs: 1, md: 4 } }}
-          >
-            Verified
-            <Switch
-              id="verified"
-              name="verified"
-              checked={formik.values.verified}
-              onChange={formik.handleChange}
-              inputProps={{ "aria-label": "controlled" }}
-            />
-            Listed
-            <Switch
-              id="listed"
-              name="listed"
-              checked={formik.values.listed}
-              onChange={formik.handleChange}
-              inputProps={{ "aria-label": "controlled" }}
-            />
-            <br></br>
-            Inbound
-            <Switch
-              id="inbound"
-              name="inbound"
-              checked={formik.values.inbound}
-              onChange={formik.handleChange}
-              inputProps={{ "aria-label": "controlled" }}
-            />
-            Final
-            <Switch
-              id="final"
-              name="final"
-              checked={formik.values.final}
-              onChange={formik.handleChange}
-              inputProps={{ "aria-label": "controlled" }}
-            />
-            <br></br>
-            <label>Generated SKU : </label> {generatedSku}{" "}
-            <Button style={{ float: "right" }} onClick={handleSkuApprove}>
-              Approve
-            </Button>
-            <Box m={2} pt={3}>
-              <TextField
-                fullWidth
-                id="sku"
-                name="sku"
-                label="SKU"
-                value={formik.values.sku}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.sku && Boolean(formik.errors.sku)}
-                helperText={formik.touched.sku && formik.errors.sku}
-              />
-            </Box>
-            <Box m={2} pt={3}>
-              <InputLabel id="brandLabel">Brand</InputLabel>
-              <Select
-                labelId="brandLabel"
-                id="brand"
-                name="brand"
-                fullWidth
-                label="Brand"
-                value={formik.values.brand}
-                onChange={(event) => {
-                  formik.setFieldValue("brand", event.target.value);
-                  generateSku(event.target.value.toLowerCase(), "1");
-                }}
-                input={<OutlinedInput label="Brand" />}
+        <Grid container spacing={0} justifyContent="center">
+          <Grid item xs={3} border={1}>
+            <Container>
+              <Paper
+                variant="outlined"
+                sx={{ my: { xs: 2, md: 3 }, p: { xs: 1, md: 4 } }}
               >
-                {Object.entries(skuData.BRANDS).map(([value, key]) => (
-                  <MenuItem key={key} value={value}>
-                    {value}
-                  </MenuItem>
-                ))}
-              </Select>
-            </Box>
-            <Box m={2} pt={3}>
-              <TextField
-                fullWidth
-                id="itemName"
-                name="itemName"
-                label="Item Name"
-                value={formik.values.itemName}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={
-                  formik.touched.itemName && Boolean(formik.errors.itemName)
-                }
-                helperText={formik.touched.itemName && formik.errors.itemName}
-              />
-            </Box>
-            <Box m={2} pt={3}>
-              <TextField
-                fullWidth
-                id="strength"
-                name="strength"
-                label="Strength"
-                value={formik.values.strength}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={
-                  formik.touched.strength && Boolean(formik.errors.strength)
-                }
-                helperText={formik.touched.strength && formik.errors.strength}
-              />
-            </Box>
-            <Box m={2} pt={3}>
-              <TextField
-                fullWidth
-                id="shade"
-                name="shade"
-                label="Shade"
-                value={formik.values.shade}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.shade && Boolean(formik.errors.shade)}
-                helperText={formik.touched.shade && formik.errors.shade}
-              />
-            </Box>
-            <Box m={2} pt={3}>
-              <TextField
-                fullWidth
-                id="quantity"
-                name="quantity"
-                label="Quantity"
-                value={formik.values.quantity}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={
-                  formik.touched.quantity && Boolean(formik.errors.quantity)
-                }
-                helperText={formik.touched.quantity && formik.errors.quantity}
-              />
-            </Box>
-            <Box m={2} pt={3}>
-              <TextField
-                fullWidth
-                id="location"
-                name="location"
-                label="Location"
-                value={formik.values.location}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={
-                  formik.touched.location && Boolean(formik.errors.location)
-                }
-                helperText={formik.touched.location && formik.errors.location}
-              />
-            </Box>
-            <Box m={2} pt={3}>
-              <TextField
-                fullWidth
-                id="sizeOz"
-                name="sizeOz"
-                label="Size in Oz."
-                value={formik.values.sizeOz}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.sizeOz && Boolean(formik.errors.sizeOz)}
-                helperText={formik.touched.sizeOz && formik.errors.sizeOz}
-              />
-            </Box>
-            <Box m={2} pt={3}>
-              <InputLabel id="categoryLabel">Category</InputLabel>
-              <Select
-                labelId="categoryLabel"
-                id="category"
-                name="category"
-                fullWidth
-                label="Category"
-                value={formik.values.category}
-                onChange={(event) => {
-                  formik.setFieldValue("category", event.target.value);
-                  generateSku(event.target.value, "2");
-                }}
-                input={<OutlinedInput label="Category" />}
+                <Grid container spacing={0} justifyContent="center">
+                  <Grid item xs={12} display="flex" justifyContent="center">
+                    <b>Generated SKU</b>
+                  </Grid>
+                  <Grid item xs={12} display="flex" justifyContent="center">
+                    {generatedSku}{" "}
+                  </Grid>
+                  <Grid
+                    item
+                    xs={12}
+                    p={2}
+                    display="flex"
+                    justifyContent="center"
+                  >
+                    <Button
+                      variant="outlined"
+                      style={{ float: "right" }}
+                      onClick={handleSkuApprove}
+                    >
+                      Approve
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Container>
+          </Grid>
+          <Grid item xs={6} border={1}>
+            <Container component="main" maxWidth="sm" sx={{ mb: 4 }}>
+              <Paper
+                variant="outlined"
+                sx={{ my: { xs: 3, md: 3 }, p: { xs: 1, md: 3 } }}
               >
-                {Object.entries(skuData.CATEGORY).map(([value, key]) => (
-                  <MenuItem key={key} value={value}>
-                    {value}
-                  </MenuItem>
-                ))}
-              </Select>
-            </Box>
-            <Box m={2} pt={3}>
-              <TextField
-                fullWidth
-                id="upc"
-                name="upc"
-                label="UPC Code"
-                value={formik.values.upc}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.upc && Boolean(formik.errors.upc)}
-                helperText={formik.touched.upc && formik.errors.upc}
-              />
-            </Box>
-            <Box m={2} pt={3}>
-              {/* // Change the radio group buttons to dynamicallly */}
-              <RadioGroup
-                onChange={(event) => {
-                  formik.handleChange;
-                  generateSku(event.target.value, "4");
-                }}
-                value={formik.values.condition}
+                <Box m={2} pt={3}>
+                  <TextField
+                    fullWidth
+                    id="sku"
+                    name="sku"
+                    label="SKU"
+                    value={formik.values.sku}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={formik.touched.sku && Boolean(formik.errors.sku)}
+                    helperText={formik.touched.sku && formik.errors.sku}
+                  />
+                </Box>
+                <Box m={2} pt={3}>
+                  <InputLabel id="brandLabel">Brand</InputLabel>
+                  <Select
+                    labelId="brandLabel"
+                    id="brand"
+                    name="brand"
+                    fullWidth
+                    label="Brand"
+                    value={formik.values.brand}
+                    onChange={(event) => {
+                      formik.setFieldValue("brand", event.target.value);
+                      generateSku(event.target.value.toLowerCase(), "1");
+                    }}
+                    input={<OutlinedInput label="Brand" />}
+                  >
+                    {Object.entries(skuData.BRANDS).map(([value, key]) => (
+                      <MenuItem key={key} value={value}>
+                        {value}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </Box>
+                <Box m={2} pt={3}>
+                  <TextField
+                    fullWidth
+                    id="itemName"
+                    name="itemName"
+                    label="Item Name"
+                    value={formik.values.itemName}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={
+                      formik.touched.itemName && Boolean(formik.errors.itemName)
+                    }
+                    helperText={
+                      formik.touched.itemName && formik.errors.itemName
+                    }
+                  />
+                </Box>
+                <Box m={2} pt={3}>
+                  <TextField
+                    fullWidth
+                    id="strength"
+                    name="strength"
+                    label="Strength"
+                    value={formik.values.strength}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={
+                      formik.touched.strength && Boolean(formik.errors.strength)
+                    }
+                    helperText={
+                      formik.touched.strength && formik.errors.strength
+                    }
+                  />
+                </Box>
+                <Box m={2} pt={3}>
+                  <TextField
+                    fullWidth
+                    id="shade"
+                    name="shade"
+                    label="Shade"
+                    value={formik.values.shade}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={formik.touched.shade && Boolean(formik.errors.shade)}
+                    helperText={formik.touched.shade && formik.errors.shade}
+                  />
+                </Box>
+                <Box m={2} pt={3}>
+                  <TextField
+                    fullWidth
+                    id="quantity"
+                    name="quantity"
+                    label="Quantity"
+                    value={formik.values.quantity}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={
+                      formik.touched.quantity && Boolean(formik.errors.quantity)
+                    }
+                    helperText={
+                      formik.touched.quantity && formik.errors.quantity
+                    }
+                  />
+                </Box>
+                <Box m={2} pt={3}>
+                  <TextField
+                    fullWidth
+                    id="location"
+                    name="location"
+                    label="Location"
+                    value={formik.values.location}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={
+                      formik.touched.location && Boolean(formik.errors.location)
+                    }
+                    helperText={
+                      formik.touched.location && formik.errors.location
+                    }
+                  />
+                </Box>
+                <Box m={2} pt={3}>
+                  <TextField
+                    fullWidth
+                    id="sizeOz"
+                    name="sizeOz"
+                    label="Size in Oz."
+                    value={formik.values.sizeOz}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={
+                      formik.touched.sizeOz && Boolean(formik.errors.sizeOz)
+                    }
+                    helperText={formik.touched.sizeOz && formik.errors.sizeOz}
+                  />
+                </Box>
+                <Box m={2} pt={3}>
+                  <InputLabel id="categoryLabel">Category</InputLabel>
+                  <Select
+                    labelId="categoryLabel"
+                    id="category"
+                    name="category"
+                    fullWidth
+                    label="Category"
+                    value={formik.values.category}
+                    onChange={(event) => {
+                      formik.setFieldValue("category", event.target.value);
+                      generateSku(event.target.value, "2");
+                    }}
+                    input={<OutlinedInput label="Category" />}
+                  >
+                    {Object.entries(skuData.CATEGORY).map(([value, key]) => (
+                      <MenuItem key={key} value={value}>
+                        {value}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </Box>
+                <Box m={2} pt={3}>
+                  <TextField
+                    fullWidth
+                    id="upc"
+                    name="upc"
+                    label="UPC Code"
+                    value={formik.values.upc}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={formik.touched.upc && Boolean(formik.errors.upc)}
+                    helperText={formik.touched.upc && formik.errors.upc}
+                  />
+                </Box>
+                <Box m={2} pt={3}>
+                  {/* // Change the radio group buttons to dynamicallly */}
+                  <RadioGroup
+                    onChange={(event) => {
+                      formik.handleChange;
+                      generateSku(event.target.value, "4");
+                    }}
+                    value={formik.values.condition}
+                  >
+                    <FormControlLabel
+                      value="unboxed"
+                      control={<Radio />}
+                      label="Unboxed"
+                      checked={formik.values.condition === "Unboxed"}
+                      onChange={() => (formik.values.condition = "Unboxed")}
+                    />
+                    <FormControlLabel
+                      value="sealed"
+                      control={<Radio />}
+                      label="Sealed"
+                      checked={formik.values.condition === "Sealed"}
+                      onChange={() => (formik.values.condition = "Sealed")}
+                    />
+                    <FormControlLabel
+                      value="unsealed"
+                      control={<Radio />}
+                      label="Unsealed"
+                      checked={formik.values.condition === "Unsealed"}
+                      onChange={() => (formik.values.condition = "Unsealed")}
+                    />
+                  </RadioGroup>
+                </Box>
+                <Button
+                  color="primary"
+                  variant="contained"
+                  fullWidth
+                  type="submit"
+                >
+                  Submit
+                </Button>
+              </Paper>
+            </Container>
+          </Grid>
+          <Grid item xs={3} border={1}>
+            <Container>
+              <Paper
+                variant="outlined"
+                sx={{ my: { xs: 3, md: 3 }, p: { xs: 1, md: 4 } }}
               >
-                <FormControlLabel
-                  value="unboxed"
-                  control={<Radio />}
-                  label="Unboxed"
-                  checked={formik.values.condition === "Unboxed"}
-                  onChange={() => (formik.values.condition = "Unboxed")}
-                />
-                <FormControlLabel
-                  value="sealed"
-                  control={<Radio />}
-                  label="Sealed"
-                  checked={formik.values.condition === "Sealed"}
-                  onChange={() => (formik.values.condition = "Sealed")}
-                />
-                <FormControlLabel
-                  value="unsealed"
-                  control={<Radio />}
-                  label="Unsealed"
-                  checked={formik.values.condition === "Unsealed"}
-                  onChange={() => (formik.values.condition = "Unsealed")}
-                />
-              </RadioGroup>
-            </Box>
-            <Button color="primary" variant="contained" fullWidth type="submit">
-              Submit
-            </Button>
-          </Paper>
-        </Container>
+                <Grid container spacing={0} justifyContent="center">
+                  <Grid
+                    item
+                    xs={12}
+                    p={1}
+                    display="flex"
+                    justifyContent="center"
+                  >
+                    <b>Product Status</b>
+                  </Grid>
+                  <Grid item xs={6}>
+                    Verified
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Switch
+                      id="verified"
+                      name="verified"
+                      checked={formik.values.verified}
+                      onChange={formik.handleChange}
+                      inputProps={{ "aria-label": "controlled" }}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    Listed
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Switch
+                      id="listed"
+                      name="listed"
+                      checked={formik.values.listed}
+                      onChange={formik.handleChange}
+                      inputProps={{ "aria-label": "controlled" }}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    Inbound
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Switch
+                      id="inbound"
+                      name="inbound"
+                      checked={formik.values.inbound}
+                      onChange={formik.handleChange}
+                      inputProps={{ "aria-label": "controlled" }}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    Final
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Switch
+                      id="final"
+                      name="final"
+                      checked={formik.values.final}
+                      onChange={formik.handleChange}
+                      inputProps={{ "aria-label": "controlled" }}
+                    />
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Container>
+            {formik.values.inbound && (
+              <Container>
+                <Paper
+                  variant="outlined"
+                  sx={{ my: { xs: 3, md: 3 }, p: { xs: 1, md: 4 } }}
+                >
+                  <Grid container spacing={0} justifyContent="center">
+                    <Grid item xs={12} display="flex" justifyContent="center">
+                      <b>Inbound Details</b>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Box pt={4}>
+                        <TextField
+                          fullWidth
+                          id="batch"
+                          name="batch"
+                          label="Batch Code"
+                          value={formik.values.batch}
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                          error={
+                            formik.touched.batch && Boolean(formik.errors.batch)
+                          }
+                          helperText={
+                            formik.touched.batch && formik.errors.batch
+                          }
+                        />
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Box m={-3} pt={6}>
+                        <LocalizationProvider dateAdapter={AdapterDayjs}>
+                          <DemoContainer components={["DatePicker"]}>
+                            <DatePicker
+                              label="Inbound Date"
+                              value={newDate}
+                              onChange={(event) => {
+                                if (event) {
+                                  setNewDate(event);
+                                  formik.setFieldValue("date", newDate);
+                                }
+                              }}
+                            />
+                          </DemoContainer>
+                        </LocalizationProvider>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Container>
+            )}
+          </Grid>
+        </Grid>
       </form>
     </div>
   );
