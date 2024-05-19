@@ -1,35 +1,36 @@
 const express = require("express");
 const router = express.Router();
-const eBayApi = require('ebay-api')
+const axios = require('axios');
 
 router.get("/allOrders", async (req, res) => {
 
-    const eBay = new eBayApi({
-        appId: 'ShanksRe-Inventor-PRD-95ec4ed98-41a5d4f1',
-        certId: 'PRD-5ec4ed9865c0-97c7-48d2-a88c-e11f',
-        sandbox: false
-    });
-    const code = req.query.code;
-    console.log(code)
+  // const EBAY_API_URL = 'https://api.ebay.com/sell/fulfillment/v1/order';
+  // const AUTH_TOKEN = 'v^1.1#i^1#p^3#f^0#r^1#I^3#t^Ul4xMF83Ojc2NjAwQUJCMTkyNThERDA3RTM0MjM1RDM3Rjc5RjY0XzBfMSNFXjI2MA==';
 
-    eBay.OAuth2.setScope([
-        'https://api.ebay.com/oauth/api_scope',
-        'https://api.ebay.com/oauth/api_scope/sell.fulfillment.readonly',
-        'https://api.ebay.com/oauth/api_scope/sell.fulfillment'
-    ]);
 
-    // try {
-    //     const token = await eBay.OAuth2.getToken(code);
-    //     eBay.OAuth2.setCredentials(token);
-    //     req.session.token = token
-    
-    //     const orders = await eBay.sell.fulfillment.getOrders();
-    //     console.log(orders);
-    // } catch (error) {
-    //     console.error(error)
-    // }
+  // try {
+  //     const response = await axios.get(EBAY_API_URL, {
+  //       headers: {
+  //         Authorization: `Bearer ${AUTH_TOKEN}`
+  //       },
+  //       params: {
+  //         limit: 100,
+  //         offset: 0,  
+  //       },
+  //     });
+  
+  //     if (response.status === 200) {
+  //       const orders = response.data.orders;
+  //       console.log('Orders:', orders);
+  //     } else {
+  //       console.error('Error fetching orders:', response.status, response.statusText);
+  //     }
+  //   } catch (error) {
+  //     console.log(error)
+  //     console.error('Error:', error.response ? error.response.data : error.message);
+  // }
 
-    res.json("Completed");
+  res.json("Completed");
 });
 
 module.exports = router;
