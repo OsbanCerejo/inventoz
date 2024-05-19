@@ -3,67 +3,62 @@ import { useEffect, useState } from "react";
 import ProductList from "../components/ProductList";
 import { TextField, Button, Box, MenuItem, Select } from "@mui/material";
 
-// export interface Products {
-//   sku: string;
-//   brand: string;
-//   itemName: string;
-//   quantity: number;
-//   location: string;
-//   sizeOz: number;
-//   sizeMl: number;
-//   strength: string;
-//   shade: string;
-//   formulation: string;
-//   category: string;
-//   type: string;
-//   upc: number;
-//   batch: string;
-//   condition: string;
-// }
-
 function Home() {
+  // State Variables
   const [listOfProducts, setListOfProducts] = useState([]);
   const [searchString, setSearchString] = useState("");
   const [selectedColumn, setSelectedColumn] = useState("");
-  let heading = "Products";
-  const columns = ["Item Name", "SKU", "Brand", "Location"];
-  const columnMap = new Map();
-  columnMap.set("Item Name", "itemName");
-  columnMap.set("SKU", "sku");
-  columnMap.set("Brand", "brand");
-  columnMap.set("Location", "location");
 
+  // Constants
+  const heading = "Products";
+  const columns = ["Item Name", "SKU", "Brand", "Location"];
+  const columnMap = new Map([
+    ["Item Name", "itemName"],
+    ["SKU", "sku"],
+    ["Brand", "brand"],
+    ["Location", "location"],
+  ]);
+
+  // Fetch initial product list on component mount
   useEffect(() => {
-    axios.get("http://localhost:3001/products").then((response) => {
-      setListOfProducts(response.data);
-    });
+    fetchProducts();
   }, []);
 
-  const handleSearch = () => {
-    // TODO: Move this to Search.tsx eventually
-    console.log("Selected Column ", selectedColumn);
-    console.log(columnMap.get(selectedColumn));
-    if (searchString.length != 0) {
-      axios
-        .get("http://localhost:3001/products/search", {
-          params: {
-            searchString: searchString,
-            searchType: columnMap.has(selectedColumn)
-              ? columnMap.get(selectedColumn)
-              : "itemName",
-          },
-        })
-        .then((response) => {
-          console.log("Response after search: ", response.data);
-          setListOfProducts(response.data);
-        });
-    } else {
-      // TODO: Fix this to reduce API GET calls and make it so empty string just resets the table state
-      axios.get("http://localhost:3001/products").then((response) => {
-        setListOfProducts(response.data);
-      });
+  const fetchProducts = async () => {
+    try {
+      const response = await axios.get("http://localhost:3001/products");
+      setListOfProducts(response.data);
+    } catch (error) {
+      console.error("Error fetching products:", error);
     }
   };
+
+  // Function to handle search based on selected column and search string
+  const handleSearch = async () => {
+    // TODO: Move this to Search.tsx eventually
+    try {
+      // Check if search string is provided
+      if (searchString.trim() !== "") {
+        const searchType = columnMap.has(selectedColumn)
+          ? columnMap.get(selectedColumn)
+          : "itemName";
+        const response = await axios.get(
+          "http://localhost:3001/products/search",
+          {
+            params: { searchString, searchType },
+          }
+        );
+        setListOfProducts(response.data);
+      } else {
+        // If search string is empty, fetch all products
+        fetchProducts();
+      }
+    } catch (error) {
+      console.error("Error searching products:", error);
+    }
+  };
+
+  // Function to handle search on pressing Enter key
   const handleKeypress = (e: any) => {
     //it triggers by pressing the enter key
     if (e.keyCode === 13) {
