@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const axios = require('axios');
-const authService = require('../Services/AuthService');
+const authService = require('../services/AuthService');
 
 const service = new authService();
 router.get("/allOrders", async (req, res) => {
