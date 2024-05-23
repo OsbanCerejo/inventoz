@@ -1,9 +1,9 @@
 {
   "development": {
-    "username": "root",
-    "password": "rvedq3070",
-    "database": "inventory",
-    "host": "127.0.0.1",
+    "username": "",
+    "password": "",
+    "database": "",
+    "host": "",
     "dialect": "mysql"
   },
   "test": {
