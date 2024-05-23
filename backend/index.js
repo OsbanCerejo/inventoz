@@ -1,11 +1,31 @@
 const express = require('express');
 const app = express();
 const cors = require("cors");
+const mysql = require("mysql");
+require('dotenv').config()
 
 app.use(express.json());
 app.use(cors());
 
 const db = require('./models');
+const awsdb = mysql.createConnection({
+    host: "database.cpgwowuq84pb.us-east-2.rds.amazonaws.com",
+    port: "3306",
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: "inventory"
+})
+
+
+awsdb.connect((error) => {
+    if(error) {
+        console.log(error);
+        return;
+    } 
+    console.log("Connected to AWS Database.");
+})
+
+
 
 //Routers
 const productRouter = require('./routes/Products');
@@ -27,8 +47,8 @@ const ordersRouter = require('./routes/Orders');
 app.use("/orders", ordersRouter);
 
 db.sequelize.sync().then(() => {
-    app.listen(3001, () => {
-        console.log("Server is running on http://localhost:3001");
+    app.listen(process.env.PORT, () => {
+        console.log(`Server is running on http://localhost:${process.env.PORT}`);
     });
 });
 
