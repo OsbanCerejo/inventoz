@@ -1,8 +1,6 @@
-<<<<<<< HEAD
+
 # Inventoz
-=======
-# Inventory-Helper
->>>>>>> c7b12ba7c901c99c3a4f8c5ba8f1b66c0d527571
+
 
 Inventory-Helper is a comprehensive solution designed to streamline the process of managing inventory for your business. This project includes features for adding, updating, and tracking products, along with managing brands, categories, and conditions of products.
 
