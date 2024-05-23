@@ -145,14 +145,6 @@ function Product() {
                     <TableCell align="right">{productObject.type}</TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell>UPC</TableCell>
-                    <TableCell align="right">{productObject.upc}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Batch</TableCell>
-                    <TableCell align="right">{productObject.batch}</TableCell>
-                  </TableRow>
-                  <TableRow>
                     <TableCell>Condition</TableCell>
                     <TableCell align="right">
                       {productObject.condition}

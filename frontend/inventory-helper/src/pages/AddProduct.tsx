@@ -557,7 +557,7 @@ function AddProduct() {
                     </Grid>
                   </Grid>
 
-                  <Grid item xs={12}>
+                  {/* <Grid item xs={12}>
                     <Box m={2}>
                       <TextField
                         fullWidth
@@ -571,7 +571,7 @@ function AddProduct() {
                         helperText={formik.touched.upc && formik.errors.upc}
                       />
                     </Box>
-                  </Grid>
+                  </Grid> */}
                 </Grid>
 
                 <Divider sx={{ borderColor: "gray", borderWidth: 1 }}></Divider>
