@@ -5,94 +5,96 @@ const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 
 router.get("/", async (req, res) => {
-    const listOfProducts = await Products.findAll();
-    res.json(listOfProducts);
+  const listOfProducts = await Products.findAll();
+  res.json(listOfProducts);
 });
 
 router.get("/byId/:id", async (req, res) => {
-    const id = req.params.id;
-    const product = await Products.findByPk(id);
-    res.json(product);
+  const id = req.params.id;
+  const product = await Products.findByPk(id);
+  res.json(product);
 });
 
 router.get("/search", async (req, res) => {
-    const {searchString , searchType} = req.query;
-    console.log(searchType)
-    const searchResults = await Products.findAll({
-        where: { 
-            [searchType]: {
-                [Op.like]: '%' + searchString + '%'
-            }
-        }
-    })
-    res.json(searchResults);
+  const { searchString, searchType } = req.query;
+  console.log(searchType);
+  const searchResults = await Products.findAll({
+    where: {
+      [searchType]: {
+        [Op.like]: "%" + searchString + "%",
+      },
+    },
+  });
+  res.json(searchResults);
 });
 
 router.post("/", async (req, res) => {
-    const product = req.body;
-    // await Products.create(product);
-    const [found, created] = await Products.findOrCreate({
-        where: { sku: product.sku},
-        defaults: product
-    });
-    if(created) {
-        console.log("Created New")
-    } else {
-        console.log("Already Exists")
-    }
-    res.json(created ? "Created New" : "Already Exists");
+  const product = req.body;
+  // await Products.create(product);
+  const [found, created] = await Products.findOrCreate({
+    where: { sku: product.sku },
+    defaults: product,
+  });
+  if (created) {
+    console.log("Created New");
+  } else {
+    console.log("Already Exists");
+  }
+  res.json(created ? "Created New" : "Already Exists");
 });
 
 router.put("/", async (req, res) => {
-    const product = req.body;
-    console.log("Edited Product Value in Server : " , product);
-    await Products.update({
-        brand: product.brand, 
-        itemName : product.itemName, 
-        quantity: product.quantity,
-        location: product.location,
-        sizeOz: product.sizeOz,
-        sizeMl: product.sizeMl,
-        strength: product.strength,
-        shade: product.shade,
-        formulation: product.formulation,
-        category: product.category,
-        type: product.type,
-        upc: product.upc,
-        batch: product.batch,
-        condition: product.condition,
-        verified: product.verified,
-        listed: product.listed,
-        final: product.final
-    }, 
-        {where: {sku: product.sku}});
-    res.json(product);
+  const product = req.body;
+  console.log("Edited Product Value in Server : ", product);
+  await Products.update(
+    {
+      brand: product.brand,
+      itemName: product.itemName,
+      quantity: product.quantity,
+      location: product.location,
+      sizeOz: product.sizeOz,
+      sizeMl: product.sizeMl,
+      strength: product.strength,
+      shade: product.shade,
+      formulation: product.formulation,
+      category: product.category,
+      type: product.type,
+      upc: product.upc,
+      batch: product.batch,
+      condition: product.condition,
+      verified: product.verified,
+      listed: product.listed,
+      final: product.final,
+    },
+    { where: { sku: product.sku } }
+  );
+  res.json(product);
 });
 
-router.delete("/delete/:id", async(req, res) => {
-    const id = req.params.id;
-    const status = await Products.destroy({
-        where: {
-            sku: id
-        }
-    })
-    res.json(status);
+router.delete("/delete/:id", async (req, res) => {
+  const id = req.params.id;
+  const status = await Products.destroy({
+    where: {
+      sku: id,
+    },
+  });
+  res.json(status);
 });
 
 router.get("/findAndCount/:skuPrefix", async (req, res) => {
-    console.log("Here inside find and count all in backend");
-    const skuPrefix = req.params.skuPrefix;
-    const { count, rows } = await Products.findAndCountAll({
-        where: {
-            sku: {
-                [Op.like]: skuPrefix + '-' + '%'
-            }
-        },
-        // offset: 10,
-        // limit: 2,
-      });
-    //   console.log(count);
-      res.json(count);
+  console.log("Here inside find and count all in backend");
+  const skuPrefix = req.params.skuPrefix;
+  const { count, rows } = await Products.findAndCountAll({
+    where: {
+      sku: {
+        [Op.like]: skuPrefix + "-" + "%",
+      },
+    },
+    // offset: 10,
+    // limit: 2,
+  });
+  //   console.log(count);
+  res.json(count);
 });
 
 module.exports = router;
