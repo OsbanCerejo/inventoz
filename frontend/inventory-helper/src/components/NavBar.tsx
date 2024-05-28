@@ -42,11 +42,11 @@ function NavBar() {
                 Inbound
               </a>
             </li>
-            {/* <li className="nav-item">
+            <li className="nav-item">
               <a className="nav-link" href="/orders/showAll">
                 Orders
               </a>
-            </li> */}
+            </li>
           </ul>
         </div>
       </nav>
