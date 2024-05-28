@@ -1,3 +1,11 @@
+import {
+  Box,
+  Card,
+  CardContent,
+  CardMedia,
+  Grid,
+  Typography,
+} from "@mui/material";
 import axios from "axios";
 import { useEffect, useState } from "react";
 
@@ -52,7 +60,7 @@ function AllOrders() {
           customerName: order.customerUsername,
           orderStatus: order.orderStatus,
         });
-        result.totalItems += item.quantity; // Increment total item count
+        result.totalItems += item.quantity;
       });
       console.log(acc);
       return acc;
@@ -63,45 +71,79 @@ function AllOrders() {
 
   return (
     <div>
-      <h5>Total Items: {orderMetrics.totalItems}</h5>
-      <h5>Total Orders : {orderMetrics.totalOrders}</h5>
-      {Object.keys(groupedOrders)
-        .sort()
-        .map((sku, skuIndex) => (
-          <div key={sku}>
-            <h5>Product SKU: {sku}</h5>
-            <table className="table table-bordered table-hover" border={2}>
-              <thead>
-                <tr>
-                  <th scope="col">#</th>
-                  <th scope="col" style={{ width: "15%" }}>
-                    Image
-                  </th>
-                  <th scope="col">Item Name</th>
-                  <th scope="col" style={{ width: "10%" }}>
-                    Location
-                  </th>
-                  <th scope="col" style={{ width: "5%" }}>
-                    Quantity
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {groupedOrders[sku].map((item: any, index: any) => (
-                  <tr key={item.orderItemId}>
-                    <th scope="row">{index + 1}</th>
-                    <td>
-                      <img src={item.imageUrl} height="50" alt={item.name} />
-                    </td>
-                    <td>{item.name}</td>
-                    <td>{item.warehouseLocation}</td>
-                    <td>{item.quantity}</td>
-                  </tr>
+      <div id="orders-container">
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+          }}
+        >
+          <Typography>Total Items: {orderMetrics.totalItems}</Typography>
+          <Typography>Total Orders: {orderMetrics.totalOrders}</Typography>
+        </Box>
+
+        {Object.keys(groupedOrders)
+          .sort()
+          .map((sku) => (
+            <Box key={sku} sx={{ marginBottom: 2 }}>
+              <Grid container spacing={1}>
+                {groupedOrders[sku].map((item: any) => (
+                  <Grid item xs={12} key={item.orderItemId}>
+                    <Card sx={{ display: "flex" }}>
+                      <CardMedia
+                        component="img"
+                        sx={{ width: 150, objectFit: "contain" }}
+                        image={item.imageUrl}
+                        alt={item.name}
+                      />
+                      <CardContent
+                        sx={{
+                          display: "flex",
+                          flexDirection: "column",
+                          width: "100%",
+                        }}
+                      >
+                        <Box sx={{ flexGrow: 1 }}>
+                          <Typography component="div">{item.name}</Typography>
+                        </Box>
+                        {item.options.length > 0 && (
+                          <Box sx={{ flexGrow: 1 }}>
+                            <Typography>
+                              <b>Shade/Variant:</b> {item.options[0].value}
+                            </Typography>
+                          </Box>
+                        )}
+                        <Box
+                          sx={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "flex-end",
+                            flexGrow: 1,
+                          }}
+                        >
+                          <Typography>Quantity: {item.quantity}</Typography>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "flex-end",
+                            }}
+                          >
+                            <Typography>
+                              Location: {item.warehouseLocation}
+                            </Typography>
+                            <Typography>SKU: {item.sku}</Typography>
+                          </Box>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
+              </Grid>
+            </Box>
+          ))}
+      </div>
     </div>
   );
 }
