@@ -2,10 +2,22 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 require("dotenv").config();
-const sequelize = require("./config/database");
+const { Sequelize } = require("sequelize");
+const dbConfig = require("./config/databaseConfig");
 
 app.use(express.json());
 app.use(cors());
+
+// Database configuration
+const sequelize = new Sequelize(
+  dbConfig.database,
+  dbConfig.username,
+  dbConfig.password,
+  {
+    host: dbConfig.host,
+    dialect: dbConfig.dialect,
+  }
+);
 
 //Routers
 const productRouter = require("./routes/Products");
@@ -29,9 +41,7 @@ app.use("/orders", ordersRouter);
 sequelize
   .authenticate()
   .then(() => {
-    console.log(
-      "Connection to AWS Database has been established successfully."
-    );
+    console.log("Connection to Database has been established successfully.");
     return sequelize.sync();
   })
   .then(() => {

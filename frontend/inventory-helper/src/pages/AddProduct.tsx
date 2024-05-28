@@ -602,7 +602,22 @@ function AddProduct() {
                         <Grid container spacing={0}>
                           <Grid item xs={12}>
                             <Box m={2}>
-                              <TextField fullWidth />
+                              <TextField
+                                fullWidth
+                                id="type"
+                                name="type"
+                                label="Type"
+                                value={formik.values.type}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.type &&
+                                  Boolean(formik.errors.type)
+                                }
+                                helperText={
+                                  formik.touched.type && formik.errors.type
+                                }
+                              />
                             </Box>
                           </Grid>
                           <Grid item xs={12}>

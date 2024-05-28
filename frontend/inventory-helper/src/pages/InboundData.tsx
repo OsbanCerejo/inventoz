@@ -1,10 +1,13 @@
 import { Box, TextField, Button } from "@mui/material";
 import axios from "axios";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import InboundProduct from "./InboundProduct";
 
 function InboundData() {
   const [listOfInbound, setListOfInbound] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const navigate = useNavigate();
 
   useEffect(() => {
     axios.get("http://localhost:3001/inbound").then((response) => {
@@ -35,6 +38,24 @@ function InboundData() {
       handleSearch();
     }
   };
+
+  const handleSelect = (product: any) => {
+    console.log("Inside handleSelect in product list component");
+    console.log(product);
+    console.log(product.verified);
+    navigate(`/products/${product}`);
+  };
+
+  const formatDate = (dateString: string) => {
+    const options = {
+      year: "numeric" as const,
+      month: "long" as const,
+      day: "numeric" as const,
+    };
+    const date = new Date(dateString);
+    return date.toLocaleDateString(undefined, options);
+  };
+
   return (
     <div>
       <Box alignItems="center" my={4} p={2}>
@@ -61,24 +82,35 @@ function InboundData() {
             <th scope="col">Quantity</th>
             <th scope="col">Date</th>
             <th scope="col">Batch Code</th>
-            <th scope="col">Vendor</th>
+            <th scope="col">Location</th>
+            <th scope="col">Listed</th>
           </tr>
         </thead>
         <tbody>
           {listOfInbound.map((inboundProduct: any, index) => (
             <tr
               key={index}
-              //   onClick={() => {
-              //     // setSelectedIndex(index);
-              //     handleSelect(product);
-              //   }}
+              onClick={() => {
+                // setSelectedIndex(index);
+                handleSelect(inboundProduct.sku);
+              }}
             >
               <th scope="row">{index + 1}</th>
               <td>{inboundProduct.sku}</td>
               <td>{inboundProduct.quantity}</td>
-              <td>{inboundProduct.date}</td>
+              <td>{formatDate(inboundProduct.date)}</td>
               <td>{inboundProduct.batch}</td>
-              <td>{inboundProduct.vendor}</td>
+              <td>{inboundProduct.Product.location}</td>
+              <td
+                style={{
+                  backgroundColor: inboundProduct.Product.listed
+                    ? "#B2FF59"
+                    : "#FF5252",
+                  width: "5%",
+                }}
+              >
+                {inboundProduct.Product.listed ? "Yes" : "No"}
+              </td>
             </tr>
           ))}
         </tbody>

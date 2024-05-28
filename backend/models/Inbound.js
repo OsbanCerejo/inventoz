@@ -1,34 +1,41 @@
 module.exports = (sequelize, DataTypes) => {
+  const Inbound = sequelize.define(
+    "Inbound",
+    {
+      sku: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+      quantity: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+      date: {
+        type: DataTypes.DATE,
+        allowNull: false,
+      },
+      batch: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      vendor: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      compositeSku: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        primaryKey: true,
+      },
+    },
+    {
+      timestamps: false,
+    }
+  );
 
-    const Inbound = sequelize.define("Inbound", {
-        sku: {
-            type: DataTypes.STRING,
-            allowNull: false,
-        },
-        quantity: {
-            type: DataTypes.STRING,
-            allowNull: false
-        },
-        date: {
-            type: DataTypes.DATE,
-            allowNull: false,
-        },
-        batch: {
-            type: DataTypes.STRING,
-            allowNull: true
-        },
-        vendor: {
-            type: DataTypes.STRING,
-            allowNull: true
-        },
-        compositeSku: {
-            type: DataTypes.STRING,
-            allowNull: false,
-            primaryKey: true
-        }
-    }, {
-        timestamps: false
-    });
+  Inbound.associate = (models) => {
+    Inbound.belongsTo(models.Products, { foreignKey: "sku" });
+  };
 
-    return Inbound;
-}
+  return Inbound;
+};
