@@ -137,6 +137,21 @@ function AllOrders() {
                           </Box>
                         </Box>
                       </CardContent>
+                      <Box
+                        border={1}
+                        sx={{
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "20px",
+                          backgroundColor: "#f0f0f0",
+                        }}
+                      >
+                        <Typography>R</Typography>
+                        <Typography>Q</Typography>
+                        <Typography>I</Typography>
+                      </Box>
                     </Card>
                   </Grid>
                 ))}
