@@ -50,10 +50,14 @@ function AllOrders() {
       order.items.forEach((item: any) => {
         const { sku } = item;
         if (!acc[sku]) {
-          acc[sku] = [];
+          acc[sku] = {
+            ...item,
+            quantity: 0, // Initialize quantity
+            orderDetails: [],
+          };
         }
-        acc[sku].push({
-          ...item,
+        acc[sku].quantity += item.quantity;
+        acc[sku].orderDetails.push({
           orderId: order.orderId,
           orderNumber: order.orderNumber,
           orderDate: order.orderDate,
@@ -62,10 +66,8 @@ function AllOrders() {
         });
         result.totalItems += item.quantity;
       });
-      console.log(acc);
       return acc;
     }, {});
-
     return result;
   }
 
@@ -88,73 +90,76 @@ function AllOrders() {
           .map((sku) => (
             <Box key={sku} sx={{ marginBottom: 2 }}>
               <Grid container spacing={1}>
-                {groupedOrders[sku].map((item: any) => (
-                  <Grid item xs={12} key={item.orderItemId}>
-                    <Card sx={{ display: "flex" }}>
-                      <CardMedia
-                        component="img"
-                        sx={{ width: 150, objectFit: "contain" }}
-                        image={item.imageUrl}
-                        alt={item.name}
-                      />
-                      <CardContent
+                <Grid item xs={12} key={groupedOrders[sku].orderItemId}>
+                  <Card sx={{ display: "flex" }}>
+                    <CardMedia
+                      component="img"
+                      sx={{ width: 150, objectFit: "contain" }}
+                      image={groupedOrders[sku].imageUrl}
+                      alt={groupedOrders[sku].name}
+                    />
+                    <CardContent
+                      sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        width: "100%",
+                      }}
+                    >
+                      <Box sx={{ flexGrow: 1 }}>
+                        <Typography component="div" variant="h6">
+                          {groupedOrders[sku].name}
+                        </Typography>
+                      </Box>
+                      {groupedOrders[sku].options.length > 0 && (
+                        <Box sx={{ flexGrow: 1 }}>
+                          <Typography>
+                            <b>Shade/Variant:</b>{" "}
+                            {groupedOrders[sku].options[0].value}
+                          </Typography>
+                        </Box>
+                      )}
+                      <Box
                         sx={{
                           display: "flex",
-                          flexDirection: "column",
-                          width: "100%",
+                          justifyContent: "space-between",
+                          alignItems: "flex-end",
+                          flexGrow: 1,
                         }}
                       >
-                        <Box sx={{ flexGrow: 1 }}>
-                          <Typography component="div">{item.name}</Typography>
-                        </Box>
-                        {item.options.length > 0 && (
-                          <Box sx={{ flexGrow: 1 }}>
-                            <Typography>
-                              <b>Shade/Variant:</b> {item.options[0].value}
-                            </Typography>
-                          </Box>
-                        )}
+                        <Typography>
+                          Quantity: {groupedOrders[sku].quantity}
+                        </Typography>
                         <Box
                           sx={{
                             display: "flex",
-                            justifyContent: "space-between",
+                            flexDirection: "column",
                             alignItems: "flex-end",
-                            flexGrow: 1,
                           }}
                         >
-                          <Typography>Quantity: {item.quantity}</Typography>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              flexDirection: "column",
-                              alignItems: "flex-end",
-                            }}
-                          >
-                            <Typography>
-                              Location: {item.warehouseLocation}
-                            </Typography>
-                            <Typography>SKU: {item.sku}</Typography>
-                          </Box>
+                          <Typography>
+                            Location: {groupedOrders[sku].warehouseLocation}
+                          </Typography>
+                          <Typography>SKU: {groupedOrders[sku].sku}</Typography>
                         </Box>
-                      </CardContent>
-                      <Box
-                        border={1}
-                        sx={{
-                          display: "flex",
-                          flexDirection: "column",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: "20px",
-                          backgroundColor: "#f0f0f0",
-                        }}
-                      >
-                        <Typography>R</Typography>
-                        <Typography>Q</Typography>
-                        <Typography>I</Typography>
                       </Box>
-                    </Card>
-                  </Grid>
-                ))}
+                    </CardContent>
+                    <Box
+                      border={1}
+                      sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "20px",
+                        backgroundColor: "#f0f0f0",
+                      }}
+                    >
+                      <Typography>R</Typography>
+                      <Typography>Q</Typography>
+                      <Typography>I</Typography>
+                    </Box>
+                  </Card>
+                </Grid>
               </Grid>
             </Box>
           ))}
