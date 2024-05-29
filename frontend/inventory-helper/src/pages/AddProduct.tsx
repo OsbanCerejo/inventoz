@@ -622,7 +622,23 @@ function AddProduct() {
                           </Grid>
                           <Grid item xs={12}>
                             <Box m={2}>
-                              <TextField fullWidth />
+                              <TextField
+                                fullWidth
+                                id="formulation"
+                                name="formulation"
+                                label="Formulation"
+                                value={formik.values.formulation}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.formulation &&
+                                  Boolean(formik.errors.formulation)
+                                }
+                                helperText={
+                                  formik.touched.formulation &&
+                                  formik.errors.formulation
+                                }
+                              />
                             </Box>
                           </Grid>
                           <Grid item xs={12}>
