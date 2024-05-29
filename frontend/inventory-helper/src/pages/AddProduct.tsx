@@ -191,7 +191,6 @@ function AddProduct() {
   const brandMap = createJsonDataMap(skuData.BRANDS);
   const categoryMap = createJsonDataMap(skuData.CATEGORY);
   const conditionMap = createJsonDataMap(skuData.CONDITION);
-  const strengthMap = createJsonDataMap(skuData.CONDITION);
 
   const generateSku = async (fieldValue: string, factor: string) => {
     // Check if the factor is "1" to process brand-related SKU generation
@@ -580,22 +579,6 @@ function AddProduct() {
                       </Grid>
                     </Grid>
                   </Grid>
-
-                  {/* <Grid item xs={12}>
-                    <Box m={2}>
-                      <TextField
-                        fullWidth
-                        id="upc"
-                        name="upc"
-                        label="UPC Code"
-                        value={formik.values.upc}
-                        onChange={formik.handleChange}
-                        onBlur={formik.handleBlur}
-                        error={formik.touched.upc && Boolean(formik.errors.upc)}
-                        helperText={formik.touched.upc && formik.errors.upc}
-                      />
-                    </Box>
-                  </Grid> */}
                 </Grid>
 
                 <Divider sx={{ borderColor: "gray", borderWidth: 1 }}></Divider>
@@ -667,7 +650,22 @@ function AddProduct() {
                           </Grid>
                           <Grid item xs={12}>
                             <Box m={2}>
-                              <TextField fullWidth />
+                              <TextField
+                                fullWidth
+                                id="upc"
+                                name="upc"
+                                label="UPC Code"
+                                value={formik.values.upc}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.upc &&
+                                  Boolean(formik.errors.upc)
+                                }
+                                helperText={
+                                  formik.touched.upc && formik.errors.upc
+                                }
+                              />
                             </Box>
                           </Grid>
                           <Grid item xs={12}>
