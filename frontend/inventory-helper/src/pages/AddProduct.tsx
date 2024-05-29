@@ -110,6 +110,8 @@ function AddProduct() {
       // Set the batch value to "NA" if inbound is false
       formik.values.batch = formik.values.inbound ? formik.values.batch : "NA";
 
+      console.log("Strength :::::::  ", formik.values.strength);
+
       try {
         // Attempt to add the new product into Products table
         const addProductresponse = await axios.post(
@@ -145,6 +147,7 @@ function AddProduct() {
               batch: data.batch,
               compositeSku: compositeInboundKey,
             };
+
             // Add the product to Inbound table along with the new composite Inbound key
             const inboundResponse = await axios.post(
               "http://localhost:3001/inbound",
@@ -188,6 +191,7 @@ function AddProduct() {
   const brandMap = createJsonDataMap(skuData.BRANDS);
   const categoryMap = createJsonDataMap(skuData.CATEGORY);
   const conditionMap = createJsonDataMap(skuData.CONDITION);
+  const strengthMap = createJsonDataMap(skuData.CONDITION);
 
   const generateSku = async (fieldValue: string, factor: string) => {
     // Check if the factor is "1" to process brand-related SKU generation
@@ -415,22 +419,42 @@ function AddProduct() {
                   {formik.values.category === "Fragrance" && (
                     <Grid item xs={12}>
                       <Box m={2}>
-                        <TextField
+                        <FormControl
                           fullWidth
-                          id="strength"
-                          name="strength"
-                          label="Strength"
-                          value={formik.values.strength}
-                          onChange={formik.handleChange}
-                          onBlur={formik.handleBlur}
+                          variant="outlined"
                           error={
                             formik.touched.strength &&
                             Boolean(formik.errors.strength)
                           }
-                          helperText={
-                            formik.touched.strength && formik.errors.strength
-                          }
-                        />
+                        >
+                          <InputLabel id="strengthLabel">Strength</InputLabel>
+                          <Select
+                            labelId="strengthLabel"
+                            id="strength"
+                            name="strength"
+                            fullWidth
+                            label="Strength"
+                            value={formik.values.strength}
+                            onChange={(event) => {
+                              formik.setFieldValue(
+                                "strength",
+                                event.target.value
+                              );
+                            }}
+                            input={<OutlinedInput label="strength" />}
+                          >
+                            {Object.entries(skuData.STRENGTH).map(
+                              ([value, key]) => (
+                                <MenuItem key={key} value={value}>
+                                  {value}
+                                </MenuItem>
+                              )
+                            )}
+                          </Select>
+                          <FormHelperText>
+                            {formik.touched.strength && formik.errors.strength}
+                          </FormHelperText>
+                        </FormControl>
                       </Box>
                     </Grid>
                   )}
