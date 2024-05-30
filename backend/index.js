@@ -38,6 +38,9 @@ app.use("/brands", brandsRouter);
 const ordersRouter = require("./routes/Orders");
 app.use("/orders", ordersRouter);
 
+const sephoraRouter = require("./routes/Sephora");
+app.use("/sephora", sephoraRouter);
+
 sequelize
   .authenticate()
   .then(() => {
