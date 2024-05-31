@@ -47,6 +47,11 @@ function NavBar() {
                 Orders
               </a>
             </li>
+            <li className="nav-item">
+              <a className="nav-link" href="/sephoraSearch">
+                Sephora
+              </a>
+            </li>
           </ul>
         </div>
       </nav>
