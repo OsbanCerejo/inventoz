@@ -1,5 +1,4 @@
 module.exports = (sequelize, DataTypes) => {
-
   const Products = sequelize.define(
     "Products",
     {
@@ -81,6 +80,10 @@ module.exports = (sequelize, DataTypes) => {
       timestamps: false,
     }
   );
+
+  Products.associate = (models) => {
+    Products.hasMany(models.Inbound, { foreignKey: "sku" });
+  };
 
   return Products;
 };

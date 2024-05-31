@@ -110,6 +110,8 @@ function AddProduct() {
       // Set the batch value to "NA" if inbound is false
       formik.values.batch = formik.values.inbound ? formik.values.batch : "NA";
 
+      console.log("Strength :::::::  ", formik.values.strength);
+
       try {
         // Attempt to add the new product into Products table
         const addProductresponse = await axios.post(
@@ -145,6 +147,7 @@ function AddProduct() {
               batch: data.batch,
               compositeSku: compositeInboundKey,
             };
+
             // Add the product to Inbound table along with the new composite Inbound key
             const inboundResponse = await axios.post(
               "http://localhost:3001/inbound",
@@ -415,22 +418,42 @@ function AddProduct() {
                   {formik.values.category === "Fragrance" && (
                     <Grid item xs={12}>
                       <Box m={2}>
-                        <TextField
+                        <FormControl
                           fullWidth
-                          id="strength"
-                          name="strength"
-                          label="Strength"
-                          value={formik.values.strength}
-                          onChange={formik.handleChange}
-                          onBlur={formik.handleBlur}
+                          variant="outlined"
                           error={
                             formik.touched.strength &&
                             Boolean(formik.errors.strength)
                           }
-                          helperText={
-                            formik.touched.strength && formik.errors.strength
-                          }
-                        />
+                        >
+                          <InputLabel id="strengthLabel">Strength</InputLabel>
+                          <Select
+                            labelId="strengthLabel"
+                            id="strength"
+                            name="strength"
+                            fullWidth
+                            label="Strength"
+                            value={formik.values.strength}
+                            onChange={(event) => {
+                              formik.setFieldValue(
+                                "strength",
+                                event.target.value
+                              );
+                            }}
+                            input={<OutlinedInput label="strength" />}
+                          >
+                            {Object.entries(skuData.STRENGTH).map(
+                              ([value, key]) => (
+                                <MenuItem key={key} value={value}>
+                                  {value}
+                                </MenuItem>
+                              )
+                            )}
+                          </Select>
+                          <FormHelperText>
+                            {formik.touched.strength && formik.errors.strength}
+                          </FormHelperText>
+                        </FormControl>
                       </Box>
                     </Grid>
                   )}
@@ -556,22 +579,6 @@ function AddProduct() {
                       </Grid>
                     </Grid>
                   </Grid>
-
-                  <Grid item xs={12}>
-                    <Box m={2}>
-                      <TextField
-                        fullWidth
-                        id="upc"
-                        name="upc"
-                        label="UPC Code"
-                        value={formik.values.upc}
-                        onChange={formik.handleChange}
-                        onBlur={formik.handleBlur}
-                        error={formik.touched.upc && Boolean(formik.errors.upc)}
-                        helperText={formik.touched.upc && formik.errors.upc}
-                      />
-                    </Box>
-                  </Grid>
                 </Grid>
 
                 <Divider sx={{ borderColor: "gray", borderWidth: 1 }}></Divider>
@@ -602,17 +609,63 @@ function AddProduct() {
                         <Grid container spacing={0}>
                           <Grid item xs={12}>
                             <Box m={2}>
-                              <TextField fullWidth />
+                              <TextField
+                                fullWidth
+                                id="type"
+                                name="type"
+                                label="Type"
+                                value={formik.values.type}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.type &&
+                                  Boolean(formik.errors.type)
+                                }
+                                helperText={
+                                  formik.touched.type && formik.errors.type
+                                }
+                              />
                             </Box>
                           </Grid>
                           <Grid item xs={12}>
                             <Box m={2}>
-                              <TextField fullWidth />
+                              <TextField
+                                fullWidth
+                                id="formulation"
+                                name="formulation"
+                                label="Formulation"
+                                value={formik.values.formulation}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.formulation &&
+                                  Boolean(formik.errors.formulation)
+                                }
+                                helperText={
+                                  formik.touched.formulation &&
+                                  formik.errors.formulation
+                                }
+                              />
                             </Box>
                           </Grid>
                           <Grid item xs={12}>
                             <Box m={2}>
-                              <TextField fullWidth />
+                              <TextField
+                                fullWidth
+                                id="upc"
+                                name="upc"
+                                label="UPC Code"
+                                value={formik.values.upc}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.upc &&
+                                  Boolean(formik.errors.upc)
+                                }
+                                helperText={
+                                  formik.touched.upc && formik.errors.upc
+                                }
+                              />
                             </Box>
                           </Grid>
                           <Grid item xs={12}>

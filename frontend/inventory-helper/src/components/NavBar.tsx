@@ -32,11 +32,11 @@ function NavBar() {
                 Add Product
               </a>
             </li>
-            <li className="nav-item">
+            {/* <li className="nav-item">
               <a className="nav-link" href="/listings">
                 Listings
               </a>
-            </li>
+            </li> */}
             <li className="nav-item">
               <a className="nav-link" href="/inbound/showAll">
                 Inbound
@@ -45,6 +45,11 @@ function NavBar() {
             <li className="nav-item">
               <a className="nav-link" href="/orders/showAll">
                 Orders
+              </a>
+            </li>
+            <li className="nav-item">
+              <a className="nav-link" href="/sephoraSearch">
+                Sephora
               </a>
             </li>
           </ul>

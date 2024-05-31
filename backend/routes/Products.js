@@ -94,7 +94,7 @@ router.get("/findAndCount/:skuPrefix", async (req, res) => {
     // limit: 2,
   });
   //   console.log(count);
-  res.json(count);
+  res.json(count + 1);
 });
 
 module.exports = router;
