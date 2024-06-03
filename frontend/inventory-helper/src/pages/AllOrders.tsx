@@ -10,7 +10,6 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 
 function AllOrders() {
-  const [orders, setOrders] = useState<any[]>([]);
   const [groupedOrders, setGroupedOrders] = useState<any>({});
   const [orderMetrics, setOrderMetrics] = useState({
     totalOrders: 0,
@@ -32,7 +31,6 @@ function AllOrders() {
 
       const grouped = groupOrdersByProduct(ordersData);
 
-      setOrders(ordersData);
       setGroupedOrders(grouped.groupedOrders);
       setOrderMetrics({ totalOrders, totalItems: grouped.totalItems });
     } catch (error) {
@@ -84,14 +82,14 @@ function AllOrders() {
         {Object.keys(groupedOrders)
           .sort()
           .map((sku) => (
-            <Box key={sku} sx={{ marginBottom: 2 }}>
-              <Grid container spacing={1}>
+            <Box key={sku} sx={{ marginBottom: 1 }}>
+              <Grid container spacing={0.5}>
                 {groupedOrders[sku].map((item: any) => (
                   <Grid item xs={12} key={item.orderItemId}>
-                    <Card sx={{ display: "flex" }}>
+                    <Card sx={{ display: "flex", padding: "5px" }}>
                       <CardMedia
                         component="img"
-                        sx={{ width: 150, objectFit: "contain" }}
+                        sx={{ width: 100, objectFit: "contain" }}
                         image={item.imageUrl}
                         alt={item.name}
                       />
@@ -100,16 +98,21 @@ function AllOrders() {
                           display: "flex",
                           flexDirection: "column",
                           width: "100%",
+                          padding: "5px",
                         }}
                       >
                         <Box sx={{ flexGrow: 1 }}>
-                          <Typography component="div" variant="h6">
+                          <Typography
+                            component="div"
+                            variant="h6"
+                            sx={{ fontSize: "1rem" }}
+                          >
                             {item.name}
                           </Typography>
                         </Box>
                         {item.options.length > 0 && (
                           <Box sx={{ flexGrow: 1 }}>
-                            <Typography>
+                            <Typography sx={{ fontSize: "0.875rem" }}>
                               <b>Shade/Variant:</b> {item.options[0].value}
                             </Typography>
                           </Box>
@@ -122,7 +125,9 @@ function AllOrders() {
                             flexGrow: 1,
                           }}
                         >
-                          <Typography>Quantity: {item.quantity}</Typography>
+                          <Typography sx={{ fontSize: "0.875rem" }}>
+                            Quantity: {item.quantity}
+                          </Typography>
                           <Box
                             sx={{
                               display: "flex",
@@ -130,10 +135,12 @@ function AllOrders() {
                               alignItems: "flex-end",
                             }}
                           >
-                            <Typography>
+                            <Typography sx={{ fontSize: "0.875rem" }}>
                               Location: {item.warehouseLocation}
                             </Typography>
-                            <Typography>SKU: {item.sku}</Typography>
+                            <Typography sx={{ fontSize: "0.875rem" }}>
+                              SKU: {item.sku}
+                            </Typography>
                           </Box>
                         </Box>
                       </CardContent>
@@ -144,13 +151,13 @@ function AllOrders() {
                           flexDirection: "column",
                           justifyContent: "space-between",
                           alignItems: "center",
-                          padding: "20px",
+                          padding: "10px",
                           backgroundColor: "#f0f0f0",
                         }}
                       >
-                        <Typography>R</Typography>
-                        <Typography>Q</Typography>
-                        <Typography>I</Typography>
+                        <Typography sx={{ fontSize: "0.875rem" }}>R</Typography>
+                        <Typography sx={{ fontSize: "0.875rem" }}>Q</Typography>
+                        <Typography sx={{ fontSize: "0.875rem" }}>I</Typography>
                       </Box>
                     </Card>
                   </Grid>
