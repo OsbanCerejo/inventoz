@@ -28,28 +28,30 @@ router.get("/search", async (req, res) => {
   } catch (error) {
     console.error("Error fetching product details:", error.message);
   }
+});
 
-  //   try {
-  //     const response = await axios.get(`${BASE_URL}/us/products/v2/search`, {
-  //       params: {
-  //         pageSize: "60",
-  //         currentPage: "1",
-  //         q: searchString,
-  //       },
-  //       headers: {
-  //         "x-rapidapi-key": API_KEY,
-  //         "x-rapidapi-host": HOST,
-  //       },
-  //     });
+router.get("/getMoreDetails", async (req, res) => {
+  const { productId, skuId } = req.query;
+  console.log("Product ID : ", productId);
+  console.log("SKU ID : ", skuId);
 
-  //     const searchResults = response.data;
-  //     console.log(searchResults);
-  //   } catch (error) {
-  //     console.error("Error fetching product details:", error.message);
-  //   }
+  try {
+    const response = await axios.get(`${BASE_URL}/us/products/v2/detail`, {
+      params: {
+        productId: productId,
+        preferedSku: skuId,
+      },
+      headers: {
+        "x-rapidapi-key": API_KEY,
+        "x-rapidapi-host": HOST,
+      },
+    });
 
-  // getProductDetailsByBarcode("3360372058878"); // Acqua di Gio EDT Sealed
-  // getProductDetailsBySearch("Acqua di Gio");
+    const productDetails = response.data;
+    res.json(productDetails);
+  } catch (error) {
+    console.error("Error fetching product details:", error.message);
+  }
 });
 
 module.exports = router;
