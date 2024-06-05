@@ -47,6 +47,7 @@ Object.keys(db).forEach((modelName) => {
 const models = {
   Products: require("./Products")(sequelize, Sequelize.DataTypes),
   Inbound: require("./Inbound")(sequelize, Sequelize.DataTypes),
+  ProductDetails: require("./ProductDetails")(sequelize, Sequelize.DataTypes),
 };
 
 // Call method to set up relationships
