@@ -27,12 +27,15 @@ function AllOrders() {
         "http://localhost:3001/orders/allOrders"
       );
       const ordersData = response.data.orders;
-      const totalOrders = response.data.total;
+      // const totalOrders = response.data.total;
 
       const grouped = groupOrdersByProduct(ordersData);
 
       setGroupedOrders(grouped.groupedOrders);
-      setOrderMetrics({ totalOrders, totalItems: grouped.totalItems });
+      setOrderMetrics({
+        totalOrders: grouped.totalOrders,
+        totalItems: grouped.totalItems,
+      });
     } catch (error) {
       console.error("Fetch orders error:", error);
     }
@@ -42,9 +45,11 @@ function AllOrders() {
     const result = {
       groupedOrders: {},
       totalItems: 0,
+      totalOrders: 0,
     };
 
     result.groupedOrders = orders.reduce((acc: any, order: any) => {
+      result.totalOrders += 1;
       order.items.forEach((item: any) => {
         const { sku } = item;
         if (!acc[sku]) {

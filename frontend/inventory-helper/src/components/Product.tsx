@@ -13,6 +13,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import WarehouseIcon from "@mui/icons-material/Warehouse";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import SellIcon from "@mui/icons-material/Sell";
 import { toast } from "react-toastify";
 import Barcode from "./Barcode";
@@ -83,6 +84,30 @@ function Product() {
   const handleSalesClick = () => {
     navigate("/sales", { state: { productObject } });
   };
+
+  const handleCopyBarcodeClick = () => {
+    const barcodeCanvas =
+      document.querySelector<HTMLCanvasElement>(".barcode-canvas");
+
+    if (barcodeCanvas) {
+      barcodeCanvas.toBlob((blob) => {
+        if (blob) {
+          const item = new ClipboardItem({ "image/png": blob });
+          navigator.clipboard.write([item]);
+          toast.success("Barcode image copied to clipboard!", {
+            position: "top-right",
+          });
+        } else {
+          toast.error("Failed to copy the barcode image.", {
+            position: "top-right",
+          });
+        }
+      });
+    } else {
+      console.error("Barcode canvas not found.");
+    }
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Grid container spacing={4} border={1}>
@@ -93,6 +118,15 @@ function Product() {
           <Box border={1} p={2} display="flex" justifyContent="center">
             <Barcode value={barcodeValue} />
           </Box>
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<ContentCopyIcon />}
+            onClick={handleCopyBarcodeClick}
+            sx={{ mx: 1 }}
+          >
+            Copy
+          </Button>
         </Grid>
 
         {/* Green Box: Product Details */}

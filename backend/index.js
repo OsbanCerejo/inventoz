@@ -4,6 +4,7 @@ const cors = require("cors");
 require("dotenv").config();
 const { Sequelize } = require("sequelize");
 const dbConfig = require("./config/databaseConfig");
+const db = require("./models");
 
 app.use(express.json());
 app.use(cors());
@@ -45,7 +46,7 @@ sequelize
   .authenticate()
   .then(() => {
     console.log("Connection to Database has been established successfully.");
-    return sequelize.sync();
+    return db.sequelize.sync();
   })
   .then(() => {
     app.listen(process.env.PORT, () => {
