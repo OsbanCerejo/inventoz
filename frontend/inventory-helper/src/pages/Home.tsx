@@ -6,8 +6,12 @@ import { TextField, Button, Box, MenuItem, Select } from "@mui/material";
 function Home() {
   // State Variables
   const [listOfProducts, setListOfProducts] = useState([]);
-  const [searchString, setSearchString] = useState("");
-  const [selectedColumn, setSelectedColumn] = useState("");
+  const [searchString, setSearchString] = useState(
+    localStorage.getItem("searchString") || ""
+  );
+  const [selectedColumn, setSelectedColumn] = useState(
+    localStorage.getItem("selectedColumn") || ""
+  );
 
   // Constants
   const heading = "Products";
@@ -21,7 +25,12 @@ function Home() {
 
   // Fetch initial product list on component mount
   useEffect(() => {
-    fetchProducts();
+    const savedProducts = localStorage.getItem("listOfProducts");
+    if (savedProducts) {
+      setListOfProducts(JSON.parse(savedProducts));
+    } else {
+      fetchProducts();
+    }
   }, []);
 
   const fetchProducts = async () => {
@@ -49,9 +58,17 @@ function Home() {
           }
         );
         setListOfProducts(response.data);
+        // Save search state and results to local storage
+        localStorage.setItem("searchString", searchString);
+        localStorage.setItem("selectedColumn", selectedColumn);
+        localStorage.setItem("listOfProducts", JSON.stringify(response.data));
       } else {
         // If search string is empty, fetch all products
         fetchProducts();
+        // Clear search state and results from local storage
+        localStorage.removeItem("searchString");
+        localStorage.removeItem("selectedColumn");
+        localStorage.removeItem("listOfProducts");
       }
     } catch (error) {
       console.error("Error searching products:", error);
