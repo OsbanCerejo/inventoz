@@ -97,4 +97,36 @@ router.get("/findAndCount/:skuPrefix", async (req, res) => {
   res.json(count + 1);
 });
 
+router.post("/updateQuantities", async (req, res) => {
+  const skusToUpdate = req.body;
+
+  try {
+    const updatePromises = skusToUpdate.map(async (skuUpdate) => {
+      const product = await Products.findOne({ where: { sku: skuUpdate.sku } });
+
+      if (product) {
+        const newQuantity = product.quantity - skuUpdate.quantitySold;
+        await product.update({ quantity: newQuantity });
+
+        return {
+          sku: skuUpdate.sku,
+          itemName: product.itemName,
+          oldQuantity: product.quantity,
+          newQuantity: newQuantity,
+        };
+      }
+    });
+
+    const updateResults = await Promise.all(updatePromises);
+
+    res.json({
+      success: true,
+      updatedProducts: updateResults.filter(Boolean),
+    });
+  } catch (error) {
+    console.error("Error updating product quantities:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
 module.exports = router;
