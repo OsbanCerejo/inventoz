@@ -1,9 +1,20 @@
+import { AssignmentTurnedIn, Cancel, Check } from "@mui/icons-material";
 import {
+  Alert,
   Box,
+  Button,
   Card,
   CardContent,
   CardMedia,
   Grid,
+  Paper,
+  Snackbar,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Typography,
 } from "@mui/material";
 import axios from "axios";
@@ -15,6 +26,10 @@ function AllOrders() {
     totalOrders: 0,
     totalItems: 0,
   });
+  const [approveOrders, setApproveOrders] = useState(false);
+  const [productsData, setProductsData] = useState<any[]>([]);
+  const [updatedProducts, setUpdatedProducts] = useState<any[]>([]);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
 
   useEffect(() => {
     // Fetch orders when component mounts
@@ -23,11 +38,12 @@ function AllOrders() {
 
   const fetchOrders = async () => {
     try {
-      const response = await axios.get(
-        "http://localhost:3001/orders/allOrders"
-      );
-      const ordersData = response.data.orders;
-      // const totalOrders = response.data.total;
+      const [ordersResponse, productsResponse] = await Promise.all([
+        axios.get("http://localhost:3001/orders/allOrders"),
+        axios.get("http://localhost:3001/products"),
+      ]);
+      const ordersData = ordersResponse.data.orders;
+      const productsData = productsResponse.data;
 
       const grouped = groupOrdersByProduct(ordersData);
 
@@ -36,6 +52,7 @@ function AllOrders() {
         totalOrders: grouped.totalOrders,
         totalItems: grouped.totalItems,
       });
+      setProductsData(productsData);
     } catch (error) {
       console.error("Fetch orders error:", error);
     }
@@ -70,107 +87,260 @@ function AllOrders() {
     return result;
   }
 
+  const handleOrdersApprove = () => {
+    setApproveOrders(true);
+  };
+
+  const handleOrdersApproveCancel = () => {
+    setApproveOrders(false);
+  };
+
+  const handleOrdersApproveFinal = async () => {
+    const skuTotals = getSkuTotals();
+    const skusToUpdate = Object.keys(skuTotals).map((sku) => ({
+      sku,
+      quantitySold: skuTotals[sku].quantity,
+    }));
+
+    try {
+      const response = await axios.post(
+        "http://localhost:3001/products/updateQuantities",
+        skusToUpdate
+      );
+
+      if (response.data.success) {
+        setUpdatedProducts(response.data.updatedProducts);
+        setSnackbarOpen(true);
+      }
+
+      setApproveOrders(true);
+    } catch (error) {
+      console.error("Error updating product quantities:", error);
+    }
+  };
+
+  const getSkuTotals = () => {
+    const skuTotals: { [sku: string]: { quantity: number; product?: any } } =
+      {};
+
+    Object.keys(groupedOrders).forEach((sku) => {
+      const totalQuantity = groupedOrders[sku].reduce(
+        (sum: number, item: any) => sum + item.quantity,
+        0
+      );
+      const product = productsData.find((p: any) => p.sku === sku);
+      skuTotals[sku] = {
+        quantity: totalQuantity,
+        product: product || { quantity: 0, itemName: "Unknown Product" },
+      };
+    });
+
+    return skuTotals;
+  };
+
+  const skuTotals = getSkuTotals();
+
   return (
     <div>
-      <div id="orders-container">
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-end",
-          }}
-        >
-          <Typography>Total Items: {orderMetrics.totalItems}</Typography>
-          <Typography>Total Orders: {orderMetrics.totalOrders}</Typography>
-        </Box>
+      <Grid container spacing={2} mb={10}>
+        <Grid item xs={12}>
+          <Grid container spacing={0} p={4}>
+            {!approveOrders && (
+              <Grid item xs={6}>
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<AssignmentTurnedIn />}
+                  onClick={handleOrdersApprove}
+                  sx={{ mx: 1 }}
+                >
+                  Approve
+                </Button>
+              </Grid>
+            )}
+            {approveOrders && (
+              <Grid item xs={6}>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<Cancel />}
+                  onClick={handleOrdersApproveCancel}
+                  sx={{ mx: 1 }}
+                >
+                  Cancel
+                </Button>
+              </Grid>
+            )}
 
-        {Object.keys(groupedOrders)
-          .sort()
-          .map((sku) => (
-            <Box key={sku} sx={{ marginBottom: 1 }}>
-              <Grid container spacing={0.5}>
-                {groupedOrders[sku].map((item: any) => (
-                  <Grid item xs={12} key={item.orderItemId}>
-                    <Card sx={{ display: "flex", padding: "5px" }}>
-                      <CardMedia
-                        component="img"
-                        sx={{ width: 100, objectFit: "contain" }}
-                        image={item.imageUrl}
-                        alt={item.name}
-                      />
-                      <CardContent
-                        sx={{
-                          display: "flex",
-                          flexDirection: "column",
-                          width: "100%",
-                          padding: "5px",
-                        }}
-                      >
-                        <Box sx={{ flexGrow: 1 }}>
-                          <Typography
-                            component="div"
-                            variant="h6"
-                            sx={{ fontSize: "1rem" }}
-                          >
-                            {item.name}
-                          </Typography>
-                        </Box>
-                        {item.options.length > 0 && (
-                          <Box sx={{ flexGrow: 1 }}>
-                            <Typography sx={{ fontSize: "0.875rem" }}>
-                              <b>Shade/Variant:</b> {item.options[0].value}
-                            </Typography>
-                          </Box>
-                        )}
-                        <Box
-                          sx={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "flex-end",
-                            flexGrow: 1,
-                          }}
-                        >
-                          <Typography sx={{ fontSize: "0.875rem" }}>
-                            Quantity: {item.quantity}
-                          </Typography>
-                          <Box
+            <Grid item xs={6}>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-end",
+                }}
+              >
+                <Typography>Total Items: {orderMetrics.totalItems}</Typography>
+                <Typography>
+                  Total Orders: {orderMetrics.totalOrders}
+                </Typography>
+              </Box>
+            </Grid>
+            {approveOrders && (
+              <Grid item xs={12}>
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<Check />}
+                  onClick={handleOrdersApproveFinal}
+                  sx={{ mx: 1 }}
+                >
+                  Update Quantity
+                </Button>
+              </Grid>
+            )}
+          </Grid>
+        </Grid>
+        {!approveOrders && (
+          <Grid item xs={12}>
+            {Object.keys(groupedOrders)
+              .sort()
+              .map((sku) => (
+                <Box key={sku} sx={{ marginBottom: 1 }}>
+                  <Grid container spacing={0.5}>
+                    {groupedOrders[sku].map((item: any) => (
+                      <Grid item xs={12} key={item.orderItemId}>
+                        <Card sx={{ display: "flex", padding: "5px" }}>
+                          <CardMedia
+                            component="img"
+                            sx={{ width: 100, objectFit: "contain" }}
+                            image={item.imageUrl}
+                            alt={item.name}
+                          />
+                          <CardContent
                             sx={{
                               display: "flex",
                               flexDirection: "column",
-                              alignItems: "flex-end",
+                              width: "100%",
+                              padding: "5px",
+                            }}
+                          >
+                            <Box sx={{ flexGrow: 1 }}>
+                              <Typography
+                                component="div"
+                                variant="h6"
+                                sx={{ fontSize: "1rem" }}
+                              >
+                                {item.name}
+                              </Typography>
+                            </Box>
+                            {item.options.length > 0 && (
+                              <Box sx={{ flexGrow: 1 }}>
+                                <Typography sx={{ fontSize: "0.875rem" }}>
+                                  <b>Shade/Variant:</b> {item.options[0].value}
+                                </Typography>
+                              </Box>
+                            )}
+                            <Box
+                              sx={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "flex-end",
+                                flexGrow: 1,
+                              }}
+                            >
+                              <Typography sx={{ fontSize: "0.875rem" }}>
+                                Quantity: {item.quantity}
+                              </Typography>
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "flex-end",
+                                }}
+                              >
+                                <Typography sx={{ fontSize: "0.875rem" }}>
+                                  Location: {item.warehouseLocation}
+                                </Typography>
+                                <Typography sx={{ fontSize: "0.875rem" }}>
+                                  SKU: {item.sku}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </CardContent>
+                          <Box
+                            border={1}
+                            sx={{
+                              display: "flex",
+                              flexDirection: "column",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              padding: "10px",
+                              backgroundColor: "#f0f0f0",
                             }}
                           >
                             <Typography sx={{ fontSize: "0.875rem" }}>
-                              Location: {item.warehouseLocation}
+                              R
                             </Typography>
                             <Typography sx={{ fontSize: "0.875rem" }}>
-                              SKU: {item.sku}
+                              Q
+                            </Typography>
+                            <Typography sx={{ fontSize: "0.875rem" }}>
+                              I
                             </Typography>
                           </Box>
-                        </Box>
-                      </CardContent>
-                      <Box
-                        border={1}
-                        sx={{
-                          display: "flex",
-                          flexDirection: "column",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: "10px",
-                          backgroundColor: "#f0f0f0",
-                        }}
-                      >
-                        <Typography sx={{ fontSize: "0.875rem" }}>R</Typography>
-                        <Typography sx={{ fontSize: "0.875rem" }}>Q</Typography>
-                        <Typography sx={{ fontSize: "0.875rem" }}>I</Typography>
-                      </Box>
-                    </Card>
+                        </Card>
+                      </Grid>
+                    ))}
                   </Grid>
-                ))}
-              </Grid>
-            </Box>
-          ))}
-      </div>
+                </Box>
+              ))}
+          </Grid>
+        )}
+        {approveOrders && (
+          <Grid item xs={12}>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>
+                      <strong>SKU</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>Product Name</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>Total Ordered Quantity</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>Original Quantity</strong>
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {Object.keys(skuTotals).map((sku) => (
+                    <TableRow key={sku}>
+                      <TableCell>{sku}</TableCell>
+                      <TableCell>{skuTotals[sku].product.itemName}</TableCell>
+                      <TableCell>{skuTotals[sku].quantity}</TableCell>
+                      <TableCell>{skuTotals[sku].product.quantity}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Grid>
+        )}
+      </Grid>
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+      >
+        <Alert onClose={() => setSnackbarOpen(false)} severity="success">
+          Product quantities updated successfully!
+        </Alert>
+      </Snackbar>
     </div>
   );
 }
