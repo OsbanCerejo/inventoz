@@ -1,38 +1,66 @@
 import { useNavigate } from "react-router-dom";
-// export interface Product {
-//   sku: string;
-//   brand: string;
-//   itemName: string;
-//   quantity: number;
-//   location: string;
-//   sizeOz: number;
-//   sizeMl: number;
-//   strength: string;
-//   shade: string;
-//   formulation: string;
-//   category: string;
-//   type: string;
-//   upc: number;
-//   batch: string;
-//   condition: string;
-// }
+import {
+  ArrowDropUp,
+  ArrowDropDown,
+  FilterAlt,
+  Sort,
+} from "@mui/icons-material";
+import Pagination from "./Pagination";
+import { useState } from "react";
 
 interface Props {
   products: any[];
   heading: string;
+  handleSort: (columnKey: string) => void;
+  sortConfig: { key: string | null; direction: string };
+  handleFilterChange: (
+    e: React.ChangeEvent<HTMLInputElement>,
+    columnKey: string
+  ) => void;
+  currentPage: number;
+  productsPerPage: number;
+  paginate: (pageNumber: number) => void;
+  totalProducts: number;
 }
 
-function ProductList({ products, heading }: Props) {
-  // const [selectedIndex, setSelectedIndex] = useState(-1);
+function ProductList({
+  products,
+  heading,
+  handleSort,
+  sortConfig,
+  handleFilterChange,
+  currentPage,
+  productsPerPage,
+  paginate,
+  totalProducts,
+}: Props) {
   const navigate = useNavigate();
 
-  // console.log(products);
   const handleSelect = (product: any) => {
-    console.log("Inside handleSelect in product list component");
-    console.log(product);
-    console.log(product.verified);
     navigate(`/products/${product.sku}`);
   };
+
+  const getSortIcon = (columnKey: string) => {
+    if (sortConfig.key === columnKey) {
+      return sortConfig.direction === "asc" ? (
+        <ArrowDropUp />
+      ) : (
+        <ArrowDropDown />
+      );
+    } else {
+      return <Sort />;
+    }
+  };
+
+  // Calculate index of the last product on the current page
+  const indexOfLastProduct = currentPage * productsPerPage;
+  // Calculate index of the first product on the current page
+  const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
+  // Get the current products to display on the current page
+  const currentProducts = products.slice(
+    indexOfFirstProduct,
+    indexOfLastProduct
+  );
 
   return (
     <>
@@ -43,18 +71,41 @@ function ProductList({ products, heading }: Props) {
           <tr>
             <th scope="col">#</th>
             <th scope="col">SKU</th>
-            <th scope="col">Brand</th>
-            <th scope="col">Item Name</th>
+            <th scope="col" onClick={() => handleSort("brand")}>
+              {getSortIcon("brand")} Brand
+              <br></br>
+              <input
+                type="text"
+                onChange={(e) => handleFilterChange(e, "brand")}
+              />
+            </th>
+            <th scope="col" onClick={() => handleSort("itemName")}>
+              {getSortIcon("itemName")} Item Name
+              <br></br>
+              <input
+                type="text"
+                onChange={(e) => handleFilterChange(e, "itemName")}
+              />
+            </th>
             <th scope="col">Size</th>
-            <th scope="col">Shade/Variant</th>
-            <th scope="col">Location</th>
+            <th scope="col">Shade / Variant</th>
+            <th scope="col" onClick={() => handleSort("location")}>
+              {getSortIcon("brlocationand")} Location
+              <br></br>
+              <input
+                type="text"
+                onChange={(e) => handleFilterChange(e, "location")}
+              />
+            </th>
             <th scope="col">Quantity Verified</th>
-            <th scope="col">Listed</th>
-            <th scope="col">Final</th>
+            <th scope="col" onClick={() => handleSort("listed")}>
+              {getSortIcon("listed")}Listed
+            </th>
+            {/* <th scope="col">Final</th> */}
           </tr>
         </thead>
         <tbody>
-          {products.map((product, index) => (
+          {currentProducts.map((product, index) => (
             <tr
               key={index}
               onClick={() => {
@@ -80,23 +131,29 @@ function ProductList({ products, heading }: Props) {
               <td
                 style={{
                   backgroundColor: product.listed ? "#B2FF59" : "#FF5252",
-                  width: "5%",
+                  width: "10%",
                 }}
               >
                 {product.listed ? "Yes" : "No"}
               </td>
-              <td
+              {/* <td
                 style={{
                   backgroundColor: product.final ? "#B2FF59" : "#FF5252",
                   width: "5%",
                 }}
               >
                 {product.final ? "Yes" : "No"}
-              </td>
+              </td> */}
             </tr>
           ))}
         </tbody>
       </table>
+      <Pagination
+        productsPerPage={productsPerPage}
+        totalProducts={products.length}
+        paginate={paginate}
+        currentPage={currentPage}
+      />
     </>
   );
 }

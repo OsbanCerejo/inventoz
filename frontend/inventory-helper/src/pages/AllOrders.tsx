@@ -8,7 +8,6 @@ import {
   CardMedia,
   Grid,
   Paper,
-  Snackbar,
   Table,
   TableBody,
   TableCell,
@@ -18,7 +17,9 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
+import { toast } from "react-toastify";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 function AllOrders() {
   const [groupedOrders, setGroupedOrders] = useState<any>({});
@@ -29,7 +30,7 @@ function AllOrders() {
   const [approveOrders, setApproveOrders] = useState(false);
   const [productsData, setProductsData] = useState<any[]>([]);
   const [updatedProducts, setUpdatedProducts] = useState<any[]>([]);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Fetch orders when component mounts
@@ -72,6 +73,10 @@ function AllOrders() {
         if (!acc[sku]) {
           acc[sku] = [];
         }
+
+        // Find the product in productsData to get the location
+        const product = productsData.find((p: any) => p.sku === sku);
+
         acc[sku].push({
           ...item,
           orderId: order.orderId,
@@ -79,6 +84,7 @@ function AllOrders() {
           orderDate: order.orderDate,
           customerName: order.customerUsername,
           orderStatus: order.orderStatus,
+          warehouseLocation: product ? product.location : "____",
         });
         result.totalItems += item.quantity;
       });
@@ -110,7 +116,8 @@ function AllOrders() {
 
       if (response.data.success) {
         setUpdatedProducts(response.data.updatedProducts);
-        setSnackbarOpen(true);
+        toast.success("Quantities Updated!", { position: "top-right" });
+        navigate("/");
       }
 
       setApproveOrders(true);
@@ -260,7 +267,8 @@ function AllOrders() {
                                 }}
                               >
                                 <Typography sx={{ fontSize: "0.875rem" }}>
-                                  Location: {item.warehouseLocation}
+                                  Location:{" "}
+                                  <strong>{item.warehouseLocation}</strong>
                                 </Typography>
                                 <Typography sx={{ fontSize: "0.875rem" }}>
                                   SKU: {item.sku}
@@ -332,15 +340,6 @@ function AllOrders() {
           </Grid>
         )}
       </Grid>
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={6000}
-        onClose={() => setSnackbarOpen(false)}
-      >
-        <Alert onClose={() => setSnackbarOpen(false)} severity="success">
-          Product quantities updated successfully!
-        </Alert>
-      </Snackbar>
     </div>
   );
 }
