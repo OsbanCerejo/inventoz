@@ -25,7 +25,7 @@ function Home() {
     value: string;
   }>({ key: "", value: "" });
   const [currentPage, setCurrentPage] = useState(1);
-  const [productsPerPage] = useState(10);
+  const [productsPerPage] = useState(15);
 
   // Constants
   const heading = "Products";
@@ -56,46 +56,46 @@ function Home() {
     }
   };
 
-  // Function to handle search based on selected column and search string
-  const handleSearch = async () => {
-    // TODO: Move this to Search.tsx eventually
-    try {
-      // Check if search string is provided
-      if (searchString.trim() !== "") {
-        const searchType = columnMap.has(selectedColumn)
-          ? columnMap.get(selectedColumn)
-          : "itemName";
-        const response = await axios.get(
-          "http://localhost:3001/products/search",
-          {
-            params: { searchString, searchType },
-          }
-        );
-        setListOfProducts(response.data);
-        // Save search state and results to local storage
-        localStorage.setItem("searchString", searchString);
-        localStorage.setItem("selectedColumn", selectedColumn);
-        localStorage.setItem("listOfProducts", JSON.stringify(response.data));
-      } else {
-        // If search string is empty, fetch all products
-        fetchProducts();
-        // Clear search state and results from local storage
-        localStorage.removeItem("searchString");
-        localStorage.removeItem("selectedColumn");
-        localStorage.removeItem("listOfProducts");
-      }
-    } catch (error) {
-      console.error("Error searching products:", error);
-    }
-  };
+  // // Function to handle search based on selected column and search string
+  // const handleSearch = async () => {
+  //   // TODO: Move this to Search.tsx eventually
+  //   try {
+  //     // Check if search string is provided
+  //     if (searchString.trim() !== "") {
+  //       const searchType = columnMap.has(selectedColumn)
+  //         ? columnMap.get(selectedColumn)
+  //         : "itemName";
+  //       const response = await axios.get(
+  //         "http://localhost:3001/products/search",
+  //         {
+  //           params: { searchString, searchType },
+  //         }
+  //       );
+  //       setListOfProducts(response.data);
+  //       // Save search state and results to local storage
+  //       localStorage.setItem("searchString", searchString);
+  //       localStorage.setItem("selectedColumn", selectedColumn);
+  //       localStorage.setItem("listOfProducts", JSON.stringify(response.data));
+  //     } else {
+  //       // If search string is empty, fetch all products
+  //       fetchProducts();
+  //       // Clear search state and results from local storage
+  //       localStorage.removeItem("searchString");
+  //       localStorage.removeItem("selectedColumn");
+  //       localStorage.removeItem("listOfProducts");
+  //     }
+  //   } catch (error) {
+  //     console.error("Error searching products:", error);
+  //   }
+  // };
 
-  // Function to handle search on pressing Enter key
-  const handleKeypress = (e: any) => {
-    //it triggers by pressing the enter key
-    if (e.keyCode === 13) {
-      handleSearch();
-    }
-  };
+  // // Function to handle search on pressing Enter key
+  // const handleKeypress = (e: any) => {
+  //   //it triggers by pressing the enter key
+  //   if (e.keyCode === 13) {
+  //     handleSearch();
+  //   }
+  // };
 
   // Function to handle sorting
   const handleSort = (columnKey: string) => {
@@ -144,7 +144,7 @@ function Home() {
 
   return (
     <div>
-      <Box alignItems="center" my={4} p={2}>
+      {/* <Box alignItems="center" my={4} p={2}>
         <TextField
           style={{ width: "85%" }}
           label="Search Item Name"
@@ -173,7 +173,7 @@ function Home() {
         <Button variant="contained" color="success" onClick={handleSearch}>
           Search
         </Button>
-      </Box>
+      </Box> */}
       <ProductList
         products={sortedAndFilteredProducts}
         heading={heading}
