@@ -8,7 +8,7 @@ import {
 } from "@mui/material";
 import { Container } from "@mui/system";
 import axios from "axios";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
@@ -23,69 +23,72 @@ function Product() {
   const navigate = useNavigate();
   const [productObject, setProductObject]: any = useState({});
   const [barcodeValue, setBarcodeValue] = useState(productObject.sku);
+  const [productDetails, setProductDetails]: any = useState({});
 
   useEffect(() => {
-    axios.get(`http://localhost:3001/products/byId/${id}`).then((response) => {
-      setProductObject(response.data);
-      setBarcodeValue(response.data.sku);
-    });
-  }, []);
+    const fetchData = async () => {
+      try {
+        const { data: product } = await axios.get(
+          `http://localhost:3001/products/byId/${id}`
+        );
+        setProductObject(product);
+        setBarcodeValue(product.sku);
+        const { data: details } = await axios.get(
+          "http://localhost:3001/productDetails/bySku",
+          {
+            params: { sku: product.sku },
+          }
+        );
+        setProductDetails(details);
+      } catch (error) {
+        console.error("Error fetching product data:", error);
+      }
+    };
+
+    fetchData();
+  }, [id]);
 
   // Handle the edit button click and redirect with the product to edit page
-  const handleEditOnClick = () => {
+  const handleEditOnClick = useCallback(() => {
     if (
       !productObject.verified ||
-      confirm("This is a verified entry. Do you want to edit?")
+      window.confirm("This is a verified entry. Do you want to edit?")
     ) {
-      navigate("/editProduct", { state: { productObject } });
+      navigate("/editProduct", { state: { productObject, productDetails } });
     }
-  };
+  }, [navigate, productObject, productDetails]);
 
   // Function to handle product deletion with password confirmation
-  const handleDeleteClick = () => {
-    // Prompt the user to enter the password for deletion
+  const handleDeleteClick = useCallback(async () => {
     const passwordToDelete = prompt("Enter Password to delete");
 
-    // Check if the entered password is correct
     if (passwordToDelete === "1998") {
-      console.log("Deleting...");
-
-      // Make a DELETE request to the server to delete the product
       try {
-        axios
-          .delete(`http://localhost:3001/products/delete/${productObject.sku}`)
-          .then(() => {
-            toast.success("Deleted Succesfully!", {
-              position: "top-right",
-            });
-            navigate("/");
-          });
-      } catch (error: any) {
-        // Handle any errors that occur during the deletion request
+        await axios.delete(
+          `http://localhost:3001/products/delete/${productObject.sku}`
+        );
+        toast.success("Deleted Successfully!", { position: "top-right" });
+        navigate("/");
+      } catch (error) {
         console.error("Error deleting the product:", error);
-
-        // Show error notification
-        toast.error("Failed to delete the product.", {
-          position: "top-right",
-        });
+        toast.error("Failed to delete the product.", { position: "top-right" });
       }
     } else {
-      // If the password is incorrect, show an error notification
       toast.error("Incorrect password. Please Try Again.", {
         position: "top-right",
       });
     }
-  };
+  }, [navigate, productObject]);
 
-  const handleInboundClick = () => {
+  const handleInboundClick = useCallback(() => {
     navigate("/inbound", { state: { productObject } });
-  };
+  }, [navigate, productObject]);
 
-  const handleSalesClick = () => {
+  const handleSalesClick = useCallback(() => {
     navigate("/sales", { state: { productObject } });
-  };
+  }, [navigate, productObject]);
 
-  const handleCopyBarcodeClick = () => {
+  const handleCopyBarcodeClick = useCallback(() => {
     const barcodeCanvas =
       document.querySelector<HTMLCanvasElement>(".barcode-canvas");
 
@@ -106,7 +109,7 @@ function Product() {
     } else {
       console.error("Barcode canvas not found.");
     }
-  };
+  }, []);
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>

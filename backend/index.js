@@ -24,6 +24,9 @@ const sequelize = new Sequelize(
 const productRouter = require("./routes/Products");
 app.use("/products", productRouter);
 
+const productDetailsRouter = require("./routes/ProductDetails");
+app.use("/productDetails", productDetailsRouter);
+
 const inboundRouter = require("./routes/Inbound");
 app.use("/inbound", inboundRouter);
 
