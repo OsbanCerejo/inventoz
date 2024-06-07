@@ -215,7 +215,7 @@ function AddProduct() {
           // Update the brand table with the next number for future
           await axios.put("http://localhost:3001/brands", brandObjectOnSubmit);
           toast.success("Product Added!", { position: "top-right" });
-          // resetForm();
+          resetForm();
         }
       } catch (error) {
         console.error("Error during form submission:", error);
@@ -585,8 +585,9 @@ function AddProduct() {
                           <Box m={2}>
                             <p>Packaging Condition :</p>
                             <RadioGroup
+                              name="condition"
                               onChange={(event) => {
-                                formik.handleChange;
+                                formik.handleChange(event);
                                 generateSku(event.target.value, "4");
                               }}
                               value={formik.values.condition}
@@ -595,28 +596,16 @@ function AddProduct() {
                                 value="unboxed"
                                 control={<Radio />}
                                 label="Unboxed"
-                                checked={formik.values.condition === "Unboxed"}
-                                onChange={() =>
-                                  (formik.values.condition = "Unboxed")
-                                }
                               />
                               <FormControlLabel
                                 value="sealed"
                                 control={<Radio />}
                                 label="Sealed"
-                                checked={formik.values.condition === "Sealed"}
-                                onChange={() =>
-                                  (formik.values.condition = "Sealed")
-                                }
                               />
                               <FormControlLabel
                                 value="unsealed"
                                 control={<Radio />}
                                 label="Unsealed"
-                                checked={formik.values.condition === "Unsealed"}
-                                onChange={() =>
-                                  (formik.values.condition = "Unsealed")
-                                }
                               />
                             </RadioGroup>
                           </Box>

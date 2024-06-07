@@ -159,7 +159,7 @@ function EditProduct() {
                 variant="outlined"
                 sx={{ my: { xs: 2, md: 3 }, p: { xs: 1, md: 4 } }}
               >
-                <strong> SKU : {productObject.sku}</strong>
+                <strong>{productObject.sku}</strong>
               </Paper>
             </Container>
           </Grid>
