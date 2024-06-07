@@ -2,16 +2,30 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import ProductList from "../components/ProductList";
 import { TextField, Button, Box, MenuItem, Select } from "@mui/material";
+import Pagination from "../components/Pagination";
 
 function Home() {
   // State Variables
-  const [listOfProducts, setListOfProducts] = useState([]);
+  const [listOfProducts, setListOfProducts] = useState<any[]>([]);
   const [searchString, setSearchString] = useState(
     localStorage.getItem("searchString") || ""
   );
   const [selectedColumn, setSelectedColumn] = useState(
     localStorage.getItem("selectedColumn") || ""
   );
+  const [sortConfig, setSortConfig] = useState<{
+    key: string | null;
+    direction: string;
+  }>({
+    key: null,
+    direction: "asc",
+  });
+  const [filterConfig, setFilterConfig] = useState<{
+    key: string;
+    value: string;
+  }>({ key: "", value: "" });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [productsPerPage] = useState(10);
 
   // Constants
   const heading = "Products";
@@ -83,6 +97,51 @@ function Home() {
     }
   };
 
+  // Function to handle sorting
+  const handleSort = (columnKey: string) => {
+    let direction = "asc";
+    if (sortConfig.key === columnKey && sortConfig.direction === "asc") {
+      direction = "desc";
+    }
+    setSortConfig({ key: columnKey, direction });
+  };
+
+  const handleFilterChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    columnKey: string
+  ) => {
+    setFilterConfig({ key: columnKey, value: e.target.value });
+    paginate(1);
+  };
+
+  const sortedAndFilteredProducts = listOfProducts
+    .filter((product) => {
+      if (filterConfig.key && filterConfig.value) {
+        const productValue = product[filterConfig.key];
+        return productValue
+          ? productValue
+              .toLowerCase()
+              .includes(filterConfig.value.toLowerCase())
+          : false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortConfig.key) {
+        const aValue = a[sortConfig.key]?.toString().toLowerCase() ?? "";
+        const bValue = b[sortConfig.key]?.toString().toLowerCase() ?? "";
+        if (aValue < bValue) {
+          return sortConfig.direction === "asc" ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === "asc" ? 1 : -1;
+        }
+      }
+      return 0;
+    });
+
+  const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
+
   return (
     <div>
       <Box alignItems="center" my={4} p={2}>
@@ -115,7 +174,17 @@ function Home() {
           Search
         </Button>
       </Box>
-      <ProductList products={listOfProducts} heading={heading}></ProductList>
+      <ProductList
+        products={sortedAndFilteredProducts}
+        heading={heading}
+        handleSort={handleSort}
+        sortConfig={sortConfig}
+        handleFilterChange={handleFilterChange}
+        currentPage={currentPage}
+        productsPerPage={productsPerPage}
+        paginate={paginate}
+        totalProducts={listOfProducts.length}
+      ></ProductList>
     </div>
   );
 }
