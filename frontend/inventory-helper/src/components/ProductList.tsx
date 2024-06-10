@@ -26,7 +26,6 @@ function ProductList({
   currentPage,
   productsPerPage,
   paginate,
-  totalProducts,
 }: Props) {
   const navigate = useNavigate();
 
@@ -77,8 +76,7 @@ function ProductList({
                 <br></br>
                 <input
                   type="text"
-                  width="15%"
-                  onChange={(e) => handleFilterChange(e, "brand")}
+                  onChange={(e) => handleFilterChange(e, "sku")}
                   onClick={(e) => e.stopPropagation()}
                 />
               </th>
@@ -103,17 +101,20 @@ function ProductList({
               <th scope="col">Size</th>
               <th scope="col">Shade / Variant</th>
               <th scope="col" onClick={() => handleSort("location")}>
-                {getSortIcon("brlocationand")} Location
+                {getSortIcon("location")} Location
                 <br></br>
                 <input
                   type="text"
+                  style={{ width: "100%" }}
                   onChange={(e) => handleFilterChange(e, "location")}
                   onClick={(e) => e.stopPropagation()}
                 />
               </th>
-              <th scope="col">Quantity Verified</th>
+              <th scope="col" onClick={() => handleSort("quantity")}>
+                {getSortIcon("location")} Quantity
+              </th>
               <th scope="col" onClick={() => handleSort("listed")}>
-                {getSortIcon("listed")}Listed
+                {getSortIcon("listed")} Listed
               </th>
               {/* <th scope="col">Final</th> */}
             </tr>
@@ -131,33 +132,25 @@ function ProductList({
                 <td style={{ width: "12%" }}>{product.sku}</td>
                 <td>{product.brand}</td>
                 <td>{product.itemName}</td>
-                <td>{product.sizeOz}</td>
-                <td>{product.shade}</td>
-                <td>{product.location}</td>
+                <td style={{ width: "5%" }}>{product.sizeOz}</td>
+                <td style={{ width: "8%" }}>{product.shade}</td>
+                <td style={{ width: "8%" }}>{product.location}</td>
                 <td
                   style={{
                     backgroundColor: product.verified ? "#B2FF59" : "#FF5252",
-                    width: "5%",
+                    width: "7%",
                   }}
                 >
-                  {product.verified ? "Yes" : "No"}
+                  {product.quantity}
                 </td>
                 <td
                   style={{
                     backgroundColor: product.listed ? "#B2FF59" : "#FF5252",
-                    width: "10%",
+                    width: "7%",
                   }}
                 >
                   {product.listed ? "Yes" : "No"}
                 </td>
-                {/* <td
-                style={{
-                  backgroundColor: product.final ? "#B2FF59" : "#FF5252",
-                  width: "5%",
-                }}
-              >
-                {product.final ? "Yes" : "No"}
-              </td> */}
               </tr>
             ))}
           </tbody>
