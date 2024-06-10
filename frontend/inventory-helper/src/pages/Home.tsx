@@ -1,18 +1,11 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
 import ProductList from "../components/ProductList";
-import { TextField, Button, Box, MenuItem, Select } from "@mui/material";
-import Pagination from "../components/Pagination";
 
 function Home() {
   // State Variables
   const [listOfProducts, setListOfProducts] = useState<any[]>([]);
-  const [searchString, setSearchString] = useState(
-    localStorage.getItem("searchString") || ""
-  );
-  const [selectedColumn, setSelectedColumn] = useState(
-    localStorage.getItem("selectedColumn") || ""
-  );
+
   const [sortConfig, setSortConfig] = useState<{
     key: string | null;
     direction: string;
@@ -25,17 +18,10 @@ function Home() {
     value: string;
   }>({ key: "", value: "" });
   const [currentPage, setCurrentPage] = useState(1);
-  const [productsPerPage] = useState(15);
+  const [productsPerPage] = useState(20);
 
   // Constants
   const heading = "Products";
-  const columns = ["Item Name", "SKU", "Brand", "Location"];
-  const columnMap = new Map([
-    ["Item Name", "itemName"],
-    ["SKU", "sku"],
-    ["Brand", "brand"],
-    ["Location", "location"],
-  ]);
 
   // Fetch initial product list on component mount
   useEffect(() => {

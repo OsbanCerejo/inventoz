@@ -14,7 +14,7 @@ const Pagination: React.FC<PaginationProps> = ({
   currentPage,
 }) => {
   const pageNumbers: number[] = [];
-  const maxPageNumbersDisplay = 5; // Change this value to adjust the number of pages displayed
+  const maxPageNumbersDisplay = 10;
 
   for (let i = 1; i <= Math.ceil(totalProducts / productsPerPage); i++) {
     pageNumbers.push(i);
