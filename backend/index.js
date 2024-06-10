@@ -33,9 +33,6 @@ app.use("/inbound", inboundRouter);
 const salesRouter = require("./routes/Sales");
 app.use("/sales", salesRouter);
 
-const listingsRouter = require("./routes/Listings");
-app.use("/listings", listingsRouter);
-
 const brandsRouter = require("./routes/Brands");
 app.use("/brands", brandsRouter);
 
