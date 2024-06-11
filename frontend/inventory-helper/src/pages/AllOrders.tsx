@@ -36,29 +36,38 @@ function AllOrders() {
     fetchOrders();
   }, []);
 
+  function createProductMap(productsData: any) {
+    const productMap = new Map();
+    productsData.forEach((product: any) => {
+      productMap.set(product.sku, product);
+    });
+    return productMap;
+  }
+
   const fetchOrders = async () => {
     try {
       const [ordersResponse, productsResponse] = await Promise.all([
         axios.get("http://localhost:3001/orders/allOrders"),
         axios.get("http://localhost:3001/products"),
       ]);
-      const ordersData = ordersResponse.data.orders;
-      const productsData = productsResponse.data;
+      const productMap = createProductMap(productsResponse.data);
 
-      const grouped = groupOrdersByProduct(ordersData);
+      const grouped = groupOrdersByProduct(
+        ordersResponse.data.orders,
+        productMap
+      );
 
       setGroupedOrders(grouped.groupedOrders);
       setOrderMetrics({
         totalOrders: grouped.totalOrders,
         totalItems: grouped.totalItems,
       });
-      setProductsData(productsData);
     } catch (error) {
       console.error("Fetch orders error:", error);
     }
   };
 
-  function groupOrdersByProduct(orders: any) {
+  function groupOrdersByProduct(orders: any, productMap: any) {
     const result = {
       groupedOrders: {},
       totalItems: 0,
@@ -74,7 +83,7 @@ function AllOrders() {
         }
 
         // Find the product in productsData to get the location
-        const product = productsData.find((p: any) => p.sku === sku);
+        const product = productMap.get(sku);
 
         acc[sku].push({
           ...item,
@@ -89,6 +98,7 @@ function AllOrders() {
       });
       return acc;
     }, {});
+    console.log("Result in orders: ", result);
     return result;
   }
 

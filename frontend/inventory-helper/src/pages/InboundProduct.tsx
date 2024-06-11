@@ -21,6 +21,7 @@ import { useState } from "react";
 
 function InboundProduct() {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const productObject = location.state.productObject;
   const today = new Date();
@@ -71,6 +72,7 @@ function InboundProduct() {
             position: "top-right",
           });
           console.log("Created New");
+          navigate("/inbound/showAll");
         } else {
           toast.error("Inbound Entry Already Exists!", {
             position: "top-right",

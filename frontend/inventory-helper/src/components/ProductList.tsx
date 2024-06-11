@@ -106,7 +106,17 @@ function ProductList({
                 />
               </th>
               <th scope="col">Size</th>
-              <th scope="col">Shade / Variant</th>
+              <th scope="col" onClick={() => handleSort("shade")}>
+                {getSortIcon("shade")} Variant
+                <br></br>
+                <input
+                  type="text"
+                  style={{ width: "100%" }}
+                  value={filterConfig.key === "shade" ? filterConfig.value : ""}
+                  onChange={(e) => handleFilterChange(e, "shade")}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </th>
               <th scope="col" onClick={() => handleSort("location")}>
                 {getSortIcon("location")} Location
                 <br></br>

@@ -53,7 +53,6 @@ function Home() {
     try {
       const response = await axios.get("http://localhost:3001/products");
       setListOfProducts(response.data);
-      localStorage.setItem("listOfProducts", JSON.stringify(response.data));
     } catch (error) {
       console.error("Error fetching products:", error);
     }
