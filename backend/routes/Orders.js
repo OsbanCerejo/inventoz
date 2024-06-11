@@ -1,9 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const axios = require("axios");
-// const authService = require('../services/AuthService');
 
-// const service = new authService();
 router.get("/allOrders", async (req, res) => {
   const TOKEN = process.env.API_KEY_ENCODED;
 
@@ -18,12 +16,12 @@ router.get("/allOrders", async (req, res) => {
         limit: 200,
         offset: 0,
         orderStatus: "awaiting_shipment",
+        pageSize: 500,
       },
     });
 
     if (response.status === 200) {
       const orders = response.data;
-      //   console.log(orders);
       res.json(orders);
     } else {
       console.error(
