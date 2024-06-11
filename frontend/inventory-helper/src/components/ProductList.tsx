@@ -1,6 +1,13 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowDropUp, ArrowDropDown, Sort } from "@mui/icons-material";
+import {
+  ArrowDropUp,
+  ArrowDropDown,
+  Sort,
+  ContentCopy,
+} from "@mui/icons-material";
 import Pagination from "./Pagination";
+import { IconButton } from "@mui/material";
+import { toast } from "react-toastify";
 
 interface Props {
   products: any[];
@@ -45,6 +52,11 @@ function ProductList({
     } else {
       return <Sort />;
     }
+  };
+
+  const copyToClipboard = (sku: string) => {
+    navigator.clipboard.writeText(sku);
+    toast.success("SKU Copied!", { position: "top-right", autoClose: 1000 });
   };
 
   // Calculate index of the last product on the current page
@@ -149,7 +161,17 @@ function ProductList({
                 }}
               >
                 <th scope="row">{index + 1}</th>
-                <td style={{ width: "12%" }}>{product.sku}</td>
+                <td style={{ width: "12%" }}>
+                  <IconButton
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      copyToClipboard(product.sku);
+                    }}
+                  >
+                    <ContentCopy />
+                  </IconButton>
+                  {product.sku}
+                </td>
                 <td>{product.brand}</td>
                 <td>{product.itemName}</td>
                 <td style={{ width: "5%" }}>{product.sizeOz}</td>
