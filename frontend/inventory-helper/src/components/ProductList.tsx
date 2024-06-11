@@ -7,6 +7,7 @@ interface Props {
   heading: string;
   handleSort: (columnKey: string) => void;
   sortConfig: { key: string | null; direction: string };
+  filterConfig: { key: string; value: string };
   handleFilterChange: (
     e: React.ChangeEvent<HTMLInputElement>,
     columnKey: string
@@ -22,6 +23,7 @@ function ProductList({
   heading,
   handleSort,
   sortConfig,
+  filterConfig,
   handleFilterChange,
   currentPage,
   productsPerPage,
@@ -76,6 +78,7 @@ function ProductList({
                 <br></br>
                 <input
                   type="text"
+                  value={filterConfig.key === "sku" ? filterConfig.value : ""}
                   onChange={(e) => handleFilterChange(e, "sku")}
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -85,6 +88,7 @@ function ProductList({
                 <br></br>
                 <input
                   type="text"
+                  value={filterConfig.key === "brand" ? filterConfig.value : ""}
                   onChange={(e) => handleFilterChange(e, "brand")}
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -94,6 +98,9 @@ function ProductList({
                 <br></br>
                 <input
                   type="text"
+                  value={
+                    filterConfig.key === "itemName" ? filterConfig.value : ""
+                  }
                   onChange={(e) => handleFilterChange(e, "itemName")}
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -106,6 +113,9 @@ function ProductList({
                 <input
                   type="text"
                   style={{ width: "100%" }}
+                  value={
+                    filterConfig.key === "location" ? filterConfig.value : ""
+                  }
                   onChange={(e) => handleFilterChange(e, "location")}
                   onClick={(e) => e.stopPropagation()}
                 />

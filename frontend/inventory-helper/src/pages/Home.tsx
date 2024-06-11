@@ -26,10 +26,26 @@ function Home() {
   // Fetch initial product list on component mount
   useEffect(() => {
     const savedProducts = localStorage.getItem("listOfProducts");
+    const savedSortConfig = localStorage.getItem("sortConfig");
+    const savedFilterConfig = localStorage.getItem("filterConfig");
+    const savedCurrentPage = localStorage.getItem("currentPage");
+
     if (savedProducts) {
       setListOfProducts(JSON.parse(savedProducts));
     } else {
       fetchProducts();
+    }
+
+    if (savedSortConfig) {
+      setSortConfig(JSON.parse(savedSortConfig));
+    }
+
+    if (savedFilterConfig) {
+      setFilterConfig(JSON.parse(savedFilterConfig));
+    }
+
+    if (savedCurrentPage) {
+      setCurrentPage(parseInt(savedCurrentPage, 10));
     }
   }, []);
 
@@ -37,51 +53,11 @@ function Home() {
     try {
       const response = await axios.get("http://localhost:3001/products");
       setListOfProducts(response.data);
+      localStorage.setItem("listOfProducts", JSON.stringify(response.data));
     } catch (error) {
       console.error("Error fetching products:", error);
     }
   };
-
-  // // Function to handle search based on selected column and search string
-  // const handleSearch = async () => {
-  //   // TODO: Move this to Search.tsx eventually
-  //   try {
-  //     // Check if search string is provided
-  //     if (searchString.trim() !== "") {
-  //       const searchType = columnMap.has(selectedColumn)
-  //         ? columnMap.get(selectedColumn)
-  //         : "itemName";
-  //       const response = await axios.get(
-  //         "http://localhost:3001/products/search",
-  //         {
-  //           params: { searchString, searchType },
-  //         }
-  //       );
-  //       setListOfProducts(response.data);
-  //       // Save search state and results to local storage
-  //       localStorage.setItem("searchString", searchString);
-  //       localStorage.setItem("selectedColumn", selectedColumn);
-  //       localStorage.setItem("listOfProducts", JSON.stringify(response.data));
-  //     } else {
-  //       // If search string is empty, fetch all products
-  //       fetchProducts();
-  //       // Clear search state and results from local storage
-  //       localStorage.removeItem("searchString");
-  //       localStorage.removeItem("selectedColumn");
-  //       localStorage.removeItem("listOfProducts");
-  //     }
-  //   } catch (error) {
-  //     console.error("Error searching products:", error);
-  //   }
-  // };
-
-  // // Function to handle search on pressing Enter key
-  // const handleKeypress = (e: any) => {
-  //   //it triggers by pressing the enter key
-  //   if (e.keyCode === 13) {
-  //     handleSearch();
-  //   }
-  // };
 
   // Function to handle sorting
   const handleSort = (columnKey: string) => {
@@ -89,14 +65,19 @@ function Home() {
     if (sortConfig.key === columnKey && sortConfig.direction === "asc") {
       direction = "desc";
     }
+    const newSortConfig = { key: columnKey, direction };
     setSortConfig({ key: columnKey, direction });
+    localStorage.setItem("sortConfig", JSON.stringify(newSortConfig));
   };
 
   const handleFilterChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     columnKey: string
   ) => {
-    setFilterConfig({ key: columnKey, value: e.target.value });
+    const newFilterConfig = { key: columnKey, value: e.target.value };
+    console.log("New Filter Config: ", newFilterConfig);
+    setFilterConfig(newFilterConfig);
+    localStorage.setItem("filterConfig", JSON.stringify(newFilterConfig));
     paginate(1);
   };
 
@@ -126,45 +107,19 @@ function Home() {
       return 0;
     });
 
-  const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
+  const paginate = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+    localStorage.setItem("currentPage", pageNumber.toString());
+  };
 
   return (
     <div>
-      {/* <Box alignItems="center" my={4} p={2}>
-        <TextField
-          style={{ width: "85%" }}
-          label="Search Item Name"
-          id="search"
-          value={searchString}
-          onChange={(event) => {
-            setSearchString(event.target.value);
-          }}
-          onKeyDown={handleKeypress}
-        />
-        <Select
-          value={selectedColumn}
-          onChange={(event) => setSelectedColumn(event.target.value)}
-          displayEmpty
-          style={{ width: "15%" }}
-        >
-          <MenuItem value="" disabled>
-            Search By
-          </MenuItem>
-          {columns.map((column, index) => (
-            <MenuItem key={index} value={column}>
-              {column}
-            </MenuItem>
-          ))}
-        </Select>
-        <Button variant="contained" color="success" onClick={handleSearch}>
-          Search
-        </Button>
-      </Box> */}
       <ProductList
         products={sortedAndFilteredProducts}
         heading={heading}
         handleSort={handleSort}
         sortConfig={sortConfig}
+        filterConfig={filterConfig}
         handleFilterChange={handleFilterChange}
         currentPage={currentPage}
         productsPerPage={productsPerPage}
