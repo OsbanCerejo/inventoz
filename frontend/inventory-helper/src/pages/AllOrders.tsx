@@ -28,7 +28,7 @@ function AllOrders() {
   });
   const [approveOrders, setApproveOrders] = useState(false);
   const [productsData, setProductsData] = useState<any[]>([]);
-  const [updatedProducts, setUpdatedProducts] = useState<any[]>([]);
+  // const [updatedProducts, setUpdatedProducts] = useState<any[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -50,6 +50,7 @@ function AllOrders() {
         axios.get("http://localhost:3001/orders/allOrders"),
         axios.get("http://localhost:3001/products"),
       ]);
+      setProductsData(productsResponse.data);
       const productMap = createProductMap(productsResponse.data);
 
       const grouped = groupOrdersByProduct(
@@ -93,12 +94,12 @@ function AllOrders() {
           customerName: order.customerUsername,
           orderStatus: order.orderStatus,
           warehouseLocation: product ? product.location : "____",
+          isverified: product ? product.verified : false,
         });
         result.totalItems += item.quantity;
       });
       return acc;
     }, {});
-    console.log("Result in orders: ", result);
     return result;
   }
 
@@ -124,7 +125,7 @@ function AllOrders() {
       );
 
       if (response.data.success) {
-        setUpdatedProducts(response.data.updatedProducts);
+        // setUpdatedProducts(response.data.updatedProducts);
         toast.success("Quantities Updated!", { position: "top-right" });
         navigate("/");
       }
@@ -293,7 +294,9 @@ function AllOrders() {
                               justifyContent: "space-between",
                               alignItems: "center",
                               padding: "10px",
-                              backgroundColor: "#f0f0f0",
+                              backgroundColor: item.isverified
+                                ? "#B2FF59"
+                                : "#FF5252",
                             }}
                           >
                             <Typography sx={{ fontSize: "0.875rem" }}>
