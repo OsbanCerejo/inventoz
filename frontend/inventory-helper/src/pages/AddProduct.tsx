@@ -609,17 +609,17 @@ function AddProduct() {
                               value={formik.values.condition}
                             >
                               <FormControlLabel
-                                value="unboxed"
+                                value="Unboxed"
                                 control={<Radio />}
                                 label="Unboxed"
                               />
                               <FormControlLabel
-                                value="sealed"
+                                value="Sealed"
                                 control={<Radio />}
                                 label="Sealed"
                               />
                               <FormControlLabel
-                                value="unsealed"
+                                value="Unsealed"
                                 control={<Radio />}
                                 label="Unsealed"
                               />
