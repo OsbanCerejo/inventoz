@@ -1,10 +1,12 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
 import ProductList from "../components/ProductList";
+import { useLocation } from "react-router-dom";
 
 function Home() {
   // State Variables
   const [listOfProducts, setListOfProducts] = useState<any[]>([]);
+  const location = useLocation();
 
   const [sortConfig, setSortConfig] = useState<{
     key: string | null;
@@ -30,6 +32,17 @@ function Home() {
     const savedFilterConfig = localStorage.getItem("filterConfig");
     const savedCurrentPage = localStorage.getItem("currentPage");
 
+    // Clear filters if navigated with the clearFilters state
+    if (location.state?.clearFilters) {
+      fetchProducts();
+      setSortConfig({ key: "sku", direction: "asc" });
+      setFilterConfig({ key: "", value: "" });
+      setCurrentPage(1);
+      localStorage.removeItem("sortConfig");
+      localStorage.removeItem("filterConfig");
+      localStorage.removeItem("currentPage");
+    }
+
     if (savedProducts) {
       setListOfProducts(JSON.parse(savedProducts));
     } else {
@@ -47,7 +60,7 @@ function Home() {
     if (savedCurrentPage) {
       setCurrentPage(parseInt(savedCurrentPage, 10));
     }
-  }, []);
+  }, [location.state]);
 
   const fetchProducts = async () => {
     try {
@@ -74,7 +87,6 @@ function Home() {
     columnKey: string
   ) => {
     const newFilterConfig = { key: columnKey, value: e.target.value };
-    console.log("New Filter Config: ", newFilterConfig);
     setFilterConfig(newFilterConfig);
     localStorage.setItem("filterConfig", JSON.stringify(newFilterConfig));
     paginate(1);

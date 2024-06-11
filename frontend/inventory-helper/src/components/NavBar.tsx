@@ -1,10 +1,16 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 function NavBar() {
   const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
 
   const toggleNavbar = () => {
     setIsOpen(!isOpen);
+  };
+
+  const handleHomeClick = () => {
+    navigate("/", { state: { clearFilters: true } });
   };
 
   return (
@@ -23,7 +29,11 @@ function NavBar() {
         >
           <ul className="navbar-nav mr-auto">
             <li className="nav-item active">
-              <a className="nav-link" href="/">
+              <a
+                className="nav-link"
+                onClick={handleHomeClick}
+                style={{ cursor: "pointer" }}
+              >
                 Home
               </a>
             </li>
