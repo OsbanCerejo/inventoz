@@ -131,7 +131,7 @@ function ProductList({
                 />
               </th>
               <th scope="col" onClick={() => handleSort("quantity")}>
-                {getSortIcon("location")} Quantity
+                {getSortIcon("quantity")} Quantity
               </th>
               <th scope="col" onClick={() => handleSort("listed")}>
                 {getSortIcon("listed")} Listed
