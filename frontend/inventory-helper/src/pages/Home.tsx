@@ -106,13 +106,19 @@ function Home() {
     })
     .sort((a, b) => {
       if (sortConfig.key) {
-        const aValue = a[sortConfig.key]?.toString().toLowerCase() ?? "";
-        const bValue = b[sortConfig.key]?.toString().toLowerCase() ?? "";
-        if (aValue < bValue) {
-          return sortConfig.direction === "asc" ? -1 : 1;
-        }
-        if (aValue > bValue) {
-          return sortConfig.direction === "asc" ? 1 : -1;
+        const aValue = a[sortConfig.key];
+        const bValue = b[sortConfig.key];
+
+        if (sortConfig.key === "quantity") {
+          return sortConfig.direction === "asc"
+            ? aValue - bValue
+            : bValue - aValue;
+        } else {
+          const aStr = aValue?.toString().toLowerCase() ?? "";
+          const bStr = bValue?.toString().toLowerCase() ?? "";
+          if (aStr < bStr) return sortConfig.direction === "asc" ? -1 : 1;
+          if (aStr > bStr) return sortConfig.direction === "asc" ? 1 : -1;
+          return 0;
         }
       }
       return 0;
