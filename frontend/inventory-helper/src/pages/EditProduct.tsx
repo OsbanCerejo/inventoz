@@ -370,6 +370,7 @@ function EditProduct() {
                             id="sizeOz"
                             name="sizeOz"
                             label="Size in Oz."
+                            style={{ width: "50%", padding: 1 }}
                             value={formik.values.sizeOz}
                             onChange={formik.handleChange}
                             onBlur={formik.handleBlur}
@@ -379,6 +380,22 @@ function EditProduct() {
                             }
                             helperText={
                               formik.touched.sizeOz && formik.errors.sizeOz
+                            }
+                          />
+                          <TextField
+                            id="sizeMl"
+                            name="sizeMl"
+                            label="Size (ml/g)"
+                            style={{ width: "50%", padding: 1 }}
+                            value={formik.values.sizeMl}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
+                            error={
+                              formik.touched.sizeMl &&
+                              Boolean(formik.errors.sizeMl)
+                            }
+                            helperText={
+                              formik.touched.sizeMl && formik.errors.sizeMl
                             }
                           />
                         </Box>
