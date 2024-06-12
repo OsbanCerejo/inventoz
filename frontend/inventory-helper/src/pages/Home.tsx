@@ -1,12 +1,13 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
 import ProductList from "../components/ProductList";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 function Home() {
   // State Variables
   const [listOfProducts, setListOfProducts] = useState<any[]>([]);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [sortConfig, setSortConfig] = useState<{
     key: string | null;
@@ -41,6 +42,8 @@ function Home() {
       localStorage.removeItem("sortConfig");
       localStorage.removeItem("filterConfig");
       localStorage.removeItem("currentPage");
+
+      navigate(location.pathname, { replace: true, state: {} });
     }
 
     if (savedProducts) {
