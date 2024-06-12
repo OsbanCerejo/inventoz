@@ -145,7 +145,7 @@ function EditProduct() {
         .catch((error) => {
           console.error("There was an error updating the product: ", error);
         });
-      navigate("/");
+      navigate("/", { state: { clearFilters: true } });
     },
   });
 
