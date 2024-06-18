@@ -5,6 +5,7 @@ import {
   CardContent,
   Grid,
   Paper,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import axios from "axios";
@@ -156,6 +157,7 @@ function Product() {
                   </Typography>
                   <br></br>
                   {[
+                    ["SKU", productObject.sku],
                     ["Brand", productObject.brand],
                     ["Item Name", productObject.itemName],
                     ["Strength", productObject.strength],
@@ -219,9 +221,9 @@ function Product() {
                   </Typography>
                   <br></br>
                   {[
-                    ["Description", productDetails.description],
                     ["Quantity Available", productObject.quantity],
                     ["Location", productObject.location],
+                    ["Description", productDetails.description],
                   ].map(([label, value]) => (
                     <Box
                       key={label}
@@ -251,16 +253,20 @@ function Product() {
             >
               {productObject.image}
             </Box>
-            <Box
-              p={4}
-              sx={{
-                flex: 0.2,
-                display: "flex",
-                flexDirection: "column",
-              }}
-            >
-              <Barcode value={barcodeValue} />
-            </Box>
+            <Tooltip title="Copy" arrow>
+              <Box
+                p={4}
+                sx={{
+                  flex: 0.2,
+                  display: "flex",
+                  flexDirection: "column",
+                  cursor: "pointer",
+                }}
+                onClick={handleCopyBarcodeClick}
+              >
+                <Barcode value={barcodeValue} />
+              </Box>
+            </Tooltip>
           </Grid>
         </Grid>
         <Box mt={2} display="flex" justifyContent="space-between" px={50}>
