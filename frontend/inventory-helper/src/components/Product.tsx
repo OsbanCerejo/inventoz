@@ -4,16 +4,15 @@ import {
   Card,
   CardContent,
   Grid,
+  Paper,
   Typography,
 } from "@mui/material";
-import { Container } from "@mui/system";
 import axios from "axios";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import WarehouseIcon from "@mui/icons-material/Warehouse";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import SellIcon from "@mui/icons-material/Sell";
 import { toast } from "react-toastify";
 import Barcode from "./Barcode";
@@ -112,11 +111,197 @@ function Product() {
   }, []);
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Grid container spacing={4} border={1}>
-        {/* Red Box: Buttons */}
-
-        {/* Yellow Box: Barcode */}
+    <div className="product-container">
+      <Paper
+        sx={{
+          my: { xs: 1, md: 4 },
+          p: { xs: 4, md: 4 },
+          height: "80vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        <Grid container spacing={0} sx={{ flex: 1, overflow: "auto" }}>
+          <Grid item xs={4} sx={{ height: "100%" }}>
+            <Box
+              p={2}
+              display="flex"
+              justifyContent="center"
+              sx={{ height: "100%", width: "100%" }}
+            >
+              <Card
+                variant="outlined"
+                sx={{
+                  height: "100%",
+                  width: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  overflow: "auto",
+                  p: 2,
+                }}
+              >
+                <CardContent
+                  sx={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    overflow: "auto",
+                  }}
+                >
+                  <Typography variant="h6" gutterBottom align="center">
+                    <strong>
+                      <u>Product Details</u>
+                    </strong>
+                  </Typography>
+                  <br></br>
+                  {[
+                    ["Brand", productObject.brand],
+                    ["Item Name", productObject.itemName],
+                    ["Strength", productObject.strength],
+                    ["Shade / Variant", productObject.shade],
+                    [
+                      "Size",
+                      `${productObject.sizeOz} oz. / ${productObject.sizeMl} ml`,
+                    ],
+                    ["Category", productObject.category],
+                    ["Type", productObject.type],
+                    ["Condition", productObject.condition],
+                    ["Period After Opening (PAO)", productDetails.pao],
+                    ["UPC", productObject.upc],
+                  ].map(([label, value]) => (
+                    <Box
+                      key={label}
+                      display="flex"
+                      justifyContent="space-between"
+                      py={1}
+                    >
+                      <Typography variant="body1" fontWeight="bold">
+                        {label}:
+                      </Typography>
+                      <Typography variant="body1">{value}</Typography>
+                    </Box>
+                  ))}
+                </CardContent>
+              </Card>
+            </Box>
+          </Grid>
+          <Grid item xs={4} sx={{ height: "100%" }}>
+            <Box
+              p={2}
+              display="flex"
+              justifyContent="center"
+              sx={{ height: "100%", width: "100%" }}
+            >
+              <Card
+                variant="outlined"
+                sx={{
+                  height: "100%",
+                  width: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  overflow: "auto",
+                  mx: 4,
+                  p: 2,
+                }}
+              >
+                <CardContent
+                  sx={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <Typography variant="h6" gutterBottom align="center">
+                    <strong>
+                      <u>Warehouse Details</u>
+                    </strong>
+                  </Typography>
+                  <br></br>
+                  {[
+                    ["Description", productDetails.description],
+                    ["Quantity Available", productObject.quantity],
+                    ["Location", productObject.location],
+                  ].map(([label, value]) => (
+                    <Box
+                      key={label}
+                      display="flex"
+                      justifyContent="space-between"
+                      py={1}
+                    >
+                      <Typography variant="body1" fontWeight="bold">
+                        {label}:
+                      </Typography>
+                      <Typography variant="body1">{value}</Typography>
+                    </Box>
+                  ))}
+                </CardContent>
+              </Card>
+            </Box>
+          </Grid>
+          <Grid item xs={4} sx={{ display: "flex", flexDirection: "column" }}>
+            <Box
+              border={1}
+              sx={{
+                flex: 0.8,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "auto",
+              }}
+            >
+              {productObject.image}
+            </Box>
+            <Box
+              p={4}
+              sx={{
+                flex: 0.2,
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <Barcode value={barcodeValue} />
+            </Box>
+          </Grid>
+        </Grid>
+        <Box mt={2} display="flex" justifyContent="space-between" px={50}>
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={<EditIcon />}
+            onClick={handleEditOnClick}
+            sx={{ mx: 1 }}
+          >
+            Edit
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<SellIcon />}
+            onClick={handleSalesClick}
+            sx={{ mx: 1 }}
+          >
+            Sales
+          </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            startIcon={<WarehouseIcon />}
+            onClick={handleInboundClick}
+            sx={{ mx: 1 }}
+          >
+            Inbound
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            startIcon={<DeleteIcon />}
+            onClick={handleDeleteClick}
+            sx={{ mx: 1 }}
+          >
+            Delete
+          </Button>
+        </Box>
+      </Paper>
+      {/* <Grid container spacing={4} border={3} borderColor="black">
         <Grid item xs={12} md={6} border={1} borderColor="green">
           <Box border={1} p={2} display="flex" justifyContent="center">
             <Barcode value={barcodeValue} />
@@ -132,7 +317,6 @@ function Product() {
           </Button>
         </Grid>
 
-        {/* Green Box: Product Details */}
         <Grid item xs={12} md={6}>
           <Card variant="outlined">
             <CardContent>
@@ -171,7 +355,6 @@ function Product() {
           </Card>
         </Grid>
 
-        {/* Blue Box: Space for Future Images */}
         <Grid item xs={12} md={6}>
           <Box
             border={1}
@@ -225,8 +408,8 @@ function Product() {
             </Button>
           </Box>
         </Grid>
-      </Grid>
-    </Container>
+      </Grid> */}
+    </div>
   );
 }
 

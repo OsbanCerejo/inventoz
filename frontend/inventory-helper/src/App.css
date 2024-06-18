@@ -5,6 +5,13 @@
   margin: 1% 5%;
 }
 
+.product-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  margin: 0% 0%;
+}
+
 .main-content {
   flex: 1;
   margin: 0 5%;
