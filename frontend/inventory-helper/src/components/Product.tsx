@@ -223,7 +223,6 @@ function Product() {
                   {[
                     ["Quantity Available", productObject.quantity],
                     ["Location", productObject.location],
-                    ["Description", productDetails.description],
                   ].map(([label, value]) => (
                     <Box
                       key={label}
@@ -237,6 +236,10 @@ function Product() {
                       <Typography variant="body1">{value}</Typography>
                     </Box>
                   ))}
+                  <strong>Description</strong>
+                  <Box display="flex" justifyContent="space-between" py={1}>
+                    {productDetails.description}
+                  </Box>
                 </CardContent>
               </Card>
             </Box>
