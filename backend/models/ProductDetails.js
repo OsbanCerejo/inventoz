@@ -3,7 +3,7 @@ module.exports = (sequelize, DataTypes) => {
     "ProductDetails",
     {
       sku: {
-        type: DataTypes.STRING,
+        type: DataTypes.TEXT,
         allowNull: false,
         primaryKey: true,
       },
@@ -16,7 +16,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
       },
       scentNotes: {
-        type: DataTypes.STRING,
+        type: DataTypes.TEXT,
         allowNull: true,
       },
       sizetype: {
@@ -24,7 +24,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
       },
       activeIngredients: {
-        type: DataTypes.STRING,
+        type: DataTypes.TEXT,
         allowNull: true,
       },
       pao: {
