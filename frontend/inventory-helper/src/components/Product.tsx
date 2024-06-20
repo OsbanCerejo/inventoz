@@ -15,6 +15,8 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import WarehouseIcon from "@mui/icons-material/Warehouse";
 import SellIcon from "@mui/icons-material/Sell";
+import ScienceIcon from "@mui/icons-material/Science";
+import CancelIcon from "@mui/icons-material/Cancel";
 import { toast } from "react-toastify";
 import Barcode from "./Barcode";
 
@@ -184,6 +186,19 @@ function Product() {
                       <Typography variant="body1">{value}</Typography>
                     </Box>
                   ))}
+                  <br></br>
+                  {productDetails.tester && (
+                    <Box>
+                      <ScienceIcon sx={{ color: "red", fontSize: 40 }} />
+                      <p>Tester</p>
+                    </Box>
+                  )}
+                  {productDetails.discontinued && (
+                    <Box>
+                      <CancelIcon sx={{ color: "purple", fontSize: 40 }} />
+                      <p>Discontinued</p>
+                    </Box>
+                  )}
                 </CardContent>
               </Card>
             </Box>
