@@ -118,6 +118,7 @@ function ProductList({
                 />
               </th>
               <th scope="col">Size</th>
+              <th scope="col">Strength</th>
               <th scope="col" onClick={() => handleSort("shade")}>
                 {getSortIcon("shade")} Variant
                 <br></br>
@@ -175,6 +176,7 @@ function ProductList({
                 <td>{product.brand}</td>
                 <td>{product.itemName}</td>
                 <td style={{ width: "5%" }}>{product.sizeOz}</td>
+                <td>{product.strength}</td>
                 <td style={{ width: "8%" }}>{product.shade}</td>
                 <td style={{ width: "8%" }}>{product.location}</td>
                 <td
