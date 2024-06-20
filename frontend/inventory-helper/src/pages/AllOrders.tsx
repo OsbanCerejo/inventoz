@@ -125,6 +125,8 @@ function AllOrders() {
       );
 
       if (response.data.success) {
+        // Log the update quantities action
+        await logUpdateQuantities(skusToUpdate);
         // setUpdatedProducts(response.data.updatedProducts);
         toast.success("Quantities Updated!", { position: "top-right" });
         navigate("/");
@@ -133,6 +135,20 @@ function AllOrders() {
       setApproveOrders(true);
     } catch (error) {
       console.error("Error updating product quantities:", error);
+    }
+  };
+
+  const logUpdateQuantities = async (skusToUpdate: any) => {
+    const logData = {
+      timestamp: new Date().toISOString(),
+      type: "Sales Update",
+      metaData: skusToUpdate,
+    };
+
+    try {
+      await axios.post("http://localhost:3001/logs/addLog", logData);
+    } catch (error) {
+      console.error("Error logging update quantities:", error);
     }
   };
 
