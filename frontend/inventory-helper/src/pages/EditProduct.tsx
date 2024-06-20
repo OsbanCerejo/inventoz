@@ -140,6 +140,11 @@ function EditProduct() {
           axios.spread((productsRes, productDetailsRes) => {
             console.log("Product Updated to: ", productsRes);
             console.log("Product Details Updated to: ", productDetailsRes);
+            axios.post("http://localhost:3001/logs/addLog", {
+              timestamp: new Date().toISOString(),
+              type: "Edit Product",
+              metaData: data,
+            });
           })
         )
         .catch((error) => {

@@ -162,6 +162,11 @@ function AddProduct() {
         if (addProductresponse.data === "Already Exists") {
           toast.error("Product Already Exists!", { position: "top-right" });
         } else if (addProductresponse.data === "Created New") {
+          axios.post("http://localhost:3001/logs/addLog", {
+            timestamp: new Date().toISOString(),
+            type: "Add Product",
+            metaData: data,
+          });
           // Handle Product Details Insertion
           const addProductDetailsresponse = await axios.post(
             "http://localhost:3001/productDetails/addProductDetails",
