@@ -237,7 +237,20 @@ function AllOrders() {
         {!approveOrders && (
           <Grid item xs={12}>
             {Object.keys(groupedOrders)
-              .sort()
+              .sort((skuA, skuB) => {
+                const locationA = groupedOrders[skuA][0].warehouseLocation;
+                const locationB = groupedOrders[skuB][0].warehouseLocation;
+
+                if (locationA === "____" && locationB === "____") {
+                  return skuA.localeCompare(skuB);
+                } else if (locationA === "____") {
+                  return skuA.localeCompare(locationB);
+                } else if (locationB === "____") {
+                  return locationA.localeCompare(skuB);
+                } else {
+                  return locationA.localeCompare(locationB);
+                }
+              })
               .map((sku) => (
                 <Box key={sku} sx={{ marginBottom: 1 }}>
                   <Grid container spacing={0.5}>
