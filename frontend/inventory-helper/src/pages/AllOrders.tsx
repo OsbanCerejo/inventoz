@@ -283,7 +283,8 @@ function AllOrders() {
                             {item.options.length > 0 && (
                               <Box sx={{ flexGrow: 1 }}>
                                 <Typography sx={{ fontSize: "0.875rem" }}>
-                                  <b>Shade/Variant:</b> {item.options[0].value}
+                                  <b>{item.options[0].name} :</b>{" "}
+                                  {item.options[0].value}
                                 </Typography>
                               </Box>
                             )}
