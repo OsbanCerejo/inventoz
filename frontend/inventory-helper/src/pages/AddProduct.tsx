@@ -84,7 +84,7 @@ function AddProduct() {
     description: "",
     setOf: "",
     scentNotes: "",
-    sizetype: "",
+    sizeType: "",
     activeIngredients: "",
     pao: "",
     skinType: "",
@@ -125,7 +125,7 @@ function AddProduct() {
     description: Yup.string(),
     setOf: Yup.string(),
     scentNotes: Yup.string(),
-    sizetype: Yup.string(),
+    sizeType: Yup.string(),
     activeIngredients: Yup.string(),
     pao: Yup.string(),
     skinType: Yup.string(),
@@ -791,23 +791,45 @@ function AddProduct() {
                           </Grid>
                           <Grid item xs={12}>
                             <Box m={2}>
-                              <TextField
+                              <FormControl
                                 fullWidth
-                                id="sizetype"
-                                name="sizetype"
-                                label="Size Type // dropdown"
-                                value={formik.values.sizetype}
-                                onChange={formik.handleChange}
-                                onBlur={formik.handleBlur}
+                                variant="outlined"
                                 error={
-                                  formik.touched.sizetype &&
-                                  Boolean(formik.errors.sizetype)
+                                  formik.touched.sizeType &&
+                                  Boolean(formik.errors.sizeType)
                                 }
-                                helperText={
-                                  formik.touched.sizetype &&
-                                  formik.errors.sizetype
-                                }
-                              />
+                              >
+                                <InputLabel id="sizeTypeLabel">
+                                  Size Type
+                                </InputLabel>
+                                <Select
+                                  labelId="sizeTypeLabel"
+                                  id="sizeType"
+                                  name="sizeType"
+                                  fullWidth
+                                  label="Size Type"
+                                  value={formik.values.sizeType}
+                                  onChange={(event) => {
+                                    formik.setFieldValue(
+                                      "sizeType",
+                                      event.target.value
+                                    );
+                                  }}
+                                  input={<OutlinedInput label="sizeType" />}
+                                >
+                                  {Object.entries(skuData.SIZE).map(
+                                    ([value, key]) => (
+                                      <MenuItem key={key} value={value}>
+                                        {value}
+                                      </MenuItem>
+                                    )
+                                  )}
+                                </Select>
+                                <FormHelperText>
+                                  {formik.touched.sizeType &&
+                                    formik.errors.sizeType}
+                                </FormHelperText>
+                              </FormControl>
                             </Box>
                           </Grid>
                           <Grid item xs={12}>

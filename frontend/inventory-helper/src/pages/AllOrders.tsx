@@ -28,11 +28,9 @@ function AllOrders() {
   });
   const [approveOrders, setApproveOrders] = useState(false);
   const [productsData, setProductsData] = useState<any[]>([]);
-  // const [updatedProducts, setUpdatedProducts] = useState<any[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Fetch orders when component mounts
     fetchOrders();
   }, []);
 
