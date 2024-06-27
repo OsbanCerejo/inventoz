@@ -30,6 +30,13 @@
     "Perfume Oil": "POL",
     "Other": "OTR"
   },
+  "SIZE": {
+    "Vial": "VIL",
+    "Mini": "MIN",
+    "Travel": "TRL",
+    "Standard": "STD",
+    "Jumbo": "JUM"
+  },
   "BRANDS": {
     "Aerin": "AEN",
     "Azzaro": "AZO",
