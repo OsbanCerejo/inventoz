@@ -51,6 +51,7 @@ const formikValidationSchema = Yup.object().shape({
   inbound: Yup.boolean(),
   listed: Yup.boolean(),
   final: Yup.boolean(),
+  image: Yup.string().url("Invalid URL"),
   vendor: Yup.string(),
   // Product Details Fields
   description: Yup.string(),
@@ -100,6 +101,7 @@ function EditProduct() {
       inbound: productObject.inbound,
       listed: productObject.listed,
       final: productObject.final,
+      image: productObject.image,
       vendor: "",
       // New fields from ProductDetails
       description: productDetails.description || "",
@@ -477,6 +479,23 @@ function EditProduct() {
                     {showMoreDetails && (
                       <Collapse in={showMoreDetails}>
                         <Grid container spacing={0}>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
+                                id="image"
+                                name="image"
+                                label="Image URL"
+                                value={formik.values.image}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.image &&
+                                  Boolean(formik.errors.image)
+                                }
+                              />
+                            </Box>
+                          </Grid>
                           <Grid item xs={12}>
                             <Box m={2}>
                               <TextField

@@ -269,7 +269,7 @@ function Product() {
                 overflow: "auto",
               }}
             >
-              {productObject.image}
+              <img src={productObject.image} height="auto" />
             </Box>
             <Tooltip title="Copy" arrow>
               <Box

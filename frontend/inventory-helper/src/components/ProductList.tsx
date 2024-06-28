@@ -161,7 +161,10 @@ function ProductList({
                   handleSelect(product);
                 }}
               >
-                <th scope="row">{index + 1}</th>
+                <th scope="row">
+                  {index + 1}
+                  <img src={product.image} height="100" />
+                </th>
                 <td style={{ width: "12%" }}>
                   <IconButton
                     onClick={(e) => {

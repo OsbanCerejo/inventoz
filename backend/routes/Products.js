@@ -65,6 +65,7 @@ router.put("/", async (req, res) => {
       verified: product.verified,
       listed: product.listed,
       final: product.final,
+      image: product.image,
     },
     { where: { sku: product.sku } }
   );
