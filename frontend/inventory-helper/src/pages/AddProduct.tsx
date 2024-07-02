@@ -79,6 +79,7 @@ function AddProduct() {
     inbound: false,
     listed: false,
     final: false,
+    image: "",
     vendor: "",
     // New fields from ProductDetails
     description: "",
@@ -120,6 +121,7 @@ function AddProduct() {
     inbound: Yup.boolean(),
     listed: Yup.boolean(),
     final: Yup.boolean(),
+    image: Yup.string().url("Invalid URL"),
     vendor: Yup.string(),
     // Product Details Fields
     description: Yup.string(),
@@ -662,6 +664,26 @@ function AddProduct() {
                     {showMoreDetails && (
                       <Collapse in={showMoreDetails}>
                         <Grid container spacing={0}>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
+                                id="image"
+                                name="image"
+                                label="Image URL"
+                                value={formik.values.image}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.image &&
+                                  Boolean(formik.errors.image)
+                                }
+                                helperText={
+                                  formik.touched.image && formik.errors.image
+                                }
+                              />
+                            </Box>
+                          </Grid>
                           <Grid item xs={12}>
                             <Box m={2}>
                               <TextField
