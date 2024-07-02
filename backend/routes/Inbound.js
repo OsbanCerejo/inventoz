@@ -7,6 +7,8 @@ const Op = Sequelize.Op;
 router.post("/", async (req, res) => {
   const inboundItem = req.body;
   console.log("Inbound object in backend is : ", inboundItem);
+  console.log;
+
   const [found, created] = await Inbound.findOrCreate({
     where: { compositeSku: inboundItem.compositeSku },
     defaults: inboundItem,

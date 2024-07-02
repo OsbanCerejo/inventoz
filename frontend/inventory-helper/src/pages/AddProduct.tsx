@@ -4,6 +4,7 @@ import * as Yup from "yup";
 import Button from "@mui/material/Button";
 import {
   Box,
+  Checkbox,
   Collapse,
   Container,
   Divider,
@@ -33,6 +34,7 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import countriesData from "../../../data/countries.json";
 
 function AddProduct() {
   const [generatedSku, setGeneratedSku] = useState("");
@@ -77,7 +79,26 @@ function AddProduct() {
     inbound: false,
     listed: false,
     final: false,
+    image: "",
     vendor: "",
+    // New fields from ProductDetails
+    description: "",
+    setOf: "",
+    scentNotes: "",
+    sizeType: "",
+    activeIngredients: "",
+    pao: "",
+    skinType: "",
+    mainPurpose: "",
+    bodyArea: "",
+    countryOfManufacture: "",
+    gender: "",
+    seo: {},
+    ingredientDesc: "",
+    discontinued: false,
+    tester: false,
+    isHazmat: false,
+    isLimitedEdition: false,
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -100,7 +121,26 @@ function AddProduct() {
     inbound: Yup.boolean(),
     listed: Yup.boolean(),
     final: Yup.boolean(),
+    image: Yup.string().url("Invalid URL"),
     vendor: Yup.string(),
+    // Product Details Fields
+    description: Yup.string(),
+    setOf: Yup.string(),
+    scentNotes: Yup.string(),
+    sizeType: Yup.string(),
+    activeIngredients: Yup.string(),
+    pao: Yup.string(),
+    skinType: Yup.string(),
+    mainPurpose: Yup.string(),
+    bodyArea: Yup.string(),
+    countryOfManufacture: Yup.string(),
+    gender: Yup.string(),
+    seo: Yup.object(),
+    ingredientDesc: Yup.string(),
+    discontinued: Yup.boolean(),
+    tester: Yup.boolean(),
+    isHazmat: Yup.boolean(),
+    isLimitedEdition: Yup.boolean(),
   });
 
   const formik = useFormik({
@@ -110,7 +150,7 @@ function AddProduct() {
       // Set the batch value to "NA" if inbound is false
       formik.values.batch = formik.values.inbound ? formik.values.batch : "NA";
 
-      console.log("Strength :::::::  ", formik.values.strength);
+      console.log("Product Data :::::::  ", data);
 
       try {
         // Attempt to add the new product into Products table
@@ -124,6 +164,18 @@ function AddProduct() {
         if (addProductresponse.data === "Already Exists") {
           toast.error("Product Already Exists!", { position: "top-right" });
         } else if (addProductresponse.data === "Created New") {
+          axios.post("http://localhost:3001/logs/addLog", {
+            timestamp: new Date().toISOString(),
+            type: "Add Product",
+            metaData: data,
+          });
+          // Handle Product Details Insertion
+          const addProductDetailsresponse = await axios.post(
+            "http://localhost:3001/productDetails/addProductDetails",
+            data
+          );
+          console.log("Product Details Response : ", addProductDetailsresponse);
+
           // Handle inbound logic if inbound is true
           if (formik.values.inbound) {
             data.batch = data.batch.length === 0 ? "NA" : data.batch;
@@ -463,7 +515,7 @@ function AddProduct() {
                         fullWidth
                         id="shade"
                         name="shade"
-                        label="Shade"
+                        label="Shade / Variant"
                         value={formik.values.shade}
                         onChange={formik.handleChange}
                         onBlur={formik.handleBlur}
@@ -515,10 +567,10 @@ function AddProduct() {
                         </Box>
                         <Box m={2}>
                           <TextField
-                            fullWidth
                             id="sizeOz"
                             name="sizeOz"
-                            label="Size in Oz."
+                            label="Size (Oz.)"
+                            style={{ width: "50%", padding: 1 }}
                             value={formik.values.sizeOz}
                             onChange={formik.handleChange}
                             onBlur={formik.handleBlur}
@@ -528,6 +580,22 @@ function AddProduct() {
                             }
                             helperText={
                               formik.touched.sizeOz && formik.errors.sizeOz
+                            }
+                          />
+                          <TextField
+                            id="sizeMl"
+                            name="sizeMl"
+                            label="Size (ml/g)"
+                            style={{ width: "50%", padding: 1 }}
+                            value={formik.values.sizeMl}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
+                            error={
+                              formik.touched.sizeMl &&
+                              Boolean(formik.errors.sizeMl)
+                            }
+                            helperText={
+                              formik.touched.sizeMl && formik.errors.sizeMl
                             }
                           />
                         </Box>
@@ -540,38 +608,27 @@ function AddProduct() {
                           <Box m={2}>
                             <p>Packaging Condition :</p>
                             <RadioGroup
+                              name="condition"
                               onChange={(event) => {
-                                formik.handleChange;
+                                formik.handleChange(event);
                                 generateSku(event.target.value, "4");
                               }}
                               value={formik.values.condition}
                             >
                               <FormControlLabel
-                                value="unboxed"
+                                value="Unboxed"
                                 control={<Radio />}
                                 label="Unboxed"
-                                checked={formik.values.condition === "Unboxed"}
-                                onChange={() =>
-                                  (formik.values.condition = "Unboxed")
-                                }
                               />
                               <FormControlLabel
-                                value="sealed"
+                                value="Sealed"
                                 control={<Radio />}
                                 label="Sealed"
-                                checked={formik.values.condition === "Sealed"}
-                                onChange={() =>
-                                  (formik.values.condition = "Sealed")
-                                }
                               />
                               <FormControlLabel
-                                value="unsealed"
+                                value="Unsealed"
                                 control={<Radio />}
                                 label="Unsealed"
-                                checked={formik.values.condition === "Unsealed"}
-                                onChange={() =>
-                                  (formik.values.condition = "Unsealed")
-                                }
                               />
                             </RadioGroup>
                           </Box>
@@ -607,6 +664,26 @@ function AddProduct() {
                     {showMoreDetails && (
                       <Collapse in={showMoreDetails}>
                         <Grid container spacing={0}>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
+                                id="image"
+                                name="image"
+                                label="Image URL"
+                                value={formik.values.image}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.image &&
+                                  Boolean(formik.errors.image)
+                                }
+                                helperText={
+                                  formik.touched.image && formik.errors.image
+                                }
+                              />
+                            </Box>
+                          </Grid>
                           <Grid item xs={12}>
                             <Box m={2}>
                               <TextField
@@ -670,22 +747,347 @@ function AddProduct() {
                           </Grid>
                           <Grid item xs={12}>
                             <Box m={2}>
-                              <TextField fullWidth />
+                              <TextField
+                                fullWidth
+                                id="description"
+                                name="description"
+                                label="Description"
+                                value={formik.values.description}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.description &&
+                                  Boolean(formik.errors.description)
+                                }
+                                helperText={
+                                  formik.touched.description &&
+                                  formik.errors.description
+                                }
+                                multiline
+                                rows={4}
+                                // maxRows={10}
+                                variant="outlined"
+                              />
                             </Box>
                           </Grid>
                           <Grid item xs={12}>
                             <Box m={2}>
-                              <TextField fullWidth />
+                              <TextField
+                                fullWidth
+                                id="setOf"
+                                name="setOf"
+                                label="Set Of / Lot of"
+                                value={formik.values.setOf}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.setOf &&
+                                  Boolean(formik.errors.setOf)
+                                }
+                                helperText={
+                                  formik.touched.setOf && formik.errors.setOf
+                                }
+                              />
                             </Box>
                           </Grid>
                           <Grid item xs={12}>
                             <Box m={2}>
-                              <TextField fullWidth />
+                              <TextField
+                                fullWidth
+                                id="scentNotes"
+                                name="scentNotes"
+                                label="Scent Notes"
+                                value={formik.values.scentNotes}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.scentNotes &&
+                                  Boolean(formik.errors.scentNotes)
+                                }
+                                helperText={
+                                  formik.touched.scentNotes &&
+                                  formik.errors.scentNotes
+                                }
+                              />
                             </Box>
                           </Grid>
                           <Grid item xs={12}>
                             <Box m={2}>
-                              <TextField fullWidth />
+                              <FormControl
+                                fullWidth
+                                variant="outlined"
+                                error={
+                                  formik.touched.sizeType &&
+                                  Boolean(formik.errors.sizeType)
+                                }
+                              >
+                                <InputLabel id="sizeTypeLabel">
+                                  Size Type
+                                </InputLabel>
+                                <Select
+                                  labelId="sizeTypeLabel"
+                                  id="sizeType"
+                                  name="sizeType"
+                                  fullWidth
+                                  label="Size Type"
+                                  value={formik.values.sizeType}
+                                  onChange={(event) => {
+                                    formik.setFieldValue(
+                                      "sizeType",
+                                      event.target.value
+                                    );
+                                  }}
+                                  input={<OutlinedInput label="sizeType" />}
+                                >
+                                  {Object.entries(skuData.SIZE).map(
+                                    ([value, key]) => (
+                                      <MenuItem key={key} value={value}>
+                                        {value}
+                                      </MenuItem>
+                                    )
+                                  )}
+                                </Select>
+                                <FormHelperText>
+                                  {formik.touched.sizeType &&
+                                    formik.errors.sizeType}
+                                </FormHelperText>
+                              </FormControl>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
+                                id="activeIngredients"
+                                name="activeIngredients"
+                                label="Active Ingredients"
+                                value={formik.values.activeIngredients}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.activeIngredients &&
+                                  Boolean(formik.errors.activeIngredients)
+                                }
+                                helperText={
+                                  formik.touched.activeIngredients &&
+                                  formik.errors.activeIngredients
+                                }
+                              />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
+                                id="pao"
+                                name="pao"
+                                label="Period After Opening (PAO)"
+                                value={formik.values.pao}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.pao &&
+                                  Boolean(formik.errors.pao)
+                                }
+                                helperText={
+                                  formik.touched.pao && formik.errors.pao
+                                }
+                              />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
+                                id="skinType"
+                                name="skinType"
+                                label="Skin Type"
+                                value={formik.values.skinType}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.skinType &&
+                                  Boolean(formik.errors.skinType)
+                                }
+                                helperText={
+                                  formik.touched.skinType &&
+                                  formik.errors.skinType
+                                }
+                              />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
+                                id="mainPurpose"
+                                name="mainPurpose"
+                                label="Main Purpose / Suggested Usage"
+                                value={formik.values.mainPurpose}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.mainPurpose &&
+                                  Boolean(formik.errors.mainPurpose)
+                                }
+                                helperText={
+                                  formik.touched.mainPurpose &&
+                                  formik.errors.mainPurpose
+                                }
+                              />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
+                                id="bodyArea"
+                                name="bodyArea"
+                                label="Body Area"
+                                value={formik.values.bodyArea}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.bodyArea &&
+                                  Boolean(formik.errors.bodyArea)
+                                }
+                                helperText={
+                                  formik.touched.bodyArea &&
+                                  formik.errors.bodyArea
+                                }
+                              />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <FormControl
+                                fullWidth
+                                error={
+                                  formik.touched.gender &&
+                                  Boolean(formik.errors.gender)
+                                }
+                              >
+                                <InputLabel id="country-label">
+                                  Country
+                                </InputLabel>
+                                <Select
+                                  labelId="country-label"
+                                  id="country"
+                                  name="country"
+                                  value={formik.values.countryOfManufacture}
+                                  onChange={(event) => {
+                                    formik.setFieldValue(
+                                      "countryOfManufacture",
+                                      event.target.value
+                                    );
+                                  }}
+                                  onBlur={formik.handleBlur}
+                                  label="Country"
+                                >
+                                  <MenuItem value="">
+                                    <em>None</em>
+                                  </MenuItem>
+                                  {countriesData.map((country: any) => (
+                                    <MenuItem
+                                      key={country.code}
+                                      value={country.name}
+                                    >
+                                      {country.name}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                                {formik.touched.gender &&
+                                  formik.errors.gender && (
+                                    <FormHelperText>
+                                      {formik.errors.gender}
+                                    </FormHelperText>
+                                  )}
+                              </FormControl>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <FormControl
+                                fullWidth
+                                error={
+                                  formik.touched.gender &&
+                                  Boolean(formik.errors.gender)
+                                }
+                              >
+                                <InputLabel id="gender-label">
+                                  Gender
+                                </InputLabel>
+                                <Select
+                                  labelId="gender-label"
+                                  id="gender"
+                                  name="gender"
+                                  value={formik.values.gender}
+                                  onChange={formik.handleChange}
+                                  onBlur={formik.handleBlur}
+                                  label="Gender"
+                                >
+                                  <MenuItem value="">
+                                    <em>None</em>
+                                  </MenuItem>
+                                  <MenuItem value="Male">Male</MenuItem>
+                                  <MenuItem value="Female">Female</MenuItem>
+                                  <MenuItem value="Unisex">Unisex</MenuItem>
+                                </Select>
+                                {formik.touched.gender &&
+                                  formik.errors.gender && (
+                                    <FormHelperText>
+                                      {formik.errors.gender}
+                                    </FormHelperText>
+                                  )}
+                              </FormControl>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={6}>
+                            <Box m={2}>
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    id="discontinued"
+                                    name="discontinued"
+                                    checked={formik.values.discontinued}
+                                    onChange={formik.handleChange}
+                                    color="primary"
+                                  />
+                                }
+                                label="Discontinued"
+                              />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={6}>
+                            <Box m={2}>
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    id="tester"
+                                    name="tester"
+                                    checked={formik.values.tester}
+                                    onChange={formik.handleChange}
+                                    color="primary"
+                                  />
+                                }
+                                label="Tester"
+                              />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={6}>
+                            <Box m={2}>
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    id="isLimitedEdition"
+                                    name="isLimitedEdition"
+                                    checked={formik.values.isLimitedEdition}
+                                    onChange={formik.handleChange}
+                                    color="primary"
+                                  />
+                                }
+                                label="Limited Edition"
+                              />
                             </Box>
                           </Grid>
                         </Grid>

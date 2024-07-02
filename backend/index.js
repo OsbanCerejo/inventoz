@@ -4,6 +4,7 @@ const cors = require("cors");
 require("dotenv").config();
 const { Sequelize } = require("sequelize");
 const dbConfig = require("./config/databaseConfig");
+const db = require("./models");
 
 app.use(express.json());
 app.use(cors());
@@ -23,14 +24,14 @@ const sequelize = new Sequelize(
 const productRouter = require("./routes/Products");
 app.use("/products", productRouter);
 
+const productDetailsRouter = require("./routes/ProductDetails");
+app.use("/productDetails", productDetailsRouter);
+
 const inboundRouter = require("./routes/Inbound");
 app.use("/inbound", inboundRouter);
 
 const salesRouter = require("./routes/Sales");
 app.use("/sales", salesRouter);
-
-const listingsRouter = require("./routes/Listings");
-app.use("/listings", listingsRouter);
 
 const brandsRouter = require("./routes/Brands");
 app.use("/brands", brandsRouter);
@@ -41,11 +42,14 @@ app.use("/orders", ordersRouter);
 const sephoraRouter = require("./routes/Sephora");
 app.use("/sephora", sephoraRouter);
 
+const logsRouter = require("./routes/Logs");
+app.use("/logs", logsRouter);
+
 sequelize
   .authenticate()
   .then(() => {
     console.log("Connection to Database has been established successfully.");
-    return sequelize.sync();
+    return db.sequelize.sync();
   })
   .then(() => {
     app.listen(process.env.PORT, () => {

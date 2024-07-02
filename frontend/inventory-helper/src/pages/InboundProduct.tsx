@@ -21,6 +21,7 @@ import { useState } from "react";
 
 function InboundProduct() {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const productObject = location.state.productObject;
   const today = new Date();
@@ -46,11 +47,10 @@ function InboundProduct() {
     initialValues: formikInitialValues,
     validationSchema: formikValidationSchema,
     onSubmit: (data) => {
-      //   console.log(productObject);
       const compositeInboundKey =
         data.sku +
         "-" +
-        data.date.month() +
+        (data.date.month() + 1) +
         "-" +
         data.date.date() +
         "-" +
@@ -67,12 +67,12 @@ function InboundProduct() {
           console.log("Quantity Updated in Inventory Table");
         });
       axios.post("http://localhost:3001/inbound", data).then((response) => {
-        console.log(response);
         if (response.data === "Created New") {
           toast.success("Success Notification !", {
             position: "top-right",
           });
           console.log("Created New");
+          navigate("/inbound/showAll");
         } else {
           toast.error("Inbound Entry Already Exists!", {
             position: "top-right",
@@ -144,7 +144,7 @@ function InboundProduct() {
                     onChange={(event) => {
                       if (event) {
                         setNewDate(event);
-                        formik.setFieldValue("date", newDate);
+                        formik.setFieldValue("date", event);
                       }
                     }}
                   />

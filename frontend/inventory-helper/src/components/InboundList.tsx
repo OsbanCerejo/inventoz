@@ -37,6 +37,7 @@ function ProductList({
   paginate,
 }: Props) {
   const navigate = useNavigate();
+  console.log(products);
 
   const handleSelect = (product: any) => {
     navigate(`/products/${product.sku}`);
@@ -69,6 +70,16 @@ function ProductList({
     indexOfLastProduct
   );
 
+  const formatDate = (dateString: string) => {
+    const options = {
+      year: "numeric" as const,
+      month: "long" as const,
+      day: "numeric" as const,
+    };
+    const date = new Date(dateString);
+    return date.toLocaleDateString(undefined, options);
+  };
+
   return (
     <>
       <h1>{heading}</h1>
@@ -95,7 +106,7 @@ function ProductList({
                   onClick={(e) => e.stopPropagation()}
                 />
               </th>
-              <th scope="col" onClick={() => handleSort("brand")}>
+              {/* <th scope="col" onClick={() => handleSort("brand")}>
                 {getSortIcon("brand")} Brand
                 <br></br>
                 <input
@@ -104,36 +115,37 @@ function ProductList({
                   onChange={(e) => handleFilterChange(e, "brand")}
                   onClick={(e) => e.stopPropagation()}
                 />
-              </th>
-              <th scope="col" onClick={() => handleSort("itemName")}>
-                {getSortIcon("itemName")} Item Name
+              </th> */}
+              <th scope="col">
+                Item Name
                 <br></br>
-                <input
+                {/* <input
                   type="text"
                   value={
                     filterConfig.key === "itemName" ? filterConfig.value : ""
                   }
                   onChange={(e) => handleFilterChange(e, "itemName")}
                   onClick={(e) => e.stopPropagation()}
-                />
+                /> */}
               </th>
-              <th scope="col">Size</th>
-              <th scope="col">Strength</th>
-              <th scope="col" onClick={() => handleSort("shade")}>
-                {getSortIcon("shade")} Variant
+              <th scope="col" onClick={() => handleSort("date")}>
+                {getSortIcon("date")} Date
+              </th>
+              <th scope="col" onClick={() => handleSort("batch")}>
+                {getSortIcon("batch")} Batch
                 <br></br>
                 <input
                   type="text"
                   style={{ width: "100%" }}
-                  value={filterConfig.key === "shade" ? filterConfig.value : ""}
-                  onChange={(e) => handleFilterChange(e, "shade")}
+                  value={filterConfig.key === "batch" ? filterConfig.value : ""}
+                  onChange={(e) => handleFilterChange(e, "batch")}
                   onClick={(e) => e.stopPropagation()}
                 />
               </th>
-              <th scope="col" onClick={() => handleSort("location")}>
-                {getSortIcon("location")} Location
+              <th scope="col">
+                Location
                 <br></br>
-                <input
+                {/* <input
                   type="text"
                   style={{ width: "100%" }}
                   value={
@@ -141,7 +153,7 @@ function ProductList({
                   }
                   onChange={(e) => handleFilterChange(e, "location")}
                   onClick={(e) => e.stopPropagation()}
-                />
+                /> */}
               </th>
               <th scope="col" onClick={() => handleSort("quantity")}>
                 {getSortIcon("quantity")} Quantity
@@ -153,50 +165,46 @@ function ProductList({
             </tr>
           </thead>
           <tbody>
-            {currentProducts.map((product, index) => (
+            {currentProducts.map((combinedItem, index) => (
               <tr
                 key={index}
                 onClick={() => {
                   // setSelectedIndex(index);
-                  handleSelect(product);
+                  handleSelect(combinedItem);
                 }}
               >
-                <th scope="row">
-                  {index + 1}
-                  <img src={product.image} height="100" />
-                </th>
+                <th scope="row">{index + 1}</th>
                 <td style={{ width: "12%" }}>
                   <IconButton
                     onClick={(e) => {
                       e.stopPropagation();
-                      copyToClipboard(product.sku);
+                      copyToClipboard(combinedItem.sku);
                     }}
                   >
                     <ContentCopy />
                   </IconButton>
-                  {product.sku}
+                  {combinedItem.sku}
                 </td>
-                <td>{product.brand}</td>
-                <td>{product.itemName}</td>
-                <td style={{ width: "5%" }}>{product.sizeOz}</td>
-                <td>{product.strength}</td>
-                <td style={{ width: "8%" }}>{product.shade}</td>
-                <td style={{ width: "8%" }}>{product.location}</td>
+                <td>{combinedItem.Product.itemName}</td>
+                <td>{formatDate(combinedItem.date)}</td>
+                <td style={{ width: "8%" }}>{combinedItem.batch}</td>
+                <td style={{ width: "8%" }}>{combinedItem.Product.location}</td>
                 <td
                   style={{
-                    backgroundColor: product.verified ? "#B2FF59" : "#FF5252",
                     width: "7%",
                   }}
                 >
-                  {product.quantity}
+                  {combinedItem.quantity}
                 </td>
                 <td
                   style={{
-                    backgroundColor: product.listed ? "#B2FF59" : "#FF5252",
+                    backgroundColor: combinedItem.listed
+                      ? "#B2FF59"
+                      : "#FF5252",
                     width: "7%",
                   }}
                 >
-                  {product.listed ? "Yes" : "No"}
+                  {combinedItem.listed ? "Yes" : "No"}
                 </td>
               </tr>
             ))}

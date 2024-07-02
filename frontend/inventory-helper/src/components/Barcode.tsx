@@ -6,7 +6,7 @@ interface BarcodeProps {
 }
 
 const Barcode: React.FC<BarcodeProps> = ({ value }) => {
-  const canvasRef = useRef(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     if (canvasRef.current) {
@@ -17,7 +17,7 @@ const Barcode: React.FC<BarcodeProps> = ({ value }) => {
     }
   }, [value]);
 
-  return <canvas ref={canvasRef} />;
+  return <canvas ref={canvasRef} className="barcode-canvas" />;
 };
 
 export default Barcode;

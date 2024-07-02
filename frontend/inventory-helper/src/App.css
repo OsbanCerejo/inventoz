@@ -1,0 +1,36 @@
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  margin: 1% 5%;
+}
+
+.product-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  margin: 0% 0%;
+}
+
+.main-content {
+  flex: 1;
+  margin: 0 5%;
+}
+
+.table-container {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+body,
+html,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+td,
+th {
+  vertical-align: top;
+}

@@ -1,120 +1,110 @@
-import { Box, TextField, Button } from "@mui/material";
 import axios from "axios";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import InboundProduct from "./InboundProduct";
+import InboundList from "../components/InboundList";
 
 function InboundData() {
-  const [listOfInbound, setListOfInbound] = useState([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const navigate = useNavigate();
+  const [listOfInbound, setListOfInbound] = useState<any[]>([]);
+
+  const [sortConfig, setSortConfig] = useState<{
+    key: string | null;
+    direction: string;
+  }>({
+    key: null,
+    direction: "asc",
+  });
+  const [filterConfig, setFilterConfig] = useState<{
+    key: string;
+    value: string;
+  }>({ key: "", value: "" });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [productsPerPage] = useState(20);
+
+  // Constants
+  const heading = "Inbound Data";
 
   useEffect(() => {
-    axios.get("http://localhost:3001/inbound").then((response) => {
-      setListOfInbound(response.data);
-    });
+    fetchInbound();
   }, []);
 
-  const handleSearch = () => {
-    // TODO: Move this to Search.tsx eventually
-    console.log("Clicked Search ", searchQuery);
-    if (searchQuery.length != 0) {
-      axios
-        .get(`http://localhost:3001/inbound/search/${searchQuery}`)
-        .then((response) => {
-          // console.log(response.data);
-          setListOfInbound(response.data);
-        });
-    } else {
-      // TODO: Fix this to reduce API GET calls and make it so empty string just resets the table state
-      axios.get("http://localhost:3001/inbound").then((response) => {
-        setListOfInbound(response.data);
-      });
-    }
-  };
-  const handleKeypress = (e: any) => {
-    //It triggers by pressing the enter key
-    if (e.keyCode === 13) {
-      handleSearch();
+  const fetchInbound = async () => {
+    try {
+      const [inboundResponse] = await Promise.all([
+        axios.get("http://localhost:3001/inbound"),
+      ]);
+      setListOfInbound(inboundResponse.data);
+    } catch (error) {
+      console.error("Fetch orders error:", error);
     }
   };
 
-  const handleSelect = (product: any) => {
-    console.log("Inside handleSelect in product list component");
-    console.log(product);
-    console.log(product.verified);
-    navigate(`/products/${product}`);
+  const sortedAndFilteredInbound = listOfInbound
+    .filter((product) => {
+      if (filterConfig.key && filterConfig.value) {
+        const productValue = product[filterConfig.key];
+        return productValue
+          ? productValue
+              .toLowerCase()
+              .includes(filterConfig.value.toLowerCase())
+          : false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortConfig.key) {
+        const aValue = a[sortConfig.key];
+        const bValue = b[sortConfig.key];
+
+        if (sortConfig.key === "quantity") {
+          return sortConfig.direction === "asc"
+            ? aValue - bValue
+            : bValue - aValue;
+        } else {
+          const aStr = aValue?.toString().toLowerCase() ?? "";
+          const bStr = bValue?.toString().toLowerCase() ?? "";
+          if (aStr < bStr) return sortConfig.direction === "asc" ? -1 : 1;
+          if (aStr > bStr) return sortConfig.direction === "asc" ? 1 : -1;
+          return 0;
+        }
+      }
+      return 0;
+    });
+
+  // Function to handle sorting
+  const handleSort = (columnKey: string) => {
+    let direction = "asc";
+    if (sortConfig.key === columnKey && sortConfig.direction === "asc") {
+      direction = "desc";
+    }
+    setSortConfig({ key: columnKey, direction });
   };
 
-  const formatDate = (dateString: string) => {
-    const options = {
-      year: "numeric" as const,
-      month: "long" as const,
-      day: "numeric" as const,
-    };
-    const date = new Date(dateString);
-    return date.toLocaleDateString(undefined, options);
+  const handleFilterChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    columnKey: string
+  ) => {
+    const newFilterConfig = { key: columnKey, value: e.target.value };
+    setFilterConfig(newFilterConfig);
+    paginate(1);
+  };
+  const paginate = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+    console.log("Sorted and filtered:", sortedAndFilteredInbound);
   };
 
   return (
     <div>
-      <Box alignItems="center" my={4} p={2}>
-        <TextField
-          fullWidth
-          label="Search Product SKU"
-          id="fullWidth"
-          value={searchQuery}
-          onChange={(event) => {
-            setSearchQuery(event.target.value);
-          }}
-          onKeyDown={handleKeypress}
-        />
-        <Button variant="contained" color="success" onClick={handleSearch}>
-          Search
-        </Button>
-      </Box>
-      {listOfInbound.length === 0 && <p>No item found</p>}
-      <table className="table table-bordered table-hover" border={2}>
-        <thead>
-          <tr>
-            <th scope="col">#</th>
-            <th scope="col">SKU</th>
-            <th scope="col">Quantity</th>
-            <th scope="col">Date</th>
-            <th scope="col">Batch Code</th>
-            <th scope="col">Location</th>
-            <th scope="col">Listed</th>
-          </tr>
-        </thead>
-        <tbody>
-          {listOfInbound.map((inboundProduct: any, index) => (
-            <tr
-              key={index}
-              onClick={() => {
-                // setSelectedIndex(index);
-                handleSelect(inboundProduct.sku);
-              }}
-            >
-              <th scope="row">{index + 1}</th>
-              <td>{inboundProduct.sku}</td>
-              <td>{inboundProduct.quantity}</td>
-              <td>{formatDate(inboundProduct.date)}</td>
-              <td>{inboundProduct.batch}</td>
-              <td>{inboundProduct.Product.location}</td>
-              <td
-                style={{
-                  backgroundColor: inboundProduct.Product.listed
-                    ? "#B2FF59"
-                    : "#FF5252",
-                  width: "5%",
-                }}
-              >
-                {inboundProduct.Product.listed ? "Yes" : "No"}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <InboundList
+        products={sortedAndFilteredInbound}
+        heading={heading}
+        handleSort={handleSort}
+        sortConfig={sortConfig}
+        filterConfig={filterConfig}
+        handleFilterChange={handleFilterChange}
+        currentPage={currentPage}
+        productsPerPage={productsPerPage}
+        paginate={paginate}
+        totalProducts={listOfInbound.length}
+      ></InboundList>
     </div>
   );
 }

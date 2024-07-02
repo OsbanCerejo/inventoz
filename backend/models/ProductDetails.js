@@ -1,82 +1,78 @@
 module.exports = (sequelize, DataTypes) => {
-  const Products = sequelize.define(
-    "Products",
+  const ProductDetails = sequelize.define(
+    "ProductDetails",
     {
       sku: {
-        type: DataTypes.STRING,
+        type: DataTypes.TEXT,
         allowNull: false,
         primaryKey: true,
       },
-      brand: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-      itemName: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-      quantity: {
-        type: DataTypes.INTEGER,
-        allowNull: true,
-      },
-      location: {
+      description: {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      sizeOz: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-      },
-      sizeMl: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-      },
-      strength: {
+      setOf: {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      shade: {
+      scentNotes: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      sizeType: {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      formulation: {
+      activeIngredients: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      pao: {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      category: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-      type: {
+      skinType: {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      upc: {
-        type: DataTypes.INTEGER,
-        allowNull: true,
-      },
-      batch: {
+      mainPurpose: {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      condition: {
+      bodyArea: {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      verified: {
+      countryOfManufacture: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      gender: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      seo: {
+        type: DataTypes.JSON,
+        allowNull: true,
+      },
+      ingredientDesc: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      discontinued: {
         type: DataTypes.BOOLEAN,
         allowNull: true,
       },
-      listed: {
+      tester: {
         type: DataTypes.BOOLEAN,
         allowNull: true,
       },
-      final: {
+      isHazmat: {
         type: DataTypes.BOOLEAN,
         allowNull: true,
       },
-      image: {
-        type: DataTypes.STRING,
+      isLimitedEdition: {
+        type: DataTypes.BOOLEAN,
         allowNull: true,
       },
     },
@@ -85,10 +81,9 @@ module.exports = (sequelize, DataTypes) => {
     }
   );
 
-  Products.associate = (models) => {
-    Products.hasMany(models.Inbound, { foreignKey: "sku" });
-    Products.hasOne(models.ProductDetails, { foreignKey: "sku" });
+  ProductDetails.associate = (models) => {
+    ProductDetails.belongsTo(models.Products, { foreignKey: "sku" });
   };
 
-  return Products;
+  return ProductDetails;
 };

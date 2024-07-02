@@ -11,13 +11,18 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 function SephoraSearch() {
   // State Variables
-  const [listOfProducts, setListOfProducts] = useState<any>(null);
+  const [returnedProduct, setReturnedProduct] = useState<any>(null);
+  const [productDetails, setProductDetails] = useState<any>(null);
   const [searchString, setSearchString] = useState("");
   const [selectedColumn, setSelectedColumn] = useState("");
+
+  useEffect(() => {
+    console.log("Product details in useeffect: ", productDetails);
+  }, [productDetails]);
 
   // Constants
   const columns = ["Item Name", "Barcode"];
@@ -42,17 +47,33 @@ function SephoraSearch() {
           }
         );
         if (response.data.primaryProduct) {
-          setListOfProducts(response.data);
+          setReturnedProduct(response.data);
+          const productId = response.data.productId;
+          const skuId = response.data.skuId;
+          setProductDetails(getProductDetails(productId, skuId));
+          console.log("Product Details : ", productDetails);
         } else {
-          setListOfProducts(null);
+          setReturnedProduct(null);
         }
         console.log("Sephora Search Results: ", response.data);
       } else {
-        setListOfProducts(null);
+        setReturnedProduct(null);
       }
     } catch (error) {
       console.error("Error searching products:", error);
     }
+  };
+
+  const getProductDetails = async (productId: any, skuId: any) => {
+    const responseProductDetails = await axios.get(
+      "http://localhost:3001/sephora/getMoreDetails",
+      {
+        params: { productId, skuId },
+      }
+    );
+    console.log("Product Details in function : ", responseProductDetails.data);
+    setProductDetails(responseProductDetails.data);
+    return responseProductDetails.data;
   };
 
   // Function to handle search on pressing Enter key
@@ -66,6 +87,7 @@ function SephoraSearch() {
   return (
     <div>
       <p>3360372058878</p>
+      <p>3605971618444</p>
       <Grid container spacing={0}>
         <Grid item xs={12}>
           <Box alignItems="center" my={4} p={2}>
@@ -99,7 +121,7 @@ function SephoraSearch() {
             </Button>
           </Box>
         </Grid>
-        {listOfProducts !== null && (
+        {returnedProduct !== null && (
           <Grid item xs={12}>
             <Grid container spacing={0}>
               <Box sx={{ marginBottom: 2 }}>
@@ -110,10 +132,10 @@ function SephoraSearch() {
                         component="img"
                         sx={{ width: 150, objectFit: "contain" }}
                         image={
-                          listOfProducts.alternateImages[0].image300 ||
-                          listOfProducts.skuImages.image300
+                          returnedProduct.alternateImages[0].image300 ||
+                          returnedProduct.skuImages.image300
                         }
-                        alt={listOfProducts.primaryProduct.displayName}
+                        alt={returnedProduct.primaryProduct.displayName}
                       />
                       <CardContent
                         sx={{
@@ -123,21 +145,73 @@ function SephoraSearch() {
                         }}
                       >
                         <Box sx={{ flexGrow: 1 }}>
-                          <Typography component="div" variant="h6">
-                            {listOfProducts.primaryProduct.displayName}
-                          </Typography>
-                          <Typography>
-                            ID: {listOfProducts.productId}
-                          </Typography>
-                          <Typography>Size: {listOfProducts.size}</Typography>
-                          <Typography>
-                            Title: {listOfProducts.seoTitle}
-                          </Typography>
-                          <Typography>
-                            Description: {listOfProducts.seoMetaDescription}
-                          </Typography>
+                          <Grid container spacing={0}>
+                            <Grid item xs={12}>
+                              <Typography component="div" variant="h6">
+                                {returnedProduct.primaryProduct.displayName}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={6} color={"green"}>
+                              <Typography>
+                                ID: {returnedProduct.productId}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={6} color={"green"}>
+                              <Typography>
+                                SKU ID: {returnedProduct.skuId}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={6} color={"blue"}>
+                              <Typography>
+                                Size: {returnedProduct.size}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={6} color={"blue"}>
+                              <Typography>
+                                Price: {returnedProduct.listPrice}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={12}>
+                              <Typography>
+                                <strong>Title: </strong>
+                                <u>{returnedProduct.seoTitle}</u>
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={12}>
+                              <Typography>
+                                Description:{" "}
+                                {returnedProduct.seoMetaDescription}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={6} color={"orange"}>
+                              <Typography>
+                                Star Rating: {returnedProduct.starRatings}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={6} color={"orange"}>
+                              {productDetails &&
+                                productDetails.productDetails && (
+                                  <Typography>
+                                    No. Of Reviews:
+                                    {productDetails.productDetails.reviews}
+                                  </Typography>
+                                )}
+                            </Grid>
+                          </Grid>
                         </Box>
                       </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Card sx={{ display: "flex", padding: 4 }}>
+                      {productDetails && productDetails.productDetails && (
+                        <div
+                          dangerouslySetInnerHTML={{
+                            __html:
+                              productDetails.productDetails.longDescription,
+                          }}
+                        />
+                      )}
                     </Card>
                   </Grid>
                 </Grid>
