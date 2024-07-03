@@ -121,7 +121,7 @@ function AddProduct() {
     inbound: Yup.boolean(),
     listed: Yup.boolean(),
     final: Yup.boolean(),
-    image: Yup.string().url("Invalid URL"),
+    image: Yup.string(),
     vendor: Yup.string(),
     // Product Details Fields
     description: Yup.string(),
