@@ -101,7 +101,7 @@ function EditProduct() {
       inbound: productObject.inbound,
       listed: productObject.listed,
       final: productObject.final,
-      image: productObject.image,
+      image: "" + productObject.image,
       vendor: "",
       // New fields from ProductDetails
       description: productDetails.description || "",
