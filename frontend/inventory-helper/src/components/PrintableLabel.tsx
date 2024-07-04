@@ -142,7 +142,6 @@ const PrintableLabel = React.forwardRef<
             style={{
               textAlign: "left",
               fontSize: sizeOzFontSize,
-              overflow: "hidden",
               whiteSpace: "nowrap",
             }}
           >
