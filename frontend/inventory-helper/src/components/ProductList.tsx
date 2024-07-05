@@ -14,7 +14,7 @@ interface Props {
   heading: string;
   handleSort: (columnKey: string) => void;
   sortConfig: { key: string | null; direction: string };
-  filterConfig: { key: string; value: string };
+  filterConfig: { key: string; value: string }[];
   handleFilterChange: (
     e: React.ChangeEvent<HTMLInputElement>,
     columnKey: string
@@ -69,6 +69,11 @@ function ProductList({
     indexOfLastProduct
   );
 
+  const getFilterValue = (columnKey: string) => {
+    const filter = filterConfig.find((f) => f.key === columnKey);
+    return filter ? filter.value : "";
+  };
+
   return (
     <>
       <h1>{heading}</h1>
@@ -90,7 +95,7 @@ function ProductList({
                 <br></br>
                 <input
                   type="text"
-                  value={filterConfig.key === "sku" ? filterConfig.value : ""}
+                  value={getFilterValue("sku")}
                   onChange={(e) => handleFilterChange(e, "sku")}
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -100,7 +105,7 @@ function ProductList({
                 <br></br>
                 <input
                   type="text"
-                  value={filterConfig.key === "brand" ? filterConfig.value : ""}
+                  value={getFilterValue("brand")}
                   onChange={(e) => handleFilterChange(e, "brand")}
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -110,9 +115,7 @@ function ProductList({
                 <br></br>
                 <input
                   type="text"
-                  value={
-                    filterConfig.key === "itemName" ? filterConfig.value : ""
-                  }
+                  value={getFilterValue("itemName")}
                   onChange={(e) => handleFilterChange(e, "itemName")}
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -125,7 +128,7 @@ function ProductList({
                 <input
                   type="text"
                   style={{ width: "100%" }}
-                  value={filterConfig.key === "shade" ? filterConfig.value : ""}
+                  value={getFilterValue("shade")}
                   onChange={(e) => handleFilterChange(e, "shade")}
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -136,9 +139,7 @@ function ProductList({
                 <input
                   type="text"
                   style={{ width: "100%" }}
-                  value={
-                    filterConfig.key === "location" ? filterConfig.value : ""
-                  }
+                  value={getFilterValue("location")}
                   onChange={(e) => handleFilterChange(e, "location")}
                   onClick={(e) => e.stopPropagation()}
                 />
