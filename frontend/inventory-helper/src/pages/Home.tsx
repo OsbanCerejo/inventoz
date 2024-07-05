@@ -57,7 +57,13 @@ function Home() {
     }
 
     if (savedFilterConfig) {
-      setFilterConfig(JSON.parse(savedFilterConfig));
+      const parsedFilterConfig = JSON.parse(savedFilterConfig);
+      if (Array.isArray(parsedFilterConfig)) {
+        setFilterConfig(parsedFilterConfig);
+      } else {
+        console.warn("savedFilterConfig is not an array", parsedFilterConfig);
+        setFilterConfig([]);
+      }
     }
 
     if (savedCurrentPage) {
