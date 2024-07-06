@@ -60,8 +60,16 @@ function InboundData() {
     })
     .sort((a, b) => {
       if (sortConfig.key) {
-        const aValue = a[sortConfig.key];
-        const bValue = b[sortConfig.key];
+        let aValue = a[sortConfig.key];
+        let bValue = b[sortConfig.key];
+
+        if (sortConfig.key === "listed") {
+          aValue = a.Product.listed;
+          bValue = b.Product.listed;
+        } else {
+          aValue = a[sortConfig.key];
+          bValue = b[sortConfig.key];
+        }
 
         if (sortConfig.key === "quantity") {
           return sortConfig.direction === "asc"
