@@ -197,13 +197,13 @@ function ProductList({
                 </td>
                 <td
                   style={{
-                    backgroundColor: combinedItem.listed
+                    backgroundColor: combinedItem.Product.listed
                       ? "#B2FF59"
                       : "#FF5252",
                     width: "7%",
                   }}
                 >
-                  {combinedItem.listed ? "Yes" : "No"}
+                  {combinedItem.Product.listed ? "Yes" : "No"}
                 </td>
               </tr>
             ))}
