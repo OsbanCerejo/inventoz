@@ -37,7 +37,6 @@ function ProductList({
   paginate,
 }: Props) {
   const navigate = useNavigate();
-  console.log(products);
 
   const handleSelect = (product: any) => {
     navigate(`/products/${product.sku}`);
@@ -119,14 +118,14 @@ function ProductList({
               <th scope="col">
                 Item Name
                 <br></br>
-                {/* <input
+                <input
                   type="text"
                   value={
                     filterConfig.key === "itemName" ? filterConfig.value : ""
                   }
                   onChange={(e) => handleFilterChange(e, "itemName")}
                   onClick={(e) => e.stopPropagation()}
-                /> */}
+                />
               </th>
               <th scope="col" onClick={() => handleSort("date")}>
                 {getSortIcon("date")} Date
