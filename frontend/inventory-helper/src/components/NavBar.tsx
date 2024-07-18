@@ -62,6 +62,11 @@ function NavBar() {
                 Sephora
               </a>
             </li>
+            {/* <li className="nav-item">
+              <a className="nav-link" href="/orders/packingMode">
+                Packing
+              </a>
+            </li> */}
           </ul>
         </div>
       </nav>
