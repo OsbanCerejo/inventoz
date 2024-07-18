@@ -12,6 +12,7 @@ import { ToastContainer } from "react-toastify";
 import AllOrders from "./pages/AllOrders";
 import SephoraSearch from "./pages/SephoraSearch";
 import "./App.css";
+import PackingMode from "./pages/PackingMode";
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
             <Route path="/inbound/showAll" Component={InboundData}></Route>
             <Route path="/sales" Component={Sales}></Route>
             <Route path="/orders/showAll" Component={AllOrders}></Route>
+            <Route path="/orders/packingMode" Component={PackingMode}></Route>
             <Route path="/sephoraSearch" Component={SephoraSearch}></Route>
           </Routes>
         </div>
