@@ -1,7 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { Grid } from "@mui/material";
-import { size } from "lodash";
 
 type Item = {
   sku: string;
@@ -9,6 +8,7 @@ type Item = {
   title: string;
   quantity: number;
   imageUrl?: string;
+  options: { name: string; value: string }[];
 };
 
 type Order = {
@@ -110,6 +110,11 @@ const OrderDetails = () => {
                       <h4>Title: {item.name}</h4>
                       <h1 style={{ fontSize: 100 }}>{adjustedQuantity}</h1>
                       <h1>{item.sku}</h1>
+                      {item.options.length > 0 && (
+                        <h1 style={{ backgroundColor: "yellow" }}>
+                          {item.options[0].name} {item.options[0].value}
+                        </h1>
+                      )}
                     </Grid>
                   </Grid>
                 );

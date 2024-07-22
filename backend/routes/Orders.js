@@ -71,6 +71,7 @@ router.get("/order/:orderNumber", async (req, res) => {
             name: item.name,
             quantity: item.quantity,
             imageUrl: item.imageUrl,
+            options: item.options,
           })),
         };
         res.json(transformedOrder);
