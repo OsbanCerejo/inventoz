@@ -310,9 +310,15 @@ function AddProduct() {
     formik.setFieldValue("sku", generatedSku);
   };
 
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+    }
+  };
+
   return (
     <div>
-      <form onSubmit={formik.handleSubmit}>
+      <form onSubmit={formik.handleSubmit} onKeyDown={handleKeyDown}>
         <Grid container spacing={0} justifyContent="center">
           <Grid item xs={3}>
             <Container>
