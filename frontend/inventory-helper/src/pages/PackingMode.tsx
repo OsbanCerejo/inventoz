@@ -102,7 +102,7 @@ const OrderDetails = () => {
                 const adjustedQuantity = item.quantity * lotSize;
 
                 return (
-                  <Grid container key={item.sku}>
+                  <Grid container>
                     <Grid item xs={8}>
                       <img src={item.imageUrl} alt={item.title} height="400" />
                     </Grid>
