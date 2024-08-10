@@ -117,6 +117,20 @@ function Product() {
     documentTitle: `Label-${productObject.sku}`,
   });
 
+  const handleAddSimilar = () => {
+    navigate("/addProduct", {
+      state: {
+        productObject: {
+          ...productObject,
+          sku: "", // Clear SKU for new product
+          quantity: "", // Clear quantity for new product
+          location: "", // Clear location for new product
+        },
+        productDetails,
+      },
+    });
+  };
+
   return (
     <div className="product-container">
       <Paper
@@ -203,6 +217,7 @@ function Product() {
                       <p>Discontinued</p>
                     </Box>
                   )}
+                  <button onClick={handleAddSimilar}>Add Similar</button>
                 </CardContent>
               </Card>
             </Box>

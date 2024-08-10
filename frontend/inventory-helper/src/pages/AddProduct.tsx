@@ -10,7 +10,6 @@ import {
   Divider,
   FormControl,
   FormControlLabel,
-  FormHelperText,
   Grid,
   IconButton,
   InputLabel,
@@ -24,7 +23,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import dayjs from "dayjs";
 import skuData from "../../../data/skuData.json";
 import { toast } from "react-toastify";
@@ -35,8 +34,11 @@ import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import countriesData from "../../../data/countries.json";
+import { useLocation } from "react-router-dom";
 
 function AddProduct() {
+  const location = useLocation();
+  const { productObject, productDetails } = location.state || {};
   const [generatedSku, setGeneratedSku] = useState("");
   const today = new Date();
   const [newDate, setNewDate] = useState(dayjs(today.toLocaleString()));
@@ -61,44 +63,43 @@ function AddProduct() {
 
   const formikInitialValues = {
     sku: "",
-    brand: "",
-    itemName: "",
+    brand: productObject?.brand || "",
+    itemName: productObject?.itemName || "",
     quantity: "",
     location: "",
-    sizeOz: "",
-    sizeMl: "",
-    strength: "",
-    shade: "",
-    formulation: "",
-    category: "",
-    type: "",
-    upc: "",
+    sizeOz: productObject?.sizeOz || "",
+    sizeMl: productObject?.sizeMl || "",
+    strength: productObject?.strength || "",
+    shade: productObject?.shade || "",
+    formulation: productObject?.formulation || "",
+    category: productObject?.category || "",
+    type: productObject?.type || "",
+    upc: productObject?.upc || "",
     batch: "NA",
-    condition: "Unboxed",
+    condition: productObject?.condition || "Unboxed",
     verified: false,
     inbound: false,
     listed: false,
     final: false,
-    image: "",
-    vendor: "",
-    // New fields from ProductDetails
-    description: "",
-    setOf: "",
-    scentNotes: "",
-    sizeType: "",
-    activeIngredients: "",
-    pao: "",
-    skinType: "",
-    mainPurpose: "",
-    bodyArea: "",
-    countryOfManufacture: "",
-    gender: "",
-    seo: {},
-    ingredientDesc: "",
-    discontinued: false,
-    tester: false,
-    isHazmat: false,
-    isLimitedEdition: false,
+    image: productObject?.image || "",
+    vendor: productObject?.vendor || "",
+    description: productDetails?.description || "",
+    setOf: productDetails?.setOf || "",
+    scentNotes: productDetails?.scentNotes || "",
+    sizeType: productDetails?.sizeType || "",
+    activeIngredients: productDetails?.activeIngredients || "",
+    pao: productDetails?.pao || "",
+    skinType: productDetails?.skinType || "",
+    mainPurpose: productDetails?.mainPurpose || "",
+    bodyArea: productDetails?.bodyArea || "",
+    countryOfManufacture: productDetails?.countryOfManufacture || "",
+    gender: productDetails?.gender || "",
+    seo: productDetails?.seo || {},
+    ingredientDesc: productDetails?.ingredientDesc || "",
+    discontinued: productDetails?.discontinued || false,
+    tester: productDetails?.tester || false,
+    isHazmat: productDetails?.isHazmat || false,
+    isLimitedEdition: productDetails?.isLimitedEdition || false,
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -316,6 +317,19 @@ function AddProduct() {
     }
   };
 
+  useEffect(() => {
+    if (
+      formik.values.brand &&
+      formik.values.category &&
+      formik.values.condition
+    ) {
+      console.log("Value in use effect", formik.values.brand);
+      generateSku(formik.values.brand.toLowerCase(), "1");
+      generateSku(formik.values.category.toLowerCase(), "2");
+      generateSku(formik.values.condition.toLowerCase(), "4");
+    }
+  }, [formik.values.brand, formik.values.category, formik.values.condition]);
+
   return (
     <div>
       <form onSubmit={formik.handleSubmit} onKeyDown={handleKeyDown}>
@@ -406,9 +420,6 @@ function AddProduct() {
                             )
                           )}
                         </Select>
-                        <FormHelperText>
-                          {formik.touched.brand && formik.errors.brand}
-                        </FormHelperText>
                       </FormControl>
                     </Box>
                   </Grid>
@@ -425,9 +436,6 @@ function AddProduct() {
                         error={
                           formik.touched.itemName &&
                           Boolean(formik.errors.itemName)
-                        }
-                        helperText={
-                          formik.touched.itemName && formik.errors.itemName
                         }
                       />
                     </Box>
@@ -467,9 +475,6 @@ function AddProduct() {
                             )
                           )}
                         </Select>
-                        <FormHelperText>
-                          {formik.touched.category && formik.errors.category}
-                        </FormHelperText>
                       </FormControl>
                     </Box>
                   </Grid>
@@ -508,9 +513,6 @@ function AddProduct() {
                               )
                             )}
                           </Select>
-                          <FormHelperText>
-                            {formik.touched.strength && formik.errors.strength}
-                          </FormHelperText>
                         </FormControl>
                       </Box>
                     </Grid>
@@ -528,7 +530,6 @@ function AddProduct() {
                         error={
                           formik.touched.shade && Boolean(formik.errors.shade)
                         }
-                        helperText={formik.touched.shade && formik.errors.shade}
                       />
                     </Box>
                   </Grid>
@@ -584,9 +585,6 @@ function AddProduct() {
                               formik.touched.sizeOz &&
                               Boolean(formik.errors.sizeOz)
                             }
-                            helperText={
-                              formik.touched.sizeOz && formik.errors.sizeOz
-                            }
                           />
                           <TextField
                             id="sizeMl"
@@ -599,9 +597,6 @@ function AddProduct() {
                             error={
                               formik.touched.sizeMl &&
                               Boolean(formik.errors.sizeMl)
-                            }
-                            helperText={
-                              formik.touched.sizeMl && formik.errors.sizeMl
                             }
                           />
                         </Box>
@@ -684,9 +679,6 @@ function AddProduct() {
                                   formik.touched.image &&
                                   Boolean(formik.errors.image)
                                 }
-                                helperText={
-                                  formik.touched.image && formik.errors.image
-                                }
                               />
                             </Box>
                           </Grid>
@@ -703,9 +695,6 @@ function AddProduct() {
                                 error={
                                   formik.touched.type &&
                                   Boolean(formik.errors.type)
-                                }
-                                helperText={
-                                  formik.touched.type && formik.errors.type
                                 }
                               />
                             </Box>
@@ -724,10 +713,6 @@ function AddProduct() {
                                   formik.touched.formulation &&
                                   Boolean(formik.errors.formulation)
                                 }
-                                helperText={
-                                  formik.touched.formulation &&
-                                  formik.errors.formulation
-                                }
                               />
                             </Box>
                           </Grid>
@@ -745,9 +730,6 @@ function AddProduct() {
                                   formik.touched.upc &&
                                   Boolean(formik.errors.upc)
                                 }
-                                helperText={
-                                  formik.touched.upc && formik.errors.upc
-                                }
                               />
                             </Box>
                           </Grid>
@@ -764,10 +746,6 @@ function AddProduct() {
                                 error={
                                   formik.touched.description &&
                                   Boolean(formik.errors.description)
-                                }
-                                helperText={
-                                  formik.touched.description &&
-                                  formik.errors.description
                                 }
                                 multiline
                                 rows={4}
@@ -790,9 +768,6 @@ function AddProduct() {
                                   formik.touched.setOf &&
                                   Boolean(formik.errors.setOf)
                                 }
-                                helperText={
-                                  formik.touched.setOf && formik.errors.setOf
-                                }
                               />
                             </Box>
                           </Grid>
@@ -809,10 +784,6 @@ function AddProduct() {
                                 error={
                                   formik.touched.scentNotes &&
                                   Boolean(formik.errors.scentNotes)
-                                }
-                                helperText={
-                                  formik.touched.scentNotes &&
-                                  formik.errors.scentNotes
                                 }
                               />
                             </Box>
@@ -853,10 +824,6 @@ function AddProduct() {
                                     )
                                   )}
                                 </Select>
-                                <FormHelperText>
-                                  {formik.touched.sizeType &&
-                                    formik.errors.sizeType}
-                                </FormHelperText>
                               </FormControl>
                             </Box>
                           </Grid>
@@ -873,10 +840,6 @@ function AddProduct() {
                                 error={
                                   formik.touched.activeIngredients &&
                                   Boolean(formik.errors.activeIngredients)
-                                }
-                                helperText={
-                                  formik.touched.activeIngredients &&
-                                  formik.errors.activeIngredients
                                 }
                               />
                             </Box>
@@ -895,9 +858,6 @@ function AddProduct() {
                                   formik.touched.pao &&
                                   Boolean(formik.errors.pao)
                                 }
-                                helperText={
-                                  formik.touched.pao && formik.errors.pao
-                                }
                               />
                             </Box>
                           </Grid>
@@ -914,10 +874,6 @@ function AddProduct() {
                                 error={
                                   formik.touched.skinType &&
                                   Boolean(formik.errors.skinType)
-                                }
-                                helperText={
-                                  formik.touched.skinType &&
-                                  formik.errors.skinType
                                 }
                               />
                             </Box>
@@ -936,10 +892,6 @@ function AddProduct() {
                                   formik.touched.mainPurpose &&
                                   Boolean(formik.errors.mainPurpose)
                                 }
-                                helperText={
-                                  formik.touched.mainPurpose &&
-                                  formik.errors.mainPurpose
-                                }
                               />
                             </Box>
                           </Grid>
@@ -956,10 +908,6 @@ function AddProduct() {
                                 error={
                                   formik.touched.bodyArea &&
                                   Boolean(formik.errors.bodyArea)
-                                }
-                                helperText={
-                                  formik.touched.bodyArea &&
-                                  formik.errors.bodyArea
                                 }
                               />
                             </Box>
@@ -1002,12 +950,6 @@ function AddProduct() {
                                     </MenuItem>
                                   ))}
                                 </Select>
-                                {formik.touched.gender &&
-                                  formik.errors.gender && (
-                                    <FormHelperText>
-                                      {formik.errors.gender}
-                                    </FormHelperText>
-                                  )}
                               </FormControl>
                             </Box>
                           </Grid>
@@ -1039,12 +981,6 @@ function AddProduct() {
                                   <MenuItem value="Female">Female</MenuItem>
                                   <MenuItem value="Unisex">Unisex</MenuItem>
                                 </Select>
-                                {formik.touched.gender &&
-                                  formik.errors.gender && (
-                                    <FormHelperText>
-                                      {formik.errors.gender}
-                                    </FormHelperText>
-                                  )}
                               </FormControl>
                             </Box>
                           </Grid>
@@ -1219,9 +1155,6 @@ function AddProduct() {
                           error={
                             formik.touched.vendor &&
                             Boolean(formik.errors.vendor)
-                          }
-                          helperText={
-                            formik.touched.vendor && formik.errors.vendor
                           }
                         />
                       </Box>
