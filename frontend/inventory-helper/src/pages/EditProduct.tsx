@@ -51,7 +51,7 @@ const formikValidationSchema = Yup.object().shape({
   inbound: Yup.boolean(),
   listed: Yup.boolean(),
   final: Yup.boolean(),
-  image: Yup.string().url("Invalid URL"),
+  image: Yup.string(),
   vendor: Yup.string(),
   // Product Details Fields
   description: Yup.string(),
@@ -101,7 +101,7 @@ function EditProduct() {
       inbound: productObject.inbound,
       listed: productObject.listed,
       final: productObject.final,
-      image: productObject.image,
+      image: "" + productObject.image,
       vendor: "",
       // New fields from ProductDetails
       description: productDetails.description || "",

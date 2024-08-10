@@ -16,10 +16,10 @@ function Home() {
     key: null,
     direction: "asc",
   });
-  const [filterConfig, setFilterConfig] = useState<{
-    key: string;
-    value: string;
-  }>({ key: "", value: "" });
+  const [filterConfig, setFilterConfig] = useState<
+    { key: string; value: string }[]
+  >([]);
+
   const [currentPage, setCurrentPage] = useState(1);
   const [productsPerPage] = useState(20);
 
@@ -37,7 +37,7 @@ function Home() {
     if (location.state?.clearFilters) {
       fetchProducts();
       setSortConfig({ key: "sku", direction: "asc" });
-      setFilterConfig({ key: "", value: "" });
+      setFilterConfig([]);
       setCurrentPage(1);
       localStorage.removeItem("sortConfig");
       localStorage.removeItem("filterConfig");
@@ -57,7 +57,13 @@ function Home() {
     }
 
     if (savedFilterConfig) {
-      setFilterConfig(JSON.parse(savedFilterConfig));
+      const parsedFilterConfig = JSON.parse(savedFilterConfig);
+      if (Array.isArray(parsedFilterConfig)) {
+        setFilterConfig(parsedFilterConfig);
+      } else {
+        console.warn("savedFilterConfig is not an array", parsedFilterConfig);
+        setFilterConfig([]);
+      }
     }
 
     if (savedCurrentPage) {
@@ -90,7 +96,11 @@ function Home() {
     e: React.ChangeEvent<HTMLInputElement>,
     columnKey: string
   ) => {
-    const newFilterConfig = { key: columnKey, value: e.target.value };
+    const { value } = e.target;
+    const newFilterConfig = filterConfig.filter((f) => f.key !== columnKey);
+    if (value) {
+      newFilterConfig.push({ key: columnKey, value });
+    }
     setFilterConfig(newFilterConfig);
     localStorage.setItem("filterConfig", JSON.stringify(newFilterConfig));
     paginate(1);
@@ -98,15 +108,12 @@ function Home() {
 
   const sortedAndFilteredProducts = listOfProducts
     .filter((product) => {
-      if (filterConfig.key && filterConfig.value) {
-        const productValue = product[filterConfig.key];
+      return filterConfig.every(({ key, value }) => {
+        const productValue = product[key];
         return productValue
-          ? productValue
-              .toLowerCase()
-              .includes(filterConfig.value.toLowerCase())
+          ? productValue.toLowerCase().includes(value.toLowerCase())
           : false;
-      }
-      return true;
+      });
     })
     .sort((a, b) => {
       if (sortConfig.key) {

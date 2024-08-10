@@ -9,7 +9,7 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
@@ -19,6 +19,8 @@ import ScienceIcon from "@mui/icons-material/Science";
 import CancelIcon from "@mui/icons-material/Cancel";
 import { toast } from "react-toastify";
 import Barcode from "./Barcode";
+import PrintableLabel from "./PrintableLabel";
+import { useReactToPrint } from "react-to-print";
 
 function Product() {
   let { id } = useParams();
@@ -26,6 +28,7 @@ function Product() {
   const [productObject, setProductObject]: any = useState({});
   const [barcodeValue, setBarcodeValue] = useState(productObject.sku);
   const [productDetails, setProductDetails]: any = useState({});
+  const labelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -86,10 +89,6 @@ function Product() {
     navigate("/inbound", { state: { productObject } });
   }, [navigate, productObject]);
 
-  const handleSalesClick = useCallback(() => {
-    navigate("/sales", { state: { productObject } });
-  }, [navigate, productObject]);
-
   const handleCopyBarcodeClick = useCallback(() => {
     const barcodeCanvas =
       document.querySelector<HTMLCanvasElement>(".barcode-canvas");
@@ -112,6 +111,25 @@ function Product() {
       console.error("Barcode canvas not found.");
     }
   }, []);
+
+  const handlePrintClick = useReactToPrint({
+    content: () => labelRef.current,
+    documentTitle: `Label-${productObject.sku}`,
+  });
+
+  const handleAddSimilar = () => {
+    navigate("/addProduct", {
+      state: {
+        productObject: {
+          ...productObject,
+          sku: "", // Clear SKU for new product
+          quantity: "", // Clear quantity for new product
+          location: "", // Clear location for new product
+        },
+        productDetails,
+      },
+    });
+  };
 
   return (
     <div className="product-container">
@@ -199,6 +217,7 @@ function Product() {
                       <p>Discontinued</p>
                     </Box>
                   )}
+                  <button onClick={handleAddSimilar}>Add Similar</button>
                 </CardContent>
               </Card>
             </Box>
@@ -300,11 +319,18 @@ function Product() {
           <Button
             variant="contained"
             startIcon={<SellIcon />}
-            onClick={handleSalesClick}
+            onClick={handlePrintClick}
             sx={{ mx: 1 }}
           >
-            Sales
+            Print Label
           </Button>
+          <div style={{ display: "none" }}>
+            <PrintableLabel
+              ref={labelRef}
+              product={productObject}
+              productDetails={productDetails}
+            />
+          </div>
           <Button
             variant="contained"
             color="secondary"

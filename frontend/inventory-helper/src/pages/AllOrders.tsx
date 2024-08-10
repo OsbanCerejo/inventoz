@@ -50,7 +50,7 @@ function AllOrders() {
       ]);
       setProductsData(productsResponse.data);
       const productMap = createProductMap(productsResponse.data);
-
+      console.log(ordersResponse.data);
       const grouped = groupOrdersByProduct(
         ordersResponse.data.orders,
         productMap
@@ -77,14 +77,15 @@ function AllOrders() {
       result.totalOrders += 1;
       order.items.forEach((item: any) => {
         const { sku } = item;
-        if (!acc[sku]) {
-          acc[sku] = [];
+        const [actualSku, lotSize] = parseSku(sku);
+        if (!acc[actualSku]) {
+          acc[actualSku] = [];
         }
 
         // Find the product in productsData to get the location
-        const product = productMap.get(sku);
+        const product = productMap.get(actualSku);
 
-        acc[sku].push({
+        acc[actualSku].push({
           ...item,
           orderId: order.orderId,
           orderNumber: order.orderNumber,
@@ -93,12 +94,21 @@ function AllOrders() {
           orderStatus: order.orderStatus,
           warehouseLocation: product ? product.location : "____",
           isverified: product ? product.verified : false,
+          lotSize: parseInt(lotSize, 10) || 1,
         });
-        result.totalItems += item.quantity;
+        result.totalItems += item.quantity * (parseInt(lotSize, 10) || 1);
       });
       return acc;
     }, {});
     return result;
+  }
+
+  function parseSku(sku: string) {
+    if (sku && sku.includes("_lot_of_")) {
+      const skuParts = sku.split("_lot_of_");
+      return [skuParts[0], skuParts[1]];
+    }
+    return [sku, "1"];
   }
 
   const handleOrdersApprove = () => {
@@ -156,7 +166,7 @@ function AllOrders() {
 
     Object.keys(groupedOrders).forEach((sku) => {
       const totalQuantity = groupedOrders[sku].reduce(
-        (sum: number, item: any) => sum + item.quantity,
+        (sum: number, item: any) => sum + item.quantity * item.lotSize,
         0
       );
       const product = productsData.find((p: any) => p.sku === sku);
@@ -165,14 +175,25 @@ function AllOrders() {
         product: product || { quantity: 0, itemName: "Unknown Product" },
       };
     });
-
     return skuTotals;
   };
 
   const skuTotals = getSkuTotals();
 
+  // const testEbay = async () => {
+  //   try {
+  //     const ebayResponse = await axios.get(
+  //       "http://localhost:3001/orders/testebay"
+  //     );
+  //     console.log(ebayResponse);
+  //   } catch (error) {
+  //     console.error("Testing eBay Failed with: ", error);
+  //   }
+  // };
+
   return (
     <div>
+      {/* <Button onClick={testEbay}>Test eBay</Button> */}
       <Grid container spacing={2} mb={10}>
         <Grid item xs={12}>
           <Grid container spacing={0} p={4}>

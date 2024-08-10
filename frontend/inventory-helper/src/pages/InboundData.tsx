@@ -40,19 +40,36 @@ function InboundData() {
   const sortedAndFilteredInbound = listOfInbound
     .filter((product) => {
       if (filterConfig.key && filterConfig.value) {
-        const productValue = product[filterConfig.key];
-        return productValue
-          ? productValue
-              .toLowerCase()
-              .includes(filterConfig.value.toLowerCase())
-          : false;
+        if (filterConfig.key === "itemName") {
+          const productValue = product.Product[filterConfig.key];
+          return productValue
+            ? productValue
+                .toLowerCase()
+                .includes(filterConfig.value.toLowerCase())
+            : false;
+        } else {
+          const productValue = product[filterConfig.key];
+          return productValue
+            ? productValue
+                .toLowerCase()
+                .includes(filterConfig.value.toLowerCase())
+            : false;
+        }
       }
       return true;
     })
     .sort((a, b) => {
       if (sortConfig.key) {
-        const aValue = a[sortConfig.key];
-        const bValue = b[sortConfig.key];
+        let aValue = a[sortConfig.key];
+        let bValue = b[sortConfig.key];
+
+        if (sortConfig.key === "listed") {
+          aValue = a.Product.listed;
+          bValue = b.Product.listed;
+        } else {
+          aValue = a[sortConfig.key];
+          bValue = b[sortConfig.key];
+        }
 
         if (sortConfig.key === "quantity") {
           return sortConfig.direction === "asc"
@@ -88,7 +105,6 @@ function InboundData() {
   };
   const paginate = (pageNumber: number) => {
     setCurrentPage(pageNumber);
-    console.log("Sorted and filtered:", sortedAndFilteredInbound);
   };
 
   return (
