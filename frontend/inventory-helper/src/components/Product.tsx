@@ -131,6 +131,10 @@ function Product() {
     });
   };
 
+  // const handleSalesClick = useCallback(() => {
+  //   navigate("/sales", { state: { productObject } });
+  // }, [navigate, productObject]);
+
   return (
     <div className="product-container">
       <Paper
@@ -349,6 +353,14 @@ function Product() {
           >
             Delete
           </Button>
+          {/* <Button
+            variant="contained"
+            startIcon={<SellIcon />}
+            onClick={handleSalesClick}
+            sx={{ mx: 1 }}
+          >
+            Sales
+          </Button> */}
         </Box>
       </Paper>
       {/* <Grid container spacing={4} border={3} borderColor="black">
