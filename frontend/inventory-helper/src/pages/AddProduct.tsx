@@ -34,10 +34,11 @@ import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import countriesData from "../../../data/countries.json";
-import { useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 function AddProduct() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { productObject, productDetails } = location.state || {};
   const [generatedSku, setGeneratedSku] = useState("");
   const today = new Date();
@@ -224,6 +225,7 @@ function AddProduct() {
           await axios.put("http://localhost:3001/brands", brandObjectOnSubmit);
           toast.success("Product Added!", { position: "top-right" });
           resetForm();
+          navigate("/", { state: {} });
         }
       } catch (error) {
         console.error("Error during form submission:", error);
