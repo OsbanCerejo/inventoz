@@ -140,8 +140,32 @@ function Home() {
     localStorage.setItem("currentPage", pageNumber.toString());
   };
 
+  const handleRefresh = () => {
+    fetchProducts();
+    setSortConfig({ key: null, direction: "asc" });
+    setFilterConfig([]);
+    setCurrentPage(1);
+    localStorage.removeItem("sortConfig");
+    localStorage.removeItem("filterConfig");
+    localStorage.removeItem("currentPage");
+  };
+
   return (
     <div>
+      <div style={{ textAlign: "center" }}>
+        <button
+          onClick={handleRefresh}
+          style={{
+            backgroundColor: "red",
+            color: "white",
+            padding: "10px",
+            border: "none",
+            borderRadius: "5px",
+          }}
+        >
+          Refresh
+        </button>
+      </div>
       <ProductList
         products={sortedAndFilteredProducts}
         heading={heading}
