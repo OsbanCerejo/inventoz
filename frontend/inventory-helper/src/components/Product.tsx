@@ -73,6 +73,14 @@ function Product() {
           `http://localhost:3001/products/delete/${productObject.sku}`
         );
         toast.success("Deleted Successfully!", { position: "top-right" });
+        await axios.post("http://localhost:3001/logs/addLog", {
+          timestamp: new Date().toISOString(),
+          type: "Delete Product",
+          metaData: {
+            productObject,
+            productDetails,
+          }, // Log the details of the deleted product
+        });
         navigate("/");
       } catch (error) {
         console.error("Error deleting the product:", error);
