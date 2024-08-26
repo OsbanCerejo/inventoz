@@ -30,6 +30,7 @@ import { useCallback, useMemo, useState } from "react";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import countriesData from "../../../data/countries.json";
+import { isEqual, pickBy } from "lodash";
 
 const formikValidationSchema = Yup.object().shape({
   sku: Yup.string().required("Please enter a valid SKU"),
@@ -133,6 +134,8 @@ function EditProduct() {
     initialValues: formikInitialValues,
     validationSchema: formikValidationSchema,
     onSubmit: (data) => {
+      const changes = getChangedFields(data, formikInitialValues);
+
       axios
         .all([
           axios.put("http://localhost:3001/products", data),
@@ -145,7 +148,7 @@ function EditProduct() {
             axios.post("http://localhost:3001/logs/addLog", {
               timestamp: new Date().toISOString(),
               type: "Edit Product",
-              metaData: data,
+              metaData: changes, // Only log the changes
             });
           })
         )
@@ -155,6 +158,18 @@ function EditProduct() {
       navigate("/", { state: { clearFilters: true } });
     },
   });
+
+  function getChangedFields(data: any, initialValues: any) {
+    return Object.keys(data).reduce((acc, key) => {
+      if (!isEqual(data[key], initialValues[key])) {
+        acc[key] = {
+          oldValue: initialValues[key],
+          newValue: data[key],
+        };
+      }
+      return acc;
+    }, {} as Record<string, { oldValue: any; newValue: any }>);
+  }
 
   return (
     <div>
