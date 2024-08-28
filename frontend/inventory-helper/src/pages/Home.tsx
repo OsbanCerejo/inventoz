@@ -28,11 +28,6 @@ function Home() {
 
   // Fetch initial product list on component mount
   useEffect(() => {
-    const savedProducts = localStorage.getItem("listOfProducts");
-    const savedSortConfig = localStorage.getItem("sortConfig");
-    const savedFilterConfig = localStorage.getItem("filterConfig");
-    const savedCurrentPage = localStorage.getItem("currentPage");
-
     // Clear filters if navigated with the clearFilters state
     if (location.state?.clearFilters) {
       fetchProducts();
@@ -45,6 +40,11 @@ function Home() {
 
       navigate(location.pathname, { replace: true, state: {} });
     }
+
+    const savedProducts = localStorage.getItem("listOfProducts");
+    const savedSortConfig = localStorage.getItem("sortConfig");
+    const savedFilterConfig = localStorage.getItem("filterConfig");
+    const savedCurrentPage = localStorage.getItem("currentPage");
 
     if (savedProducts) {
       setListOfProducts(JSON.parse(savedProducts));
