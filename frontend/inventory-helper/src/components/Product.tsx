@@ -81,7 +81,7 @@ function Product() {
             productDetails,
           }, // Log the details of the deleted product
         });
-        navigate("/");
+        navigate("/", { state: { clearFilters: true } });
       } catch (error) {
         console.error("Error deleting the product:", error);
         toast.error("Failed to delete the product.", { position: "top-right" });

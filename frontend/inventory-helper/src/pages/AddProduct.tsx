@@ -225,7 +225,7 @@ function AddProduct() {
           await axios.put("http://localhost:3001/brands", brandObjectOnSubmit);
           toast.success("Product Added!", { position: "top-right" });
           resetForm();
-          navigate("/", { state: {} });
+          navigate("/", { state: { clearFilters: true } });
         }
       } catch (error) {
         console.error("Error during form submission:", error);
