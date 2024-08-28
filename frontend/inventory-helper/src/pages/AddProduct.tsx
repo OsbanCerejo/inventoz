@@ -75,7 +75,7 @@ function AddProduct() {
     formulation: productObject?.formulation || "",
     category: productObject?.category || "",
     type: productObject?.type || "",
-    upc: productObject?.upc || "",
+    upc: "",
     batch: "NA",
     condition: productObject?.condition || "Unboxed",
     verified: false,

@@ -30,7 +30,7 @@ import { useCallback, useMemo, useState } from "react";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import countriesData from "../../../data/countries.json";
-import { isEqual, pickBy } from "lodash";
+import { isEqual } from "lodash";
 
 const formikValidationSchema = Yup.object().shape({
   sku: Yup.string().required("Please enter a valid SKU"),
