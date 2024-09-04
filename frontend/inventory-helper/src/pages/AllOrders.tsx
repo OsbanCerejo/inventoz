@@ -333,8 +333,13 @@ function AllOrders() {
                                 <Typography sx={{ fontSize: "0.875rem" }}>
                                   SKU: {item.sku}
                                 </Typography>
-                                <Typography sx={{ fontSize: "0.875rem" }}>
-                                  Variant: {item.variant}
+                                <Typography
+                                  sx={{
+                                    fontSize: "0.875rem",
+                                    backgroundColor: "yellow",
+                                  }}
+                                >
+                                  <strong>{item.variant}</strong>
                                 </Typography>
                               </Box>
                             </Box>
