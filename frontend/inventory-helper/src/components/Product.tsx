@@ -73,7 +73,15 @@ function Product() {
           `http://localhost:3001/products/delete/${productObject.sku}`
         );
         toast.success("Deleted Successfully!", { position: "top-right" });
-        navigate("/");
+        await axios.post("http://localhost:3001/logs/addLog", {
+          timestamp: new Date().toISOString(),
+          type: "Delete Product",
+          metaData: {
+            productObject,
+            productDetails,
+          }, // Log the details of the deleted product
+        });
+        navigate("/", { state: { clearFilters: true } });
       } catch (error) {
         console.error("Error deleting the product:", error);
         toast.error("Failed to delete the product.", { position: "top-right" });
@@ -130,6 +138,10 @@ function Product() {
       },
     });
   };
+
+  // const handleSalesClick = useCallback(() => {
+  //   navigate("/sales", { state: { productObject } });
+  // }, [navigate, productObject]);
 
   return (
     <div className="product-container">
@@ -349,6 +361,14 @@ function Product() {
           >
             Delete
           </Button>
+          {/* <Button
+            variant="contained"
+            startIcon={<SellIcon />}
+            onClick={handleSalesClick}
+            sx={{ mx: 1 }}
+          >
+            Sales
+          </Button> */}
         </Box>
       </Paper>
       {/* <Grid container spacing={4} border={3} borderColor="black">

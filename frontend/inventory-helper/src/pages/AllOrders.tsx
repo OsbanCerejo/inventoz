@@ -95,6 +95,7 @@ function AllOrders() {
           warehouseLocation: product ? product.location : "____",
           isverified: product ? product.verified : false,
           lotSize: parseInt(lotSize, 10) || 1,
+          variant: product ? product.shade : "",
         });
         result.totalItems += item.quantity * (parseInt(lotSize, 10) || 1);
       });
@@ -331,6 +332,14 @@ function AllOrders() {
                                 </Typography>
                                 <Typography sx={{ fontSize: "0.875rem" }}>
                                   SKU: {item.sku}
+                                </Typography>
+                                <Typography
+                                  sx={{
+                                    fontSize: "0.875rem",
+                                    backgroundColor: "yellow",
+                                  }}
+                                >
+                                  <strong>{item.variant}</strong>
                                 </Typography>
                               </Box>
                             </Box>

@@ -9,7 +9,7 @@ router.get("/", async (req, res) => {
   const nextNumber = await Brands.findAll({
     where: {
       brand: {
-        [Op.like]: "%" + brandName + "%",
+        [Op.like]: brandName,
       },
     },
   });
