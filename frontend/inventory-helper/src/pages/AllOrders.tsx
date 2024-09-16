@@ -96,6 +96,10 @@ function AllOrders() {
           isverified: product ? product.verified : false,
           lotSize: parseInt(lotSize, 10) || 1,
           variant: product ? product.shade : "",
+          image:
+            product && product.image && product.image !== "null"
+              ? product.image // Use product image if available
+              : item.imageUrl || "",
         });
         result.totalItems += item.quantity * (parseInt(lotSize, 10) || 1);
       });
@@ -180,6 +184,7 @@ function AllOrders() {
   };
 
   const skuTotals = getSkuTotals();
+  console.log(groupedOrders);
 
   // const testEbay = async () => {
   //   try {
@@ -280,9 +285,10 @@ function AllOrders() {
                           <CardMedia
                             component="img"
                             sx={{ width: 100, objectFit: "contain" }}
-                            image={item.imageUrl}
-                            alt={item.name}
+                            image={item.image}
+                            alt={item.image}
                           />
+                          {item.imageUrl1}
                           <CardContent
                             sx={{
                               display: "flex",

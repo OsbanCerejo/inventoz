@@ -19,6 +19,7 @@ router.get("/allOrders", async (req, res) => {
         offset: 0,
         orderStatus: "awaiting_shipment",
         pageSize: 500,
+        // storeid: 1027789,
       },
     });
 
