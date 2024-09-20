@@ -17,10 +17,10 @@ router.get("/allOrders", async (req, res) => {
       params: {
         limit: 200,
         offset: 0,
-        orderStatus: "shipped",
+        orderStatus: "awaiting_shipment",
         pageSize: 500,
-        modifyDateStart: "2024-09-20T12:00:05.000Z",
-        storeid: 1027789,
+        // modifyDateStart: "2024-09-20T12:00:05.000Z",
+        // storeid: 1027789,
       },
     });
 
