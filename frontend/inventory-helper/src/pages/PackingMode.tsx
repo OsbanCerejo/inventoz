@@ -17,17 +17,39 @@ type Order = {
   items: Item[];
 };
 
+type Product = {
+  sku: string;
+  image: string;
+};
+
 const OrderDetails = () => {
   const [orderId, setOrderId] = useState<string>("");
   const [orderDetails, setOrderDetails] = useState<Order | null>(null);
   const [error, setError] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const [productsData, setProductsData] = useState<Product[]>([]);
 
   useEffect(() => {
     // Focus the input field when the component mounts
     if (inputRef.current) {
       inputRef.current.focus();
     }
+  }, []);
+
+  useEffect(() => {
+    // Fetch all products from backend to match with SKUs
+    const fetchProducts = async () => {
+      try {
+        const productsResponse = await axios.get(
+          "http://localhost:3001/products"
+        );
+        setProductsData(productsResponse.data);
+      } catch (error) {
+        console.error("Failed to fetch products", error);
+      }
+    };
+
+    fetchProducts();
   }, []);
 
   useEffect(() => {
@@ -52,6 +74,14 @@ const OrderDetails = () => {
       setError("Order not found");
       setOrderDetails(null);
     }
+  };
+
+  // Function to match the SKU from the order items to the product data
+  const findProductImage = (sku: string): string => {
+    const product = productsData.find((product) => product.sku === sku);
+    return product && product.image && product.image !== "null"
+      ? product.image
+      : "";
   };
 
   function parseSku(sku: string) {
@@ -104,7 +134,11 @@ const OrderDetails = () => {
                 return (
                   <Grid container>
                     <Grid item xs={8}>
-                      <img src={item.imageUrl} alt={item.title} height="400" />
+                      <img
+                        src={findProductImage(item.sku)}
+                        alt={item.title}
+                        height="400"
+                      />
                     </Grid>
                     <Grid item xs={4}>
                       <h4>Title: {item.name}</h4>
