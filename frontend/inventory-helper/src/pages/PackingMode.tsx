@@ -78,7 +78,9 @@ const OrderDetails = () => {
 
   // Function to match the SKU from the order items to the product data
   const findProductImage = (sku: string, imageUrl: string): string => {
-    sku = sku.split("_")[0];
+    if (sku) {
+      sku = sku.split("_")[0];
+    }
     const product = productsData.find((product) => product.sku === sku);
     return product && product.image && product.image !== "null"
       ? product.image
