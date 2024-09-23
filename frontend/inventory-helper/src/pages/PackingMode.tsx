@@ -77,11 +77,12 @@ const OrderDetails = () => {
   };
 
   // Function to match the SKU from the order items to the product data
-  const findProductImage = (sku: string): string => {
+  const findProductImage = (sku: string, imageUrl: string): string => {
+    sku = sku.split("_")[0];
     const product = productsData.find((product) => product.sku === sku);
     return product && product.image && product.image !== "null"
       ? product.image
-      : "";
+      : imageUrl;
   };
 
   function parseSku(sku: string) {
@@ -135,7 +136,10 @@ const OrderDetails = () => {
                   <Grid container>
                     <Grid item xs={8}>
                       <img
-                        src={findProductImage(item.sku)}
+                        src={findProductImage(
+                          item.sku,
+                          item.imageUrl ? item.imageUrl : ""
+                        )}
                         alt={item.title}
                         height="400"
                       />
