@@ -96,6 +96,7 @@ function AllOrders() {
           isverified: product ? product.verified : false,
           lotSize: parseInt(lotSize, 10) || 1,
           variant: product ? product.shade : "",
+          store: order.advancedOptions.storeId,
           image:
             product && product.image && product.image !== "null"
               ? product.image // Use product image if available
@@ -373,6 +374,18 @@ function AllOrders() {
                               I
                             </Typography>
                           </Box>
+                          <Box
+                            border={1}
+                            sx={{
+                              display: "flex",
+                              flexDirection: "column",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              padding: "10px",
+                              backgroundColor:
+                                item.store == "1027789" ? "#0071ce" : "#F5AF02",
+                            }}
+                          ></Box>
                         </Card>
                       </Grid>
                     ))}
