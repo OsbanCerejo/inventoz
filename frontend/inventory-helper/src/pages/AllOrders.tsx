@@ -101,6 +101,7 @@ function AllOrders() {
             product && product.image && product.image !== "null"
               ? product.image // Use product image if available
               : item.imageUrl || "",
+          qty: product ? product.quantity : "N/A",
         });
         result.totalItems += item.quantity * (parseInt(lotSize, 10) || 1);
       });
@@ -385,7 +386,11 @@ function AllOrders() {
                               backgroundColor:
                                 item.store == "1027789" ? "#0071ce" : "#F5AF02",
                             }}
-                          ></Box>
+                          >
+                            <Typography sx={{ fontSize: "0.875rem" }}>
+                              <b>{item.qty}</b>
+                            </Typography>
+                          </Box>
                         </Card>
                       </Grid>
                     ))}
