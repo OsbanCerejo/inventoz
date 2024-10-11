@@ -384,7 +384,7 @@ function AllOrders() {
                               alignItems: "center",
                               padding: "10px",
                               backgroundColor:
-                                item.store == "1027789" ? "#0071ce" : "#F5AF02",
+                                item.store == "1027789" ? "#0071ce" : item.store == "983189" ? "#EE66A6" : "#FFEB55",
                             }}
                           >
                             <Typography sx={{ fontSize: "0.875rem" }}>
