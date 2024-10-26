@@ -127,24 +127,37 @@ function AllOrders() {
   };
 
   const handleOrdersApproveFinal = async () => {
-    const skuTotals = getSkuTotals();
-    const skusToUpdate = Object.keys(skuTotals).map((sku) => ({
-      sku,
-      quantitySold: skuTotals[sku].quantity,
-    }));
+    const skuStoreTotals = getSkuStoreTotals();
+    const skusToUpdate = Object.keys(skuStoreTotals).map((sku) => {
+      const totalQuantitySold = skuStoreTotals[sku].reduce(
+        (sum, { quantitySold }) => sum + quantitySold,
+        0
+      );
+      return {
+        sku,
+        totalQuantitySold,
+        stores: skuStoreTotals[sku],
+      };
+    });
 
     try {
+      // Update product quantities in the products table
       const response = await axios.post(
         "http://localhost:3001/products/updateQuantities",
-        skusToUpdate
+        skusToUpdate.map(({ sku, totalQuantitySold }) => ({
+          sku,
+          quantitySold: totalQuantitySold,
+        }))
       );
 
       if (response.data.success) {
         // Log the update quantities action
         await logUpdateQuantities(skusToUpdate);
-        // setUpdatedProducts(response.data.updatedProducts);
+
+        // Update quantities in the listings table for each store
+        await updateStoreQuantities(skusToUpdate);
         toast.success("Quantities Updated!", { position: "top-right" });
-        navigate("/");
+        navigate("/", { state: { clearFilters: true } });
       }
 
       setApproveOrders(true);
@@ -183,6 +196,75 @@ function AllOrders() {
       };
     });
     return skuTotals;
+  };
+
+  // Function to get the total quantities sold by SKU and store
+  const getSkuStoreTotals = () => {
+    const skuStoreTotals: {
+      [sku: string]: { storeId: string; quantitySold: number }[];
+    } = {};
+
+    Object.keys(groupedOrders).forEach((sku) => {
+      const storeQuantities = groupedOrders[sku].reduce(
+        (acc: any, item: any) => {
+          const { store, quantity, lotSize } = item;
+          const quantitySold = quantity * lotSize;
+
+          const existingStore = acc.find((s: any) => s.storeId === store);
+          if (existingStore) {
+            existingStore.quantitySold += quantitySold;
+          } else {
+            acc.push({ storeId: store, quantitySold });
+          }
+
+          return acc;
+        },
+        []
+      );
+
+      skuStoreTotals[sku] = storeQuantities;
+    });
+
+    return skuStoreTotals;
+  };
+
+  // Function to update quantities in the listings table for each store
+  const updateStoreQuantities = async (
+    skusToUpdate: {
+      sku: string;
+      totalQuantitySold: number;
+      stores: { storeId: string; quantitySold: number }[];
+    }[]
+  ) => {
+    try {
+      // Prepare the request payload to update the listings table
+      const listingsUpdate = skusToUpdate.flatMap(({ sku, stores }) =>
+        stores.map(
+          ({
+            storeId,
+            quantitySold,
+          }: {
+            storeId: string;
+            quantitySold: number;
+          }) => ({
+            sku,
+            quantitySold,
+            storeId,
+          })
+        )
+      );
+
+      // Send a POST request to update the listings table
+      await axios.post(
+        "http://localhost:3001/listings/updateQuantities",
+        listingsUpdate
+      );
+    } catch (error) {
+      console.error(
+        "Error updating store quantities in listings table:",
+        error
+      );
+    }
   };
 
   const skuTotals = getSkuTotals();
@@ -384,7 +466,11 @@ function AllOrders() {
                               alignItems: "center",
                               padding: "10px",
                               backgroundColor:
-                                item.store == "1027789" ? "#0071ce" : item.store == "983189" ? "#EE66A6" : "#FFEB55",
+                                item.store == "1027789"
+                                  ? "#0071ce"
+                                  : item.store == "983189"
+                                  ? "#EE66A6"
+                                  : "#FFEB55",
                             }}
                           >
                             <Typography sx={{ fontSize: "0.875rem" }}>

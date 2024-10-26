@@ -72,6 +72,10 @@ const formikValidationSchema = Yup.object().shape({
   tester: Yup.boolean(),
   isHazmat: Yup.boolean(),
   isLimitedEdition: Yup.boolean(),
+  //Listings
+  buy4lesstoday: Yup.string(),
+  onelifeluxuries: Yup.string(),
+  walmart: Yup.string()
 });
 
 function EditProduct() {
@@ -80,6 +84,7 @@ function EditProduct() {
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const productObject = location.state.productObject;
   const productDetails = location.state.productDetails || {};
+  const productListings = location.state.productListings || {};
 
   const formikInitialValues = useMemo(
     () => ({
@@ -122,6 +127,10 @@ function EditProduct() {
       tester: productDetails.tester || false,
       isHazmat: productDetails.isHazmat || false,
       isLimitedEdition: productDetails.isLimitedEdition || false,
+      //Listings
+      buy4lesstoday: productListings.ebayBuy4LessToday || "",
+      onelifeluxuries: productListings.ebayOneLifeLuxuries4 || "",
+      walmart: productListings.walmartOneLifeLuxuries || ""
     }),
     [productObject, productDetails]
   );
@@ -136,10 +145,18 @@ function EditProduct() {
     onSubmit: (data) => {
       const changes = getChangedFields(data, formikInitialValues);
 
+      const listingsObject = {
+        sku: data.sku,
+        ebayBuy4LessToday: data.buy4lesstoday,
+        ebayOneLifeLuxuries4: data.onelifeluxuries,
+        walmartOneLifeLuxuries: data.walmart
+      };
+
       axios
         .all([
           axios.put("http://localhost:3001/products", data),
           axios.put("http://localhost:3001/productDetails", data),
+          axios.put("http://localhost:3001/listings", listingsObject)
         ])
         .then(
           axios.spread((productsRes, productDetailsRes) => {
@@ -946,6 +963,59 @@ function EditProduct() {
                 </Grid>
               </Paper>
             </Container>
+            {formik.values.listed && (
+              <Container>
+                <Paper
+                  variant="outlined"
+                  sx={{ my: { xs: 3, md: 3 }, p: { xs: 1, md: 4 } }}
+                >
+                  <Grid container spacing={0} justifyContent="center">
+                    <Grid item xs={12} display="flex" justifyContent="center">
+                      <b>Listings Details</b>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Box pt={4}>
+                        <TextField
+                          fullWidth
+                          id="buy4lesstoday"
+                          name="buy4lesstoday"
+                          label="Buy4LessToday"
+                          value={formik.values.buy4lesstoday}
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                        />
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Box pt={4}>
+                        <TextField
+                          fullWidth
+                          id="onelifeluxuries"
+                          name="onelifeluxuries"
+                          label="OneLifeLuxuries"
+                          value={formik.values.onelifeluxuries}
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                        />
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Box pt={4}>
+                        <TextField
+                          fullWidth
+                          id="walmart"
+                          name="walmart"
+                          label="Walmart"
+                          value={formik.values.walmart}
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                        />
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Container>
+            )}
           </Grid>
         </Grid>
       </form>
