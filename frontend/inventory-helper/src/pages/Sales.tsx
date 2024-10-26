@@ -64,7 +64,7 @@ function Sales() {
       axios.post("http://localhost:3001/sales", data).then((response) => {
         console.log(response);
       });
-      navigate("/");
+      navigate("/", { state: { clearFilters: true } });
     },
   });
   return (

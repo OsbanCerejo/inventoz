@@ -45,6 +45,9 @@ app.use("/sephora", sephoraRouter);
 const logsRouter = require("./routes/Logs");
 app.use("/logs", logsRouter);
 
+const listingsRouter = require("./routes/Listings");
+app.use("/listings", listingsRouter);
+
 sequelize
   .authenticate()
   .then(() => {

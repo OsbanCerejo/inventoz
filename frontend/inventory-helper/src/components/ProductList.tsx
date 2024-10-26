@@ -154,11 +154,11 @@ function ProductList({
                 />
               </th>
               <th scope="col" onClick={() => handleSort("quantity")}>
-                {getSortIcon("quantity")} Quantity
+                {getSortIcon("quantity")} QTY
               </th>
-              <th scope="col" onClick={() => handleSort("listed")}>
+              {/* <th scope="col" onClick={() => handleSort("listed")}>
                 {getSortIcon("listed")} Listed
-              </th>
+              </th> */}
               {/* <th scope="col">Final</th> */}
             </tr>
           </thead>
@@ -186,7 +186,7 @@ function ProductList({
                   </IconButton>
                   {product.sku}
                 </td>
-                <td>{product.brand}</td>
+                <td style={{ width: "8%" }}>{product.brand}</td>
                 <td>{product.itemName}</td>
                 <td style={{ width: "5%" }}>{product.sizeOz}</td>
                 <td>{product.strength}</td>
@@ -200,14 +200,14 @@ function ProductList({
                 >
                   {product.quantity}
                 </td>
-                <td
+                {/* <td
                   style={{
                     backgroundColor: product.listed ? "#B2FF59" : "#FF5252",
                     width: "7%",
                   }}
                 >
                   {product.listed ? "Yes" : "No"}
-                </td>
+                </td> */}
               </tr>
             ))}
           </tbody>

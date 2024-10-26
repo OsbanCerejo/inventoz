@@ -28,6 +28,7 @@ function Product() {
   const [productObject, setProductObject]: any = useState({});
   const [barcodeValue, setBarcodeValue] = useState(productObject.sku);
   const [productDetails, setProductDetails]: any = useState({});
+  const [productListings, setProductListings]: any = useState({});
   const labelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -45,6 +46,13 @@ function Product() {
           }
         );
         setProductDetails(details);
+        const { data: listings } = await axios.get(
+          "http://localhost:3001/listings/bySku",
+          {
+            params: { sku: product.sku },
+          }
+        );
+        setProductListings(listings);
       } catch (error) {
         console.error("Error fetching product data:", error);
       }
@@ -59,9 +67,11 @@ function Product() {
       !productObject.verified ||
       window.confirm("This is a verified entry. Do you want to edit?")
     ) {
-      navigate("/editProduct", { state: { productObject, productDetails } });
+      navigate("/editProduct", {
+        state: { productObject, productDetails, productListings },
+      });
     }
-  }, [navigate, productObject, productDetails]);
+  }, [navigate, productObject, productDetails, productListings]);
 
   // Function to handle product deletion with password confirmation
   const handleDeleteClick = useCallback(async () => {
@@ -267,8 +277,8 @@ function Product() {
                   </Typography>
                   <br></br>
                   {[
-                    ["Quantity Available", productObject.quantity],
                     ["Location", productObject.location],
+                    ["Quantity Available", productObject.quantity],
                   ].map(([label, value]) => (
                     <Box
                       key={label}
@@ -282,10 +292,50 @@ function Product() {
                       <Typography variant="body1">{value}</Typography>
                     </Box>
                   ))}
-                  <strong>Description</strong>
-                  <Box display="flex" justifyContent="space-between" py={1}>
-                    {productDetails.description}
-                  </Box>
+                  <strong>Listed Quantity</strong>
+                  {productObject.listed && (
+                    <>
+                      <Box
+                        display="flex"
+                        justifyContent="space-between"
+                        py={1}
+                        style={{
+                          backgroundColor: "#EE66A6",
+                        }}
+                      >
+                        B4L: {productListings.ebayBuy4LessToday} <br />
+                      </Box>
+                      <Box
+                        display="flex"
+                        justifyContent="space-between"
+                        py={1}
+                        style={{
+                          backgroundColor: "#FFEB55",
+                        }}
+                      >
+                        OLL: {productListings.ebayOneLifeLuxuries4}
+                        <br />
+                      </Box>
+                      <Box
+                        display="flex"
+                        justifyContent="space-between"
+                        py={1}
+                        style={{
+                          backgroundColor: "#0071ce",
+                        }}
+                      >
+                        Walmart: {productListings.walmartOneLifeLuxuries}
+                        <br />
+                      </Box>
+                      <strong>Description</strong>
+                      <Box display="flex" justifyContent="space-between" py={1}>
+                        {productDetails.description}
+                      </Box>
+                    </>
+                  )}
+                  {!productObject.listed && (
+                    <strong style={{backgroundColor: "skyblue"}}>NOT LISTED</strong>
+                  )}
                 </CardContent>
               </Card>
             </Box>
