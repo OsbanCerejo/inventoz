@@ -101,6 +101,10 @@ function AddProduct() {
     tester: productDetails?.tester || false,
     isHazmat: productDetails?.isHazmat || false,
     isLimitedEdition: productDetails?.isLimitedEdition || false,
+    //Listings
+    buy4lesstoday: "",
+    onelifeluxuries: "",
+    walmart: ""
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -143,6 +147,10 @@ function AddProduct() {
     tester: Yup.boolean(),
     isHazmat: Yup.boolean(),
     isLimitedEdition: Yup.boolean(),
+    //Listings
+    buy4lesstoday: Yup.string(),
+    onelifeluxuries: Yup.string(),
+    walmart: Yup.string()
   });
 
   const formik = useFormik({
@@ -208,6 +216,22 @@ function AddProduct() {
               inboundObject
             );
             console.log(inboundResponse);
+          }
+
+          // Handle Listed Logic
+          if(formik.values.listed) {
+            const listingsObject = {
+              sku: data.sku,
+              ebayBuy4LessToday: data.buy4lesstoday,
+              ebayOneLifeLuxuries4: data.onelifeluxuries,
+              walmartOneLifeLuxuries: data.walmart
+            };
+            console.log("LISTINGS OBJECT: ", listingsObject)
+            const listingsResponse = await axios.post(
+              "http://localhost:3001/listings",
+              listingsObject
+            );
+            console.log(listingsResponse);
           }
 
           // Fetch the brand object and update nextNumber
@@ -1177,6 +1201,59 @@ function AddProduct() {
                             />
                           </DemoContainer>
                         </LocalizationProvider>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Container>
+            )}
+            {formik.values.listed && (
+              <Container>
+                <Paper
+                  variant="outlined"
+                  sx={{ my: { xs: 3, md: 3 }, p: { xs: 1, md: 4 } }}
+                >
+                  <Grid container spacing={0} justifyContent="center">
+                    <Grid item xs={12} display="flex" justifyContent="center">
+                      <b>Listings Details</b>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Box pt={4}>
+                        <TextField
+                          fullWidth
+                          id="buy4lesstoday"
+                          name="buy4lesstoday"
+                          label="Buy4LessToday"
+                          value={formik.values.buy4lesstoday}
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                        />
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Box pt={4}>
+                        <TextField
+                          fullWidth
+                          id="onelifeluxuries"
+                          name="onelifeluxuries"
+                          label="OneLifeLuxuries"
+                          value={formik.values.onelifeluxuries}
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                        />
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Box pt={4}>
+                        <TextField
+                          fullWidth
+                          id="walmart"
+                          name="walmart"
+                          label="Walmart"
+                          value={formik.values.walmart}
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                        />
                       </Box>
                     </Grid>
                   </Grid>
