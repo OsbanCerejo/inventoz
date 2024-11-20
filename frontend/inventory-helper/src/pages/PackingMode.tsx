@@ -20,6 +20,7 @@ type Order = {
 type Product = {
   sku: string;
   image: string;
+  shade?: string;
 };
 
 const OrderDetails = () => {
@@ -97,6 +98,14 @@ const OrderDetails = () => {
     return 1;
   }
 
+  // Function to find the product object and extract additional attributes like Shade
+  const findProductDetails = (sku: string): Product | null => {
+    if (sku) {
+      sku = sku.split("_")[0]; // Normalize SKU to match
+    }
+    return productsData.find((product) => product.sku === sku) || null;
+  };
+
   return (
     <div>
       <Grid container spacing={0} textAlign={"center"}>
@@ -133,6 +142,7 @@ const OrderDetails = () => {
               {orderDetails.items.map((item) => {
                 const lotSize = parseSku(item.sku);
                 const adjustedQuantity = item.quantity * lotSize;
+                const product = findProductDetails(item.sku);
 
                 return (
                   <Grid container>
@@ -150,6 +160,11 @@ const OrderDetails = () => {
                       <h4>Title: {item.name}</h4>
                       <h1 style={{ fontSize: 100 }}>{adjustedQuantity}</h1>
                       <h1>{item.sku}</h1>
+                      {product && product.shade && (
+                        <h1 style={{ backgroundColor: "lightblue" }}>
+                          Shade/Variant: {product.shade}
+                        </h1>
+                      )}
                       {item.options.length > 0 && (
                         <h1 style={{ backgroundColor: "yellow" }}>
                           {item.options[0].name} {item.options[0].value}
