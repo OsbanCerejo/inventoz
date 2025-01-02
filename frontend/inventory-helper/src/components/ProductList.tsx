@@ -86,6 +86,13 @@ function ProductList({
       />
       {products.length === 0 && <p>No item found</p>}
       <div>
+        UPC:{" "}
+        <input
+          type="text"
+          value={getFilterValue("upc")}
+          onChange={(e) => handleFilterChange(e, "upc")}
+          onClick={(e) => e.stopPropagation()}
+        />
         <table className="table table-bordered table-hover" border={1}>
           <thead>
             <tr>

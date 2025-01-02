@@ -82,7 +82,7 @@ function AddProduct() {
     inbound: false,
     listed: false,
     final: false,
-    image: productObject?.image || "",
+    image: "",
     vendor: productObject?.vendor || "",
     description: productDetails?.description || "",
     setOf: productDetails?.setOf || "",
