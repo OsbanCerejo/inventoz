@@ -52,11 +52,11 @@ const PrintableLabel = React.forwardRef<
     (maxWidth * 8) / 12,
     30
   );
-  const locationFontSize = getFontSize(
-    product.location,
-    (maxWidth * 4) / 12,
-    30
-  );
+  // const locationFontSize = getFontSize(
+  //   product.location,
+  //   (maxWidth * 4) / 12,
+  //   30
+  // );
   const sizeOzFontSize = getFontSize(product.sizeOz, maxWidth / 3, 25);
   const quantityFontSize = getFontSize(product.quantity, maxWidth / 3, 25);
   const warehouseLocationsFontSize = getFontSize(
