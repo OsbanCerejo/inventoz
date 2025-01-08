@@ -327,9 +327,10 @@ function Product() {
                         Walmart: {productListings.walmartOneLifeLuxuries}
                         <br />
                       </Box>
-                      <strong>Description</strong>
+                      <br />
+                      <strong>Warehouse Location</strong>
                       <Box display="flex" justifyContent="space-between" py={1}>
-                        {productDetails.description}
+                        {productObject.warehouseLocations}
                       </Box>
                     </>
                   )}
