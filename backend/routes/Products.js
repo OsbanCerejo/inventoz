@@ -60,6 +60,7 @@ router.put("/", async (req, res) => {
       category: product.category,
       type: product.type,
       upc: product.upc,
+      warehouseLocations: product.warehouseLocations,
       batch: product.batch,
       condition: product.condition,
       verified: product.verified,
