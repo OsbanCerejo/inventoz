@@ -55,6 +55,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: true,
       },
+      warehouseLocations: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
       batch: {
         type: DataTypes.STRING,
         allowNull: true,
