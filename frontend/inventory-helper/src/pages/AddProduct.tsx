@@ -1278,7 +1278,7 @@ function AddProduct() {
                 >
                   <Grid container spacing={0} justifyContent="center">
                     <Grid item xs={12} display="flex" justifyContent="center">
-                      <b>Listings Details</b>
+                      <b>Listing Allocation</b>
                     </Grid>
                     <Grid item xs={12}>
                       <Box pt={4}>
