@@ -48,6 +48,9 @@ app.use("/logs", logsRouter);
 const listingsRouter = require("./routes/Listings");
 app.use("/listings", listingsRouter);
 
+const priceListParserRouter = require("./routes/PricelistParser");
+app.use("/priceListParser", priceListParserRouter);
+
 sequelize
   .authenticate()
   .then(() => {

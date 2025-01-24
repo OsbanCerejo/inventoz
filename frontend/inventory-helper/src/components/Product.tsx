@@ -77,7 +77,7 @@ function Product() {
   const handleDeleteClick = useCallback(async () => {
     const passwordToDelete = prompt("Enter Password to delete");
 
-    if (passwordToDelete === "1998") {
+    if (passwordToDelete === "1080") {
       try {
         await axios.delete(
           `http://localhost:3001/products/delete/${productObject.sku}`

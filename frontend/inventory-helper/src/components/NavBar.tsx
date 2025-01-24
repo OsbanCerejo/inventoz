@@ -57,14 +57,19 @@ function NavBar() {
                 Orders
               </a>
             </li>
-            <li className="nav-item">
+            {/* <li className="nav-item">
               <a className="nav-link" href="/sephoraSearch">
                 Sephora
               </a>
-            </li>
+            </li> */}
             <li className="nav-item">
               <a className="nav-link" href="/orders/packingMode">
                 Packing
+              </a>
+            </li>
+            <li className="nav-item">
+              <a className="nav-link" href="/priceListParser">
+                PriceList
               </a>
             </li>
           </ul>

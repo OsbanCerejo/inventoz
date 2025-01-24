@@ -10,9 +10,9 @@ import InboundProduct from "./pages/InboundProduct";
 import InboundData from "./pages/InboundData";
 import { ToastContainer } from "react-toastify";
 import AllOrders from "./pages/AllOrders";
-import SephoraSearch from "./pages/SephoraSearch";
 import "./App.css";
 import PackingMode from "./pages/PackingMode";
+import PriceListParser from "./pages/PriceListParser";
 
 function App() {
   return (
@@ -31,7 +31,8 @@ function App() {
             <Route path="/sales" Component={Sales}></Route>
             <Route path="/orders/showAll" Component={AllOrders}></Route>
             <Route path="/orders/packingMode" Component={PackingMode}></Route>
-            <Route path="/sephoraSearch" Component={SephoraSearch}></Route>
+            {/* <Route path="/sephoraSearch" Component={SephoraSearch}></Route> */}
+            <Route path="/pricelistParser" Component={PriceListParser}></Route>
           </Routes>
         </div>
       </Router>
