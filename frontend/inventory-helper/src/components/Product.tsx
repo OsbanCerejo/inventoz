@@ -10,7 +10,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import WarehouseIcon from "@mui/icons-material/Warehouse";
@@ -25,6 +25,7 @@ import { useReactToPrint } from "react-to-print";
 function Product() {
   let { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [productObject, setProductObject]: any = useState({});
   const [barcodeValue, setBarcodeValue] = useState(productObject.sku);
   const [productDetails, setProductDetails]: any = useState({});
@@ -34,20 +35,27 @@ function Product() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+
+        // Reset states before fetching new data
+        setProductObject({});
+        setProductDetails({});
+        setProductListings({});
+
+        
         const { data: product } = await axios.get(
-          `http://localhost:3001/products/byId/${id}`
+          `http://localhost:3001/products/byId/${id}?nocache=${Date.now()}`
         );
         setProductObject(product);
         setBarcodeValue(product.sku);
         const { data: details } = await axios.get(
-          "http://localhost:3001/productDetails/bySku",
+          "http://localhost:3001/productDetails/bySku?nocache=${Date.now()",
           {
             params: { sku: product.sku },
           }
         );
         setProductDetails(details);
         const { data: listings } = await axios.get(
-          "http://localhost:3001/listings/bySku",
+          "http://localhost:3001/listings/bySku?nocache=${Date.now()",
           {
             params: { sku: product.sku },
           }
@@ -59,7 +67,7 @@ function Product() {
     };
 
     fetchData();
-  }, [id]);
+  }, [id, location.pathname]);
 
   // Handle the edit button click and redirect with the product to edit page
   const handleEditOnClick = useCallback(() => {
