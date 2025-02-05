@@ -35,13 +35,11 @@ function Product() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-
         // Reset states before fetching new data
         setProductObject({});
         setProductDetails({});
         setProductListings({});
 
-        
         const { data: product } = await axios.get(
           `http://localhost:3001/products/byId/${id}?nocache=${Date.now()}`
         );
@@ -66,8 +64,15 @@ function Product() {
       }
     };
 
-    fetchData();
-  }, [id, location.pathname]);
+    // If coming back from the edit page, update state instead of refetching
+    if (location.state?.updatedProduct) {
+      setProductObject(location.state.updatedProduct);
+      setProductDetails(location.state.updatedDetails || {});
+      setProductListings(location.state.updatedListings || {});
+    } else {
+      fetchData(); // Fetch only if no updated product is passed
+    }
+  }, [id, location.state]);
 
   // Handle the edit button click and redirect with the product to edit page
   const handleEditOnClick = useCallback(() => {
@@ -343,7 +348,9 @@ function Product() {
                     </>
                   )}
                   {!productObject.listed && (
-                    <strong style={{backgroundColor: "skyblue"}}>NOT LISTED</strong>
+                    <strong style={{ backgroundColor: "skyblue" }}>
+                      NOT LISTED
+                    </strong>
                   )}
                 </CardContent>
               </Card>

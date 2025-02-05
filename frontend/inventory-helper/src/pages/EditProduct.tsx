@@ -172,7 +172,7 @@ function EditProduct() {
           axios.put("http://localhost:3001/listings", listingsObject),
         ])
         .then(
-          axios.spread((productsRes, productDetailsRes) => {
+          axios.spread((productsRes, productDetailsRes, listingsRes) => {
             console.log("Product Updated to: ", productsRes);
             console.log("Product Details Updated to: ", productDetailsRes);
             axios.post("http://localhost:3001/logs/addLog", {
@@ -180,13 +180,19 @@ function EditProduct() {
               type: "Edit Product",
               metaData: changes, // Only log the changes
             });
+            navigate(`/products/${data.sku}`, {
+              state: {
+                updatedProduct: productsRes.data, 
+                updatedDetails: productDetailsRes.data,
+                updatedListings: listingsRes.data,
+              },
+            });
           })
         )
         .catch((error) => {
           console.error("There was an error updating the product: ", error);
         });
       // navigate("/", { state: { clearFilters: true } });
-      navigate(-1);
     },
   });
 
