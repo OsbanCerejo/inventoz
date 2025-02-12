@@ -5,6 +5,7 @@ import Button from "@mui/material/Button";
 import {
   Box,
   Checkbox,
+  Chip,
   Collapse,
   Container,
   Divider,
@@ -44,6 +45,8 @@ function AddProduct() {
   const today = new Date();
   const [newDate, setNewDate] = useState(dayjs(today.toLocaleString()));
   const [showMoreDetails, setShowMoreDetails] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
+  const [currentInput, setCurrentInput] = useState<string>("");
 
   const toggleMoreDetails = () => {
     setShowMoreDetails(!showMoreDetails);
@@ -77,7 +80,7 @@ function AddProduct() {
     type: productObject?.type || "",
     upc: "",
     batch: "NA",
-    condition: productObject?.condition || "Unboxed",
+    condition: productObject?.condition || "Unsealed",
     verified: false,
     inbound: false,
     listed: false,
@@ -104,7 +107,9 @@ function AddProduct() {
     //Listings
     buy4lesstoday: "",
     onelifeluxuries: "",
-    walmart: ""
+    walmart: "",
+    //Warehouse Locations
+    warehouseLocations: "",
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -150,7 +155,9 @@ function AddProduct() {
     //Listings
     buy4lesstoday: Yup.string(),
     onelifeluxuries: Yup.string(),
-    walmart: Yup.string()
+    walmart: Yup.string(),
+    //Warehouse Locations
+    warehouseLocations: Yup.string(),
   });
 
   const formik = useFormik({
@@ -219,14 +226,14 @@ function AddProduct() {
           }
 
           // Handle Listed Logic
-          if(formik.values.listed) {
+          if (formik.values.listed) {
             const listingsObject = {
               sku: data.sku,
               ebayBuy4LessToday: data.buy4lesstoday,
               ebayOneLifeLuxuries4: data.onelifeluxuries,
-              walmartOneLifeLuxuries: data.walmart
+              walmartOneLifeLuxuries: data.walmart,
             };
-            console.log("LISTINGS OBJECT: ", listingsObject)
+            console.log("LISTINGS OBJECT: ", listingsObject);
             const listingsResponse = await axios.post(
               "http://localhost:3001/listings",
               listingsObject
@@ -355,6 +362,21 @@ function AddProduct() {
       generateSku(formik.values.condition.toLowerCase(), "4");
     }
   }, [formik.values.brand, formik.values.category, formik.values.condition]);
+
+  const handleAddLocation = () => {
+    if (currentInput.trim() !== "" && !tags.includes(currentInput.trim())) {
+      const updatedTags = [...tags, currentInput.trim()];
+      setTags(updatedTags); // Update tags state
+      formik.setFieldValue("warehouseLocations", updatedTags.join(", ")); // Update formik value
+      setCurrentInput(""); // Clear the input field
+    }
+  };
+
+  const handleDelete = (tagToDelete: string) => {
+    const updatedTags = tags.filter((tag) => tag !== tagToDelete);
+    setTags(updatedTags); // Update tags state
+    formik.setFieldValue("warehouseLocations", updatedTags.join(", ")); // Update formik value
+  };
 
   return (
     <div>
@@ -643,6 +665,11 @@ function AddProduct() {
                               value={formik.values.condition}
                             >
                               <FormControlLabel
+                                value="Unsealed"
+                                control={<Radio />}
+                                label="Unsealed"
+                              />
+                              <FormControlLabel
                                 value="Unboxed"
                                 control={<Radio />}
                                 label="Unboxed"
@@ -651,11 +678,6 @@ function AddProduct() {
                                 value="Sealed"
                                 control={<Radio />}
                                 label="Sealed"
-                              />
-                              <FormControlLabel
-                                value="Unsealed"
-                                control={<Radio />}
-                                label="Unsealed"
                               />
                             </RadioGroup>
                           </Box>
@@ -712,6 +734,64 @@ function AddProduct() {
                             <Box m={2}>
                               <TextField
                                 fullWidth
+                                id="upc"
+                                name="upc"
+                                label="UPC Code"
+                                value={formik.values.upc}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.upc &&
+                                  Boolean(formik.errors.upc)
+                                }
+                              />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box
+                              display="flex"
+                              alignItems="center"
+                              gap={2}
+                              m={2}
+                            >
+                              <TextField
+                                fullWidth
+                                id="warehouseLocationInput"
+                                name="warehouseLocationInput"
+                                label="Add Warehouse Location"
+                                placeholder="Enter location (e.g., A-12)"
+                                value={currentInput}
+                                onChange={(e) =>
+                                  setCurrentInput(e.target.value)
+                                }
+                              />
+                              <Button
+                                variant="contained"
+                                color="primary"
+                                onClick={handleAddLocation}
+                              >
+                                Add Location
+                              </Button>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <Box display="flex" flexWrap="wrap" gap={1}>
+                                {tags.map((tag, index) => (
+                                  <Chip
+                                    key={index}
+                                    label={tag}
+                                    onDelete={() => handleDelete(tag)}
+                                    color="primary"
+                                  />
+                                ))}
+                              </Box>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
                                 id="type"
                                 name="type"
                                 label="Type"
@@ -738,23 +818,6 @@ function AddProduct() {
                                 error={
                                   formik.touched.formulation &&
                                   Boolean(formik.errors.formulation)
-                                }
-                              />
-                            </Box>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Box m={2}>
-                              <TextField
-                                fullWidth
-                                id="upc"
-                                name="upc"
-                                label="UPC Code"
-                                value={formik.values.upc}
-                                onChange={formik.handleChange}
-                                onBlur={formik.handleBlur}
-                                error={
-                                  formik.touched.upc &&
-                                  Boolean(formik.errors.upc)
                                 }
                               />
                             </Box>
@@ -1215,7 +1278,7 @@ function AddProduct() {
                 >
                   <Grid container spacing={0} justifyContent="center">
                     <Grid item xs={12} display="flex" justifyContent="center">
-                      <b>Listings Details</b>
+                      <b>Listing Allocation</b>
                     </Grid>
                     <Grid item xs={12}>
                       <Box pt={4}>

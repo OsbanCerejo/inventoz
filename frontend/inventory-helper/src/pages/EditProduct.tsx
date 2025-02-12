@@ -20,13 +20,14 @@ import {
   Grid,
   IconButton,
   Typography,
+  Chip,
 } from "@mui/material";
 import axios from "axios";
 import * as Yup from "yup";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
 import skuData from "../../../data/skuData.json";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import countriesData from "../../../data/countries.json";
@@ -75,7 +76,9 @@ const formikValidationSchema = Yup.object().shape({
   //Listings
   buy4lesstoday: Yup.string(),
   onelifeluxuries: Yup.string(),
-  walmart: Yup.string()
+  walmart: Yup.string(),
+  //Warehouse Locations
+  warehouseLocations: Yup.string(),
 });
 
 function EditProduct() {
@@ -85,6 +88,13 @@ function EditProduct() {
   const productObject = location.state.productObject;
   const productDetails = location.state.productDetails || {};
   const productListings = location.state.productListings || {};
+
+  const [isLocked, setIsLocked] = useState(true);
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(false);
+
+  const [tags, setTags] = useState<string[]>([]); // State for tags
+  const [currentInput, setCurrentInput] = useState<string>("");
 
   const formikInitialValues = useMemo(
     () => ({
@@ -130,7 +140,9 @@ function EditProduct() {
       //Listings
       buy4lesstoday: productListings.ebayBuy4LessToday || "",
       onelifeluxuries: productListings.ebayOneLifeLuxuries4 || "",
-      walmart: productListings.walmartOneLifeLuxuries || ""
+      walmart: productListings.walmartOneLifeLuxuries || "",
+      //Warehouse Locatins
+      warehouseLocations: productObject.warehouseLocations || "",
     }),
     [productObject, productDetails]
   );
@@ -144,22 +156,23 @@ function EditProduct() {
     validationSchema: formikValidationSchema,
     onSubmit: (data) => {
       const changes = getChangedFields(data, formikInitialValues);
+      console.log("CHANGES : ", changes)
 
       const listingsObject = {
         sku: data.sku,
         ebayBuy4LessToday: data.buy4lesstoday,
         ebayOneLifeLuxuries4: data.onelifeluxuries,
-        walmartOneLifeLuxuries: data.walmart
+        walmartOneLifeLuxuries: data.walmart,
       };
 
       axios
         .all([
           axios.put("http://localhost:3001/products", data),
           axios.put("http://localhost:3001/productDetails", data),
-          axios.put("http://localhost:3001/listings", listingsObject)
+          axios.put("http://localhost:3001/listings", listingsObject),
         ])
         .then(
-          axios.spread((productsRes, productDetailsRes) => {
+          axios.spread((productsRes, productDetailsRes, listingsRes) => {
             console.log("Product Updated to: ", productsRes);
             console.log("Product Details Updated to: ", productDetailsRes);
             axios.post("http://localhost:3001/logs/addLog", {
@@ -167,12 +180,19 @@ function EditProduct() {
               type: "Edit Product",
               metaData: changes, // Only log the changes
             });
+            navigate(`/products/${data.sku}`, {
+              state: {
+                updatedProduct: productsRes.data, 
+                updatedDetails: productDetailsRes.data,
+                updatedListings: listingsRes.data,
+              },
+            });
           })
         )
         .catch((error) => {
           console.error("There was an error updating the product: ", error);
         });
-      navigate("/", { state: { clearFilters: true } });
+      // navigate("/", { state: { clearFilters: true } });
     },
   });
 
@@ -192,6 +212,40 @@ function EditProduct() {
     if (event.key === "Enter") {
       event.preventDefault();
     }
+  };
+
+  const handleUnlock = () => {
+    if (password === "1234") {
+      setIsLocked(false);
+      setError(false);
+    } else {
+      setError(true);
+    }
+  };
+
+  useEffect(() => {
+    if (formikInitialValues.warehouseLocations) {
+      setTags(
+        formikInitialValues.warehouseLocations
+          .split(", ")
+          .map((tag: string) => tag.trim())
+      );
+    }
+  }, [formikInitialValues.warehouseLocations]);
+
+  const handleAddLocation = () => {
+    if (currentInput.trim() !== "" && !tags.includes(currentInput.trim())) {
+      const updatedTags = [...tags, currentInput.trim()];
+      setTags(updatedTags);
+      formik.setFieldValue("warehouseLocations", updatedTags.join(", "));
+      setCurrentInput(""); // Clear input field
+    }
+  };
+
+  const handleDeleteLocation = (tagToDelete: string) => {
+    const updatedTags = tags.filter((tag) => tag !== tagToDelete);
+    setTags(updatedTags);
+    formik.setFieldValue("warehouseLocations", updatedTags.join(", "));
   };
 
   return (
@@ -392,6 +446,29 @@ function EditProduct() {
                           />
                         </Box>
                         <Box m={2}>
+                          {isLocked && (
+                            <Box
+                              display="flex"
+                              alignItems="center"
+                              gap={1}
+                              mb={2}
+                            >
+                              <TextField
+                                type="password"
+                                label="Enter Password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                error={error}
+                                helperText={error ? "Incorrect password" : ""}
+                              />
+                              <Button
+                                variant="contained"
+                                onClick={handleUnlock}
+                              >
+                                Unlock
+                              </Button>
+                            </Box>
+                          )}
                           <TextField
                             fullWidth
                             id="location"
@@ -400,6 +477,7 @@ function EditProduct() {
                             value={formik.values.location}
                             onChange={formik.handleChange}
                             onBlur={formik.handleBlur}
+                            disabled={isLocked}
                             error={
                               formik.touched.location &&
                               Boolean(formik.errors.location)
@@ -538,6 +616,68 @@ function EditProduct() {
                             <Box m={2}>
                               <TextField
                                 fullWidth
+                                id="upc"
+                                name="upc"
+                                label="UPC Code"
+                                value={formik.values.upc}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.upc &&
+                                  Boolean(formik.errors.upc)
+                                }
+                                helperText={
+                                  formik.touched.upc && formik.errors.upc
+                                }
+                              />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box
+                              display="flex"
+                              alignItems="center"
+                              gap={2}
+                              m={2}
+                            >
+                              <TextField
+                                fullWidth
+                                id="warehouseLocationInput"
+                                name="warehouseLocationInput"
+                                label="Add Warehouse Location"
+                                placeholder="Enter location (e.g., A-12)"
+                                value={currentInput}
+                                onChange={(e) =>
+                                  setCurrentInput(e.target.value)
+                                }
+                              />
+                              <Button
+                                variant="contained"
+                                color="primary"
+                                onClick={handleAddLocation}
+                              >
+                                Add Location
+                              </Button>
+                            </Box>
+                          </Grid>
+
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <Box display="flex" flexWrap="wrap" gap={1}>
+                                {tags.map((tag, index) => (
+                                  <Chip
+                                    key={index}
+                                    label={tag}
+                                    onDelete={() => handleDeleteLocation(tag)}
+                                    color="primary"
+                                  />
+                                ))}
+                              </Box>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
                                 id="type"
                                 name="type"
                                 label="Type"
@@ -571,26 +711,6 @@ function EditProduct() {
                                 helperText={
                                   formik.touched.formulation &&
                                   formik.errors.formulation
-                                }
-                              />
-                            </Box>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Box m={2}>
-                              <TextField
-                                fullWidth
-                                id="upc"
-                                name="upc"
-                                label="UPC Code"
-                                value={formik.values.upc}
-                                onChange={formik.handleChange}
-                                onBlur={formik.handleBlur}
-                                error={
-                                  formik.touched.upc &&
-                                  Boolean(formik.errors.upc)
-                                }
-                                helperText={
-                                  formik.touched.upc && formik.errors.upc
                                 }
                               />
                             </Box>

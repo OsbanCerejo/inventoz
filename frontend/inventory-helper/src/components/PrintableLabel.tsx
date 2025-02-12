@@ -3,6 +3,7 @@ import { Box, Grid, Typography } from "@mui/material";
 import Barcode from "./Barcode";
 import ScienceIcon from "@mui/icons-material/Science";
 import CancelIcon from "@mui/icons-material/Cancel";
+import WarehouseIcon from '@mui/icons-material/Warehouse';
 
 // Define the type for the 'product' prop
 type ProductType = {
@@ -15,6 +16,7 @@ type ProductType = {
   sizeOz: string;
   sku: string;
   quantity: string;
+  warehouseLocations: string;
 };
 
 type ProductDetailsType = {
@@ -50,13 +52,18 @@ const PrintableLabel = React.forwardRef<
     (maxWidth * 8) / 12,
     30
   );
-  const locationFontSize = getFontSize(
-    product.location,
-    (maxWidth * 4) / 12,
-    30
-  );
+  // const locationFontSize = getFontSize(
+  //   product.location,
+  //   (maxWidth * 4) / 12,
+  //   30
+  // );
   const sizeOzFontSize = getFontSize(product.sizeOz, maxWidth / 3, 25);
   const quantityFontSize = getFontSize(product.quantity, maxWidth / 3, 25);
+  const warehouseLocationsFontSize = getFontSize(
+    product.warehouseLocations,
+    (maxWidth * 6) / 12,
+    30
+  );
 
   return (
     <Box
@@ -105,11 +112,11 @@ const PrintableLabel = React.forwardRef<
             variant="h4"
             align="right"
             style={{
-              fontSize: locationFontSize,
-              whiteSpace: "nowrap",
+              fontSize: warehouseLocationsFontSize,
             }}
           >
-            [{product.location}]
+            [{product.location}]<br></br>
+            <WarehouseIcon sx={{fontSize: 30 }}></WarehouseIcon> {product.warehouseLocations}
           </Typography>
         </Grid>
         <Grid item xs={2}>
@@ -148,11 +155,11 @@ const PrintableLabel = React.forwardRef<
             {product.condition} : {product.sizeOz} oz
           </Typography>
         </Grid>
-        <Grid item xs={4}>
+        <Grid item xs={4} border={1}>
           <Typography
-            variant="subtitle1"
-            style={{ textAlign: "left" }}
-          ></Typography>
+            variant="h4"
+            style={{ textAlign: "center" }}
+          >{new Date().toLocaleDateString()}</Typography>
         </Grid>
         <Grid item xs={4}>
           <Typography

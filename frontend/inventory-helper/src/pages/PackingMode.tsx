@@ -21,6 +21,7 @@ type Product = {
   sku: string;
   image: string;
   shade?: string;
+  location?: string;
 };
 
 const OrderDetails = () => {
@@ -169,6 +170,11 @@ const OrderDetails = () => {
                         <h1 style={{ backgroundColor: "yellow" }}>
                           {item.options[0].name} {item.options[0].value}
                         </h1>
+                      )}
+                      {product && product.location && (
+                        <h2 style={{ backgroundColor: "lightgray" }}>
+                          Location: {product.location}
+                        </h2>
                       )}
                     </Grid>
                   </Grid>
