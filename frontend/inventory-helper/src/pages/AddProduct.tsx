@@ -80,7 +80,7 @@ function AddProduct() {
     type: productObject?.type || "",
     upc: "",
     batch: "NA",
-    condition: productObject?.condition || "Unboxed",
+    condition: productObject?.condition || "Unsealed",
     verified: false,
     inbound: false,
     listed: false,
@@ -665,6 +665,11 @@ function AddProduct() {
                               value={formik.values.condition}
                             >
                               <FormControlLabel
+                                value="Unsealed"
+                                control={<Radio />}
+                                label="Unsealed"
+                              />
+                              <FormControlLabel
                                 value="Unboxed"
                                 control={<Radio />}
                                 label="Unboxed"
@@ -673,11 +678,6 @@ function AddProduct() {
                                 value="Sealed"
                                 control={<Radio />}
                                 label="Sealed"
-                              />
-                              <FormControlLabel
-                                value="Unsealed"
-                                control={<Radio />}
-                                label="Unsealed"
                               />
                             </RadioGroup>
                           </Box>
