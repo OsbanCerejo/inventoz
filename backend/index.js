@@ -51,6 +51,9 @@ app.use("/listings", listingsRouter);
 const priceListParserRouter = require("./routes/PricelistParser");
 app.use("/priceListParser", priceListParserRouter);
 
+const walmartRouter = require("./routes/WalmartRoutes");
+app.use("/walmart", walmartRouter);
+
 sequelize
   .authenticate()
   .then(() => {

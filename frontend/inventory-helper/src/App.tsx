@@ -13,6 +13,7 @@ import AllOrders from "./pages/AllOrders";
 import "./App.css";
 import PackingMode from "./pages/PackingMode";
 import PriceListParser from "./pages/PriceListParser";
+import Walmart from "./pages/Walmart";
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
             <Route path="/orders/packingMode" Component={PackingMode}></Route>
             {/* <Route path="/sephoraSearch" Component={SephoraSearch}></Route> */}
             <Route path="/pricelistParser" Component={PriceListParser}></Route>
+            <Route path="/walmart" Component={Walmart}></Route>
           </Routes>
         </div>
       </Router>
