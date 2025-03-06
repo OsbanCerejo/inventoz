@@ -19,9 +19,10 @@ router.get("/allOrders", async (req, res) => {
         offset: 0,
         orderStatus: "awaiting_shipment",
         pageSize: 500,
-        // modifyDateStart: "2024-09-20T12:00:05.000Z",
-        // storeid: 1027789,
-        // storeid: 183046
+        // modifyDateStart: "2025-02-25",
+        // storeid: 1040538,
+        // storeid: 183046,
+        // storeid: 1034120
       },
     });
 
