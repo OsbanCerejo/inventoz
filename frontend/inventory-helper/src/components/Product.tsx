@@ -41,19 +41,19 @@ function Product() {
         setProductListings({});
 
         const { data: product } = await axios.get(
-          `http://localhost:3001/products/byId/${id}?nocache=${Date.now()}`
+          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products/byId/${id}?nocache=${Date.now()}`
         );
         setProductObject(product);
         setBarcodeValue(product.sku);
         const { data: details } = await axios.get(
-          "http://localhost:3001/productDetails/bySku?nocache=${Date.now()",
+          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/productDetails/bySku?nocache=${Date.now()}`,
           {
             params: { sku: product.sku },
           }
         );
         setProductDetails(details);
         const { data: listings } = await axios.get(
-          "http://localhost:3001/listings/bySku?nocache=${Date.now()",
+          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/listings/bySku?nocache=${Date.now()}`,
           {
             params: { sku: product.sku },
           }
@@ -93,10 +93,10 @@ function Product() {
     if (passwordToDelete === "1080") {
       try {
         await axios.delete(
-          `http://localhost:3001/products/delete/${productObject.sku}`
+          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products/delete/${productObject.sku}`
         );
         toast.success("Deleted Successfully!", { position: "top-right" });
-        await axios.post("http://localhost:3001/logs/addLog", {
+        await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
           timestamp: new Date().toISOString(),
           type: "Delete Product",
           metaData: {

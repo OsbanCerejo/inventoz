@@ -11,7 +11,7 @@ const ExcelUploader = () => {
     const clearPreviousSessionData = async () => {
       try {
         await axios.get(
-          "http://localhost:3001/priceListParser/clearPriceLists"
+          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/priceListParser/clearPriceLists`
         );
         console.log("Session data cleared.");
       } catch (error) {
@@ -37,7 +37,7 @@ const ExcelUploader = () => {
 
     try {
       await axios.post(
-        "http://localhost:3001/priceListParser/removePriceLists",
+        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/priceListParser/removePriceLists`,
         {
           filename: removedFile.name,
         }
@@ -63,7 +63,7 @@ const ExcelUploader = () => {
 
     try {
       await axios.post(
-        "http://localhost:3001/priceListParser/upload",
+        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/priceListParser/upload`,
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },
@@ -85,7 +85,7 @@ const ExcelUploader = () => {
 
     try {
       const response = await axios.get(
-        `http://localhost:3001/priceListParser/search?upc=${upc}`
+        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/priceListParser/search?upc=${upc}`
       );
       setSearchResults(response.data);
     } catch (error) {

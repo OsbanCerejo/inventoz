@@ -43,7 +43,7 @@ const OrderDetails = () => {
     const fetchProducts = async () => {
       try {
         const productsResponse = await axios.get(
-          "http://localhost:3001/products"
+          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`
         );
         setProductsData(productsResponse.data);
       } catch (error) {
@@ -67,7 +67,7 @@ const OrderDetails = () => {
   const handleFetchOrderDetails = async () => {
     try {
       const response = await axios.get(
-        `http://localhost:3001/orders/order/${orderId}`
+        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/orders/order/${orderId}`
       );
       console.log(response.data);
       setOrderDetails(response.data);

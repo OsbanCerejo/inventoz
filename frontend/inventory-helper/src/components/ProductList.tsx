@@ -55,8 +55,35 @@ function ProductList({
   };
 
   const copyToClipboard = (sku: string) => {
-    navigator.clipboard.writeText(sku);
-    toast.success("SKU Copied!", { position: "top-right", autoClose: 1000 });
+    // Create a temporary textarea element
+    const textArea = document.createElement("textarea");
+    textArea.value = sku;
+    textArea.style.position = "fixed"; // Avoid scrolling to bottom
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.opacity = "0"; // Make it invisible
+  
+    // Append the textarea to the document body
+    document.body.appendChild(textArea);
+  
+    // Select and copy the text
+    textArea.focus();
+    textArea.select();
+  
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        toast.success("SKU Copied!", { position: "top-right", autoClose: 1000 });
+      } else {
+        toast.error("Failed to copy SKU", { position: "top-right", autoClose: 1000 });
+      }
+    } catch (err) {
+      toast.error("Failed to copy SKU", { position: "top-right", autoClose: 1000 });
+      console.error("Copy failed:", err);
+    }
+  
+    // Clean up: remove the textarea from the document
+    document.body.removeChild(textArea);
   };
 
   // Calculate index of the last product on the current page

@@ -73,7 +73,7 @@ function Home() {
 
   const fetchProducts = async () => {
     try {
-      const response = await axios.get("http://localhost:3001/products");
+      const response = await axios.get(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`);
       setListOfProducts(response.data);
       localStorage.setItem("listOfProducts", JSON.stringify(response.data));
     } catch (error) {
