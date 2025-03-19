@@ -41,7 +41,7 @@ function SephoraSearch() {
           ? columnMap.get(selectedColumn)
           : "itemName";
         const response = await axios.get(
-          "http://localhost:3001/sephora/search",
+          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/sephora/search`,
           {
             params: { searchString, searchType },
           }
@@ -66,7 +66,7 @@ function SephoraSearch() {
 
   const getProductDetails = async (productId: any, skuId: any) => {
     const responseProductDetails = await axios.get(
-      "http://localhost:3001/sephora/getMoreDetails",
+      `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/sephora/getMoreDetails`,
       {
         params: { productId, skuId },
       }

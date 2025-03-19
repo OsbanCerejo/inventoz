@@ -167,15 +167,15 @@ function EditProduct() {
 
       axios
         .all([
-          axios.put("http://localhost:3001/products", data),
-          axios.put("http://localhost:3001/productDetails", data),
-          axios.put("http://localhost:3001/listings", listingsObject),
+          axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`, data),
+          axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/productDetails`, data),
+          axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/listings`, listingsObject),
         ])
         .then(
           axios.spread((productsRes, productDetailsRes, listingsRes) => {
             console.log("Product Updated to: ", productsRes);
             console.log("Product Details Updated to: ", productDetailsRes);
-            axios.post("http://localhost:3001/logs/addLog", {
+            axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
               timestamp: new Date().toISOString(),
               type: "Edit Product",
               metaData: changes, // Only log the changes

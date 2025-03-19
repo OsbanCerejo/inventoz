@@ -45,8 +45,8 @@ function AllOrders() {
   const fetchOrders = async () => {
     try {
       const [ordersResponse, productsResponse] = await Promise.all([
-        axios.get("http://localhost:3001/orders/allOrders"),
-        axios.get("http://localhost:3001/products"),
+        axios.get(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/orders/allOrders`),
+        axios.get(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`),
       ]);
       setProductsData(productsResponse.data);
       const productMap = createProductMap(productsResponse.data);
@@ -143,7 +143,7 @@ function AllOrders() {
     try {
       // Update product quantities in the products table
       const response = await axios.post(
-        "http://localhost:3001/products/updateQuantities",
+        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products/updateQuantities`,
         skusToUpdate.map(({ sku, totalQuantitySold }) => ({
           sku,
           quantitySold: totalQuantitySold,
@@ -174,7 +174,7 @@ function AllOrders() {
     };
 
     try {
-      await axios.post("http://localhost:3001/logs/addLog", logData);
+      await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, logData);
     } catch (error) {
       console.error("Error logging update quantities:", error);
     }
@@ -256,7 +256,7 @@ function AllOrders() {
 
       // Send a POST request to update the listings table
       await axios.post(
-        "http://localhost:3001/listings/updateQuantities",
+        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/listings/updateQuantities`,
         listingsUpdate
       );
     } catch (error) {
@@ -273,7 +273,7 @@ function AllOrders() {
   // const testEbay = async () => {
   //   try {
   //     const ebayResponse = await axios.get(
-  //       "http://localhost:3001/orders/testebay"
+  //       "http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/orders/testebay"
   //     );
   //     console.log(ebayResponse);
   //   } catch (error) {

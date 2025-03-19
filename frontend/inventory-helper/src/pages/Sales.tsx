@@ -54,14 +54,14 @@ function Sales() {
         data.date.year();
       data.compositeSalesSku = compositeSalesKey;
       axios
-        .put("http://localhost:3001/sales", {
+        .put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/sales`, {
           quantity: parseInt(productObject.quantity) - parseInt(data.quantity),
           sku: productObject.sku,
         })
         .then(() => {
           console.log("Quantity Updated in Inventory Table");
         });
-      axios.post("http://localhost:3001/sales", data).then((response) => {
+      axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/sales`, data).then((response) => {
         console.log(response);
       });
       navigate("/", { state: { clearFilters: true } });

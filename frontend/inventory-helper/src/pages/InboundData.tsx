@@ -29,7 +29,7 @@ function InboundData() {
   const fetchInbound = async () => {
     try {
       const [inboundResponse] = await Promise.all([
-        axios.get("http://localhost:3001/inbound"),
+        axios.get(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/inbound`),
       ]);
       setListOfInbound(inboundResponse.data);
     } catch (error) {

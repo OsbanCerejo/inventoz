@@ -58,8 +58,8 @@ sequelize
     return db.sequelize.sync();
   })
   .then(() => {
-    app.listen(process.env.PORT, () => {
-      console.log(`Server is running on http://localhost:${process.env.PORT}`);
+    app.listen(process.env.PORT, '0.0.0.0', () => {
+      console.log(`Server is running on http://${process.env.SERVER_IP}:${process.env.PORT}`);
     });
   })
   .catch((err) => {

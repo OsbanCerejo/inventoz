@@ -18,7 +18,7 @@ function Search({ columnMap, onSearch }: SearchProps) {
           ? columnMap.get(selectedColumn)
           : "itemName";
         const response = await axios.get(
-          "http://localhost:3001/products/search",
+          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products/search`,
           {
             params: { searchString, searchType },
           }
