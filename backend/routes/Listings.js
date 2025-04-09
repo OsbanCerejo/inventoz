@@ -78,7 +78,7 @@ router.post("/updateQuantities", async (req, res) => {
         } else if (storeId === 1034120) {
           columnToUpdate = "ebayOneLifeLuxuries4";
           console.log("COLUMN TO UPDATE: " ,columnToUpdate)
-        } else if (storeId === 1027789) {
+        } else if (storeId === 1040538) {
           columnToUpdate = "walmartOneLifeLuxuries";
           console.log("COLUMN TO UPDATE: " ,columnToUpdate)
         } else {

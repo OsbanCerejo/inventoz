@@ -41,19 +41,25 @@ function Product() {
         setProductListings({});
 
         const { data: product } = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products/byId/${id}?nocache=${Date.now()}`
+          `http://${import.meta.env.VITE_SERVER_IP}:${
+            import.meta.env.VITE_SERVER_PORT
+          }/products/byId/${id}?nocache=${Date.now()}`
         );
         setProductObject(product);
         setBarcodeValue(product.sku);
         const { data: details } = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/productDetails/bySku?nocache=${Date.now()}`,
+          `http://${import.meta.env.VITE_SERVER_IP}:${
+            import.meta.env.VITE_SERVER_PORT
+          }/productDetails/bySku?nocache=${Date.now()}`,
           {
             params: { sku: product.sku },
           }
         );
         setProductDetails(details);
         const { data: listings } = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/listings/bySku?nocache=${Date.now()}`,
+          `http://${import.meta.env.VITE_SERVER_IP}:${
+            import.meta.env.VITE_SERVER_PORT
+          }/listings/bySku?nocache=${Date.now()}`,
           {
             params: { sku: product.sku },
           }
@@ -69,6 +75,7 @@ function Product() {
       setProductObject(location.state.updatedProduct);
       setProductDetails(location.state.updatedDetails || {});
       setProductListings(location.state.updatedListings || {});
+      setBarcodeValue(location.state.updatedProduct.sku);
     } else {
       fetchData(); // Fetch only if no updated product is passed
     }
@@ -93,17 +100,24 @@ function Product() {
     if (passwordToDelete === "1080") {
       try {
         await axios.delete(
-          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products/delete/${productObject.sku}`
+          `http://${import.meta.env.VITE_SERVER_IP}:${
+            import.meta.env.VITE_SERVER_PORT
+          }/products/delete/${productObject.sku}`
         );
         toast.success("Deleted Successfully!", { position: "top-right" });
-        await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
-          timestamp: new Date().toISOString(),
-          type: "Delete Product",
-          metaData: {
-            productObject,
-            productDetails,
-          }, // Log the details of the deleted product
-        });
+        await axios.post(
+          `http://${import.meta.env.VITE_SERVER_IP}:${
+            import.meta.env.VITE_SERVER_PORT
+          }/logs/addLog`,
+          {
+            timestamp: new Date().toISOString(),
+            type: "Delete Product",
+            metaData: {
+              productObject,
+              productDetails,
+            }, // Log the details of the deleted product
+          }
+        );
         navigate("/", { state: { clearFilters: true } });
       } catch (error) {
         console.error("Error deleting the product:", error);
@@ -368,20 +382,18 @@ function Product() {
             >
               <img src={productObject.image} height="auto" />
             </Box>
-            <Tooltip title="Copy" arrow>
-              <Box
-                p={4}
-                sx={{
-                  flex: 0.2,
-                  display: "flex",
-                  flexDirection: "column",
-                  cursor: "pointer",
-                }}
-                onClick={handleCopyBarcodeClick}
-              >
-                <Barcode value={barcodeValue} />
-              </Box>
-            </Tooltip>
+
+            <Box
+              p={4}
+              sx={{
+                flex: 0.2,
+                display: "flex",
+                flexDirection: "column",
+                cursor: "pointer",
+              }}
+            >
+              <Barcode value={barcodeValue} />
+            </Box>
           </Grid>
         </Grid>
         <Box mt={2} display="flex" justifyContent="space-between" px={50}>

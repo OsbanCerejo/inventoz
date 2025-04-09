@@ -17,6 +17,7 @@ class AuthService {
       grant_type: "refresh_token",
       scope: ORDER_SCOPE,
     };
+    console.log("POST DATA:", postData)
     const headers = this.getHeaders();
 
     try {
@@ -25,6 +26,7 @@ class AuthService {
         qs.stringify(postData),
         { headers }
       );
+      console.log("RESPOSE DATA:", response)
       return response.data.access_token;
     } catch (error) {
       console.error(
