@@ -13,6 +13,7 @@ import AllOrders from "./pages/AllOrders";
 import "./App.css";
 import PackingMode from "./pages/PackingMode";
 import PriceListParser from "./pages/PriceListParser";
+import EbayApi from "./pages/EbayApi";
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
             <Route path="/orders/packingMode" Component={PackingMode}></Route>
             {/* <Route path="/sephoraSearch" Component={SephoraSearch}></Route> */}
             <Route path="/pricelistParser" Component={PriceListParser}></Route>
+            <Route path="/ebayAPI" Component={EbayApi}></Route>
           </Routes>
         </div>
       </Router>

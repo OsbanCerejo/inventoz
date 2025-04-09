@@ -200,12 +200,13 @@ function EditProduct() {
     return Object.keys(data).reduce((acc, key) => {
       if (!isEqual(data[key], initialValues[key])) {
         acc[key] = {
+          sku: data.sku,
           oldValue: initialValues[key],
           newValue: data[key],
         };
       }
       return acc;
-    }, {} as Record<string, { oldValue: any; newValue: any }>);
+    }, {} as Record<string, { sku: string; oldValue: any; newValue: any }>);
   }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {

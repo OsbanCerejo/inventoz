@@ -51,6 +51,9 @@ app.use("/listings", listingsRouter);
 const priceListParserRouter = require("./routes/PricelistParser");
 app.use("/priceListParser", priceListParserRouter);
 
+const ebayApiRouter = require("./routes/EbayAPI");
+app.use("/ebayAPI", ebayApiRouter);
+
 sequelize
   .authenticate()
   .then(() => {
