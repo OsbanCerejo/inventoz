@@ -5,6 +5,7 @@ require("dotenv").config();
 const { Sequelize } = require("sequelize");
 const dbConfig = require("./config/databaseConfig");
 const db = require("./models");
+const stockUpdateCron = require("./cron/stockUpdate");
 
 app.use(express.json());
 app.use(cors());
@@ -61,6 +62,9 @@ sequelize
     return db.sequelize.sync();
   })
   .then(() => {
+    // Initialize cron jobs
+    console.log("Initializing cron jobs...");
+    
     app.listen(process.env.PORT, '0.0.0.0', () => {
       console.log(`Server is running on http://${process.env.SERVER_IP}:${process.env.PORT}`);
     });
