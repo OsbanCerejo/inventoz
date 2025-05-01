@@ -2,7 +2,7 @@ const axios = require('axios');
 const AuthService = require('../Services/AuthService');
 const { StockUpdateHistory } = require('../models');
 const { Op } = require('sequelize');
-const { sequelize } = require('sequelize');
+const { sequelize } = require('../models');
 
 class EbayService {
   constructor() {
@@ -50,14 +50,21 @@ class EbayService {
           message: `Successfully updated ${updates.length} items on eBay`
         };
       } else {
-        throw new Error('Failed to update stock on eBay');
+        const errorMessage = response.data?.errors?.[0]?.message || 'Failed to update stock on eBay';
+        throw new Error(errorMessage);
       }
     } catch (error) {
       console.error('Error in bulk stock update:', error);
       
-      // Increment tries count for failed updates
+      const errorResponse = error.response?.data || error.message;
+      const errorMessage = error.response?.data?.errors?.[0]?.message || error.message;
+      
+      // Update tries count and store error response for failed updates
       await StockUpdateHistory.update(
-        { tries: sequelize.literal('tries + 1') },
+        { 
+          tries: sequelize.literal('tries + 1'),
+          response: JSON.stringify(errorResponse)
+        },
         {
           where: {
             id: {
@@ -69,8 +76,8 @@ class EbayService {
 
       return {
         success: false,
-        message: 'Failed to update stock on eBay',
-        errors: [error.response?.data?.errors?.[0]?.message || error.message]
+        message: errorMessage,
+        errors: [errorMessage]
       };
     }
   }
