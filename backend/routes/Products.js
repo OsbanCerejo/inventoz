@@ -3,6 +3,7 @@ const router = express.Router();
 const { Products, ProductHistory, StockUpdateHistory } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
+const StockUpdateService = require("../Services/StockUpdateService");
 
 router.get("/", async (req, res) => {
   const listOfProducts = await Products.findAll();
@@ -55,14 +56,12 @@ router.put("/", async (req, res) => {
       return res.status(404).json({ error: "Product not found" });
     }
 
-    // Check if quantity is being updated
+    // If quantity is being updated, use the StockUpdateService
     if (currentProduct.quantity !== product.quantity) {
-      // Store stock update history
-      await StockUpdateHistory.create({
-        sku: product.sku,
-        oldQuantity: currentProduct.quantity,
-        newQuantity: product.quantity
-      });
+      await StockUpdateService.updateProductQuantity(
+        product.sku,
+        product.quantity
+      );
     }
 
     // Update the product
@@ -70,7 +69,6 @@ router.put("/", async (req, res) => {
       {
         brand: product.brand,
         itemName: product.itemName,
-        quantity: product.quantity,
         location: product.location,
         sizeOz: product.sizeOz,
         sizeMl: product.sizeMl,
@@ -127,27 +125,22 @@ router.post("/updateQuantities", async (req, res) => {
   const skusToUpdate = req.body;
 
   try {
-    const updatePromises = skusToUpdate.map(async (skuUpdate) => {
+    const updates = await Promise.all(skusToUpdate.map(async (skuUpdate) => {
       const product = await Products.findOne({ where: { sku: skuUpdate.sku } });
-
-      if (product) {
-        const newQuantity = product.quantity - skuUpdate.quantitySold;
-        await product.update({ quantity: newQuantity });
-
-        return {
-          sku: skuUpdate.sku,
-          itemName: product.itemName,
-          oldQuantity: product.quantity,
-          newQuantity: newQuantity,
-        };
+      if (!product) {
+        throw new Error(`Product not found for SKU: ${skuUpdate.sku}`);
       }
-    });
+      return {
+        sku: skuUpdate.sku,
+        newQuantity: product.quantity - skuUpdate.quantitySold
+      };
+    }));
 
-    const updateResults = await Promise.all(updatePromises);
+    const result = await StockUpdateService.updateMultipleProductQuantities(updates);
 
     res.json({
       success: true,
-      updatedProducts: updateResults.filter(Boolean),
+      updatedProducts: result.results.map(r => r.product)
     });
   } catch (error) {
     console.error("Error updating product quantities:", error);
