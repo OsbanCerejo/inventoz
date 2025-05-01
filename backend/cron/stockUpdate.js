@@ -1,8 +1,8 @@
 const cron = require('node-cron');
 const ebayService = require('../services/ebayService');
 
-// Schedule the job to run every minute
-cron.schedule('* * * * *', async () => {
+// Schedule the job to run every 30 seconds
+cron.schedule('*/30 * * * * *', async () => {
   try {
     console.log('Running stock update cron job...');
     
