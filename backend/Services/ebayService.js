@@ -1,13 +1,11 @@
 const axios = require('axios');
-const AuthService = require('../Services/AuthService');
-const { StockUpdateHistory } = require('../models');
+const AuthService = require('./AuthService');
+const { StockUpdateHistory, Products, EbayOrders } = require('../models');
 const { Op } = require('sequelize');
 const { sequelize } = require('../models');
 
-class EbayService {
-  constructor() {
-    this.authService = new AuthService();
-  }
+const ebayService = {
+  authService: new AuthService(),
 
   async bulkUpdateStock(updates) {
     try {
@@ -80,7 +78,7 @@ class EbayService {
         errors: [errorMessage]
       };
     }
-  }
+  },
 
   async processPendingUpdates() {
     try {
@@ -112,7 +110,139 @@ class EbayService {
         errors: [error.message]
       };
     }
-  }
-}
+  },
 
-module.exports = new EbayService(); 
+  async getOrders() {
+    try {
+      const accessToken = await this.authService.getAccessToken();
+      console.log('Fetching orders with access token');
+      
+      // Get orders from the last 24 hours
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      console.log('Fetching orders from:', yesterday.toISOString());
+      
+      const response = await axios.get(
+        'https://api.ebay.com/sell/fulfillment/v1/order',
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          },
+          params: {
+            filter: `creationdate:[${yesterday.toISOString()}..]`
+          }
+        }
+      );
+
+      console.log('Orders API response:', response.data);
+      const orders = response.data.orders || [];
+      console.log(`Found ${orders.length} orders`);
+      
+      return orders;
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      if (error.response) {
+        console.error('Error response:', error.response.data);
+      }
+      throw error;
+    }
+  },
+
+  async createOrderRecord(order, lineItem, logs) {
+    return await EbayOrders.create({
+      orderId: order.orderId,
+      sku: lineItem.sku,
+      quantity: lineItem.quantity,
+      orderStatus: order.orderFulfillmentStatus || 'UNKNOWN',
+      creationDate: new Date(order.creationDate),
+      lastModifiedDate: new Date(order.lastModifiedDate),
+      buyerUsername: order.buyer?.username,
+      totalAmount: order.pricingSummary?.total?.value,
+      currency: order.pricingSummary?.total?.currency,
+      shippingAddress: order.fulfillmentStartInstructions?.[0]?.shippingStep?.shipTo,
+      lineItemId: lineItem.lineItemId,
+      title: lineItem.title,
+      price: lineItem.price?.value,
+      logs: logs.length > 0 ? JSON.stringify(logs) : null
+    });
+  },
+
+  async processOrder(order) {
+    try {
+      for (const lineItem of order.lineItems) {
+        const sku = lineItem.sku;
+        const quantity = lineItem.quantity;
+        let logs = [];
+        
+        if(sku === undefined){
+          console.log(order);
+          break;
+        }
+
+        try {
+          // Check if the order already exists
+          const existingOrder = await EbayOrders.findOne({
+            where: {
+              orderId: order.orderId,
+              sku: sku
+            }
+          });
+
+          if (existingOrder) {
+            // If order exists and status is different, handle cancellation
+            if (existingOrder.orderStatus !== order.orderFulfillmentStatus) {
+              if (order.orderFulfillmentStatus === 'CANCELLED') {
+                // Reverse the quantity for canceled orders
+                const product = await Products.findOne({ where: { sku } });
+                if (product) {
+                  await product.update({
+                    quantity: sequelize.literal(`quantity + ${quantity}`)
+                  });
+                  logs.push(`Reversed quantity ${quantity} for cancelled order`);
+                }
+              }
+              // Update the order status
+              await existingOrder.update({ 
+                orderStatus: order.orderFulfillmentStatus || 'UNKNOWN'
+              });
+              logs.push(`Updated order status from ${existingOrder.orderStatus} to ${order.orderFulfillmentStatus}`);
+            }
+            continue;
+          }
+
+          // Find the product in our database
+          const product = await Products.findOne({
+            where: { sku }
+          });
+          
+          if (product) {
+            // For new orders, update the quantity
+            if (order.orderFulfillmentStatus !== 'CANCELLED') {
+              await product.update({
+                quantity: sequelize.literal(`quantity - ${quantity}`)
+              });
+              logs.push(`Reduced quantity by ${quantity} for new order`);
+            }
+
+            // Store detailed order data in the EbayOrders table
+            await this.createOrderRecord(order, lineItem, logs);
+          } else {
+            logs.push('Product not found in database');
+            await this.createOrderRecord(order, lineItem, logs);
+          }
+        } catch (error) {
+          console.error(`Error processing line item ${sku} for order ${order.orderId}:`, error);
+          logs.push(`Error processing line item: ${error.message}`);
+          await this.createOrderRecord(order, lineItem, logs);
+        }
+      }
+      return true;
+    } catch (error) {
+      console.error(`Error processing order ${order.orderId}:`, error);
+      throw error;
+    }
+  }
+};
+
+module.exports = ebayService; 

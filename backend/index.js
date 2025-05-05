@@ -6,6 +6,7 @@ const { Sequelize } = require("sequelize");
 const dbConfig = require("./config/databaseConfig");
 const db = require("./models");
 const stockUpdateCron = require("./cron/stockUpdate");
+const orderProcessingCron = require("./cron/orderProcessing");
 
 app.use(express.json());
 app.use(cors());
@@ -55,6 +56,9 @@ app.use("/priceListParser", priceListParserRouter);
 const ebayApiRouter = require("./routes/EbayAPI");
 app.use("/ebayAPI", ebayApiRouter);
 
+const ebayOrdersRouter = require("./routes/EbayOrders");
+app.use("/ebayOrders", ebayOrdersRouter);
+
 sequelize
   .authenticate()
   .then(() => {
@@ -64,6 +68,8 @@ sequelize
   .then(() => {
     // Initialize cron jobs
     console.log("Initializing cron jobs...");
+    stockUpdateCron;
+    orderProcessingCron;
     
     app.listen(process.env.PORT, '0.0.0.0', () => {
       console.log(`Server is running on http://${process.env.SERVER_IP}:${process.env.PORT}`);

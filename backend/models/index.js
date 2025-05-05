@@ -48,7 +48,8 @@ const models = {
   Products: require("./Products")(sequelize, Sequelize.DataTypes),
   Inbound: require("./Inbound")(sequelize, Sequelize.DataTypes),
   ProductDetails: require("./ProductDetails")(sequelize, Sequelize.DataTypes),
-  Listings: require("./Listings")(sequelize, Sequelize.DataTypes)
+  Listings: require("./Listings")(sequelize, Sequelize.DataTypes),
+  EbayOrders: require("./EbayOrders")(sequelize, Sequelize.DataTypes)
 };
 
 // Call method to set up relationships
