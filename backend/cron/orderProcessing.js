@@ -6,16 +6,10 @@ const { Op } = require('sequelize');
 // Schedule the job to run every minute
 cron.schedule('* * * * *', async () => {
   try {
-    const now = new Date();
-    const oneMinuteAgo = new Date(now.getTime() - 60000); // 60000 ms = 1 minute
+    console.log('Running order processing cron job for all orders');
     
-    console.log(`Running order processing cron job for orders since ${oneMinuteAgo.toISOString()}`);
-    
-    // Get orders from eBay API with timestamp filter
-    const orders = await ebayService.getOrders({
-      startTime: oneMinuteAgo.toISOString(),
-      endTime: now.toISOString()
-    });
+    // Get all orders from eBay API without time filter
+    const orders = await ebayService.getOrders();
     
     for (const order of orders) {
       try {
@@ -25,7 +19,7 @@ cron.schedule('* * * * *', async () => {
       }
     }
     
-    console.log(`Order processing completed for time window ${oneMinuteAgo.toISOString()} to ${now.toISOString()}`);
+    console.log('Order processing completed for all orders');
   } catch (error) {
     console.error('Error in order processing:', error);
   }
