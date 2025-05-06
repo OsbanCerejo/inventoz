@@ -3,13 +3,19 @@ const ebayService = require('../Services/ebayService');
 const { Products, Sales, EbayOrders } = require('../models');
 const { Op } = require('sequelize');
 
-// Schedule the job to run daily at 1 AM
-cron.schedule('0 1 * * *', async () => {
+// Schedule the job to run every minute
+cron.schedule('* * * * *', async () => {
   try {
-    console.log('Running daily order processing cron job...');
+    const now = new Date();
+    const oneMinuteAgo = new Date(now.getTime() - 60000); // 60000 ms = 1 minute
     
-    // Get orders from eBay API
-    const orders = await ebayService.getOrders();
+    console.log(`Running order processing cron job for orders since ${oneMinuteAgo.toISOString()}`);
+    
+    // Get orders from eBay API with timestamp filter
+    const orders = await ebayService.getOrders({
+      startTime: oneMinuteAgo.toISOString(),
+      endTime: now.toISOString()
+    });
     
     for (const order of orders) {
       try {
@@ -19,9 +25,9 @@ cron.schedule('0 1 * * *', async () => {
       }
     }
     
-    console.log('Daily order processing completed');
+    console.log(`Order processing completed for time window ${oneMinuteAgo.toISOString()} to ${now.toISOString()}`);
   } catch (error) {
-    console.error('Error in daily order processing:', error);
+    console.error('Error in order processing:', error);
   }
 });
 
