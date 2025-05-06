@@ -2,8 +2,11 @@ module.exports = (sequelize, DataTypes) => {
     const EbayOrders = sequelize.define("EbayOrders", {
         orderId: {
             type: DataTypes.STRING,
-            allowNull: false,
-            primaryKey: true
+            allowNull: false
+        },
+        lineItemId: {
+            type: DataTypes.STRING,
+            allowNull: false
         },
         sku: {
             type: DataTypes.STRING,
@@ -47,10 +50,6 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.JSON,
             allowNull: true
         },
-        lineItemId: {
-            type: DataTypes.STRING,
-            allowNull: true
-        },
         title: {
             type: DataTypes.STRING,
             allowNull: true
@@ -78,6 +77,9 @@ module.exports = (sequelize, DataTypes) => {
             }
         ]
     });
+
+    EbayOrders.removeAttribute('id');
+    EbayOrders.primaryKeys = ['orderId', 'lineItemId'];
 
     return EbayOrders;
 }; 

@@ -117,15 +117,12 @@ const ebayService = {
       const accessToken = await this.authService.getAccessToken();
       console.log('Fetching orders with access token');
       
-      // If no timestamps provided, default to last minute
-      if (!startTime || !endTime) {
-        const now = new Date();
-        const oneMinuteAgo = new Date(now.getTime() - 60000);
-        startTime = oneMinuteAgo.toISOString();
-        endTime = now.toISOString();
+      const params = {};
+      if (startTime && endTime) {
+        params.filter = `creationdate:[${startTime}..${endTime}]`;
       }
       
-      console.log('Fetching orders from:', startTime, 'to:', endTime);
+      console.log('Fetching all orders');
       
       const response = await axios.get(
         'https://api.ebay.com/sell/fulfillment/v1/order',
@@ -133,9 +130,7 @@ const ebayService = {
           headers: {
             'Authorization': `Bearer ${accessToken}`
           },
-          params: {
-            filter: `creationdate:[${startTime}..${endTime}]`
-          }
+          params
         }
       );
 
