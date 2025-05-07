@@ -115,32 +115,57 @@ const ebayService = {
   async getOrders({ startTime, endTime } = {}) {
     try {
       const accessToken = await this.authService.getAccessToken();
-      console.log('Fetching orders with access token');
       
-      const params = {};
+      const params = {
+        limit: 200 // Maximum allowed by eBay API
+      };
       if (startTime && endTime) {
         params.filter = `creationdate:[${startTime}..${endTime}]`;
       }
       
-      console.log('Fetching all orders');
+      let allOrders = [];
+      let hasMoreOrders = true;
+      let nextUrl = null;
       
-      const response = await axios.get(
-        'https://api.ebay.com/sell/fulfillment/v1/order',
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`
-          },
-          params
-        }
-      );
+      while (hasMoreOrders) {
+        const url = nextUrl || 'https://api.ebay.com/sell/fulfillment/v1/order';
+        
+        try {
+          const response = await axios.get(
+            url,
+            {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`
+              },
+              params: nextUrl ? {} : params // Only use params for first request
+            }
+          );
 
-      console.log('Orders API response:', response.data);
-      const orders = response.data.orders || [];
-      console.log(`Found ${orders.length} orders`);
+          const orders = response.data.orders || [];
+          allOrders = allOrders.concat(orders);
+          
+          // Check if there are more orders to fetch
+          nextUrl = response.data.next;
+          hasMoreOrders = !!nextUrl;
+          
+          // Add a small delay to avoid rate limiting
+          if (hasMoreOrders) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        } catch (error) {
+          console.error('Error fetching orders page:', error.message);
+          if (error.response) {
+            console.error('Error response:', error.response.data);
+          }
+          // If we get an error, wait a bit longer and try again
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          continue;
+        }
+      }
       
-      return orders;
+      return allOrders;
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error('Error in getOrders:', error);
       if (error.response) {
         console.error('Error response:', error.response.data);
       }
