@@ -180,6 +180,44 @@ function Product() {
     navigate("/sales", { state: { productObject } });
   }, [navigate, productObject]);
 
+  const handleOutOfStockClick = useCallback(async () => {
+    try {
+      const response = await axios.post(
+        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/ebayAPI/updateQuantity`,
+        {
+          sku: productObject.sku,
+          quantity: 0,
+        }
+      );
+
+      if (response.data) {
+        toast.success("Product marked as out of stock on eBay!", { position: "top-right" });
+      }
+    } catch (error) {
+      console.error("Error marking product as out of stock:", error);
+      toast.error("Failed to mark product as out of stock", { position: "top-right" });
+    }
+  }, [productObject.sku]);
+
+  const handleRestockClick = useCallback(async () => {
+    try {
+      const response = await axios.post(
+        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/ebayAPI/updateQuantity`,
+        {
+          sku: productObject.sku,
+          quantity: productObject.quantity,
+        }
+      );
+
+      if (response.data) {
+        toast.success("Product quantity updated on eBay!", { position: "top-right" });
+      }
+    } catch (error) {
+      console.error("Error updating product quantity on eBay:", error);
+      toast.error("Failed to update product quantity on eBay", { position: "top-right" });
+    }
+  }, [productObject.sku, productObject.quantity]);
+
   return (
     <div className="product-container">
       <Paper
@@ -396,13 +434,12 @@ function Product() {
             </Box>
           </Grid>
         </Grid>
-        <Box mt={2} display="flex" justifyContent="space-between" px={50}>
+        <Box mt={2} display="flex" justifyContent="center" gap={1}>
           <Button
             variant="contained"
             color="success"
             startIcon={<EditIcon />}
             onClick={handleEditOnClick}
-            sx={{ mx: 1 }}
           >
             Edit
           </Button>
@@ -410,7 +447,6 @@ function Product() {
             variant="contained"
             startIcon={<SellIcon />}
             onClick={handlePrintClick}
-            sx={{ mx: 1 }}
           >
             Print Label
           </Button>
@@ -426,7 +462,6 @@ function Product() {
             color="secondary"
             startIcon={<WarehouseIcon />}
             onClick={handleInboundClick}
-            sx={{ mx: 1 }}
           >
             Inbound
           </Button>
@@ -435,7 +470,6 @@ function Product() {
             color="error"
             startIcon={<DeleteIcon />}
             onClick={handleDeleteClick}
-            sx={{ mx: 1 }}
           >
             Delete
           </Button>
@@ -443,9 +477,24 @@ function Product() {
             variant="contained"
             startIcon={<SellIcon />}
             onClick={handleSalesClick}
-            sx={{ mx: 1 }}
           >
             Sold
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            startIcon={<SellIcon />}
+            onClick={handleOutOfStockClick}
+          >
+            Out of Stock
+          </Button>
+          <Button
+            variant="contained"
+            color="info"
+            startIcon={<WarehouseIcon />}
+            onClick={handleRestockClick}
+          >
+            Restock
           </Button>
         </Box>
       </Paper>
