@@ -12,35 +12,38 @@ class StockUpdateService {
         throw new Error("Product not found");
       }
 
-      // Find or create stock update history
-      const [historyRecord, created] = await StockUpdateHistory.findOrCreate({
-        where: {
-          sku: sku,
-          status: 0
-        },
-        defaults: {
-          sku: sku,
-          oldQuantity: currentProduct.quantity,
-          newQuantity: newQuantity,
-          status: 0,
-          tries: 0
-        }
-      });
-
-      // If record exists, update it
-      if (!created) {
-        await historyRecord.update({
-          oldQuantity: currentProduct.quantity,
-          newQuantity: newQuantity,
-          tries: 0
-        });
-      }
-
       // Update the product quantity
       await Products.update(
         { quantity: newQuantity },
         { where: { sku } }
       );
+
+      // Only create a stock update history if the product is verified
+      if (currentProduct.verified) {
+        // Find or create a stock update history
+        const [historyRecord, created] = await StockUpdateHistory.findOrCreate({
+          where: {
+            sku: sku,
+            status: 0
+          },
+          defaults: {
+            sku: sku,
+            oldQuantity: currentProduct.quantity,
+            newQuantity: newQuantity,
+            status: 0,
+            tries: 0
+          }
+        });
+
+        // If a record exists, update it
+        if (!created) {
+          await historyRecord.update({
+            oldQuantity: currentProduct.quantity,
+            newQuantity: newQuantity,
+            tries: 0
+          });
+        }
+      }
 
       return {
         success: true,
@@ -48,7 +51,8 @@ class StockUpdateService {
         product: {
           sku,
           oldQuantity: currentProduct.quantity,
-          newQuantity
+          newQuantity,
+          verified: currentProduct.verified
         }
       };
     } catch (error) {
