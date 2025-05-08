@@ -241,22 +241,22 @@ const ebayService = {
           });
           
           if (product) {
-            // Check if order is older than 24 hours
+            // Check if the order is older than 24 hours
             const orderDate = new Date(order.creationDate);
             const now = new Date();
             const hoursDiff = (now - orderDate) / (1000 * 60 * 60);
             
-            // Only update quantity if order is older than 24 hours
-            if (hoursDiff >= 24) {
+            // Only update quantity if the order is less than 24 hours old
+            if (hoursDiff <= 24) {
               // For new orders, update the quantity
               if (order.orderFulfillmentStatus !== 'CANCELLED') {
                 await product.update({
                   quantity: sequelize.literal(`quantity - ${quantity}`)
                 });
-                logs.push(`Reduced quantity by ${quantity} for new order older than 24 hours`);
+                logs.push(`Reduced quantity by ${quantity} for new order less than 24 hours old`);
               }
             } else {
-              logs.push(`Skipped quantity update for order less than 24 hours old`);
+              logs.push(`Skipped quantity update for order older than 24 hours`);
             }
 
             // Store detailed order data in the EbayOrders table
