@@ -56,14 +56,6 @@ router.put("/", async (req, res) => {
       return res.status(404).json({ error: "Product not found" });
     }
 
-    // If quantity is being updated, use the StockUpdateService
-    if (currentProduct.quantity !== product.quantity) {
-      await StockUpdateService.updateProductQuantity(
-        product.sku,
-        product.quantity
-      );
-    }
-
     // Update the product
     await Products.update(
       {
@@ -88,6 +80,15 @@ router.put("/", async (req, res) => {
       },
       { where: { sku: product.sku } }
     );
+
+    // If a quantity is being updated, use the StockUpdateService
+    if (currentProduct.quantity !== product.quantity || product.verified !== currentProduct.verified) {
+      await StockUpdateService.updateProductQuantity(
+          product.sku,
+          product.quantity
+      );
+    }
+
     res.json(product);
   } catch (error) {
     console.error("Error updating product:", error);

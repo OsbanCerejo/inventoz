@@ -108,7 +108,7 @@ router.get("/testebay", async (req, res) => {
     requests: [
       {
         listingId: "195728146053",
-      },
+      }
     ],
   };
   try {
