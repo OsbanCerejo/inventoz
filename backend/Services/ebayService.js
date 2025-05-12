@@ -200,7 +200,7 @@ const ebayService = {
         let logs = [];
         
         if(sku === undefined){
-          console.error('Invalid SKU in order:', order);
+          console.error(`Missing SKU in order: ${order.orderId}`);
           break;
         }
 
@@ -266,14 +266,14 @@ const ebayService = {
             await this.createOrderRecord(order, lineItem, logs);
           }
         } catch (error) {
-          console.error(`Error processing line item ${sku} for order ${order.orderId}:`, error);
+          console.error(`Error processing line item ${sku} for order ${order.orderId}:`, error.message);
           logs.push(`Error processing line item: ${error.message}`);
           await this.createOrderRecord(order, lineItem, logs);
         }
       }
       return true;
     } catch (error) {
-      console.error(`Error processing order ${order.orderId}:`, error);
+      console.error(`Error processing order ${order.orderId}:`, error.message);
       throw error;
     }
   }

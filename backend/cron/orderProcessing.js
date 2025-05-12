@@ -6,7 +6,7 @@ const { Op } = require('sequelize');
 // Schedule the job to run every minute
 cron.schedule('* * * * *', async () => {
   try {
-    console.log('Running order processing cron job for all orders');
+    console.log('Starting order processing cron job...');
     
     // Get all orders from eBay API without time filter
     const orders = await ebayService.getOrders();
@@ -15,13 +15,11 @@ cron.schedule('* * * * *', async () => {
       try {
         await ebayService.processOrder(order);
       } catch (error) {
-        console.error(`Error processing order ${order.orderId}:`, error);
+        console.error(`Error processing order ${order.orderId}:`, error.message);
       }
     }
-    
-    console.log('Order processing completed for all orders');
   } catch (error) {
-    console.error('Error in order processing:', error);
+    console.error('Order processing cron job error:', error.message);
   }
 });
 
