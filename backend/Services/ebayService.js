@@ -200,7 +200,7 @@ const ebayService = {
         let logs = [];
         
         if(sku === undefined){
-          console.log(order);
+          console.error('Invalid SKU in order:', order);
           break;
         }
 
