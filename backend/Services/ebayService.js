@@ -52,16 +52,14 @@ const ebayService = {
         throw new Error(errorMessage);
       }
     } catch (error) {
-      console.error('Error in bulk stock update:', error);
-      
-      const errorResponse = error.response?.data || error.message;
       const errorMessage = error.response?.data?.errors?.[0]?.message || error.message;
+      console.error('Error in bulk stock update:', errorMessage);
       
       // Update tries count and store error response for failed updates
       await StockUpdateHistory.update(
         { 
           tries: sequelize.literal('tries + 1'),
-          response: JSON.stringify(errorResponse)
+          response: JSON.stringify(error.response?.data || error.message)
         },
         {
           where: {
