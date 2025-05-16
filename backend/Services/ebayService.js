@@ -11,9 +11,24 @@ const ebayService = {
     try {
       const accessToken = await this.authService.getAccessToken();
       
+      // Get all products to check for alternative SKUs
+      const products = await Products.findAll({
+        where: {
+          sku: {
+            [Op.in]: updates.map(update => update.sku)
+          }
+        }
+      });
+
+      // Create a map of original SKU to alternative SKU
+      const skuMap = products.reduce((map, product) => {
+        map[product.sku] = product.alternativeSku || product.sku;
+        return map;
+      }, {});
+      
       const payload = {
         requests: updates.map(update => ({
-          sku: update.sku,
+          sku: skuMap[update.sku], // Use alternative SKU if available, otherwise use original SKU
           shipToLocationAvailability: {
             quantity: parseInt(update.newQuantity)
           }
@@ -193,36 +208,46 @@ const ebayService = {
   async processOrder(order) {
     try {
       for (const lineItem of order.lineItems) {
-        const sku = lineItem.sku;
+        const ebaySku = lineItem.sku; // This is the SKU from eBay (could be alternative or main)
         const quantity = lineItem.quantity;
         let logs = [];
         
-        if(sku === undefined){
+        if(ebaySku === undefined){
           console.error(`Missing SKU in order: ${order.orderId}`);
           break;
         }
 
         try {
-          // Check if the order already exists
+          // Find the product in our database by either original SKU or alternative SKU
+          const product = await Products.findOne({
+            where: {
+              [Op.or]: [
+                { sku: ebaySku },
+                { alternativeSku: sequelize.where(
+                    sequelize.fn('TRIM', sequelize.col('alternativeSku')),
+                    ebaySku
+                  )
+                }
+              ]
+            }
+          });
+
+          // Check if the order already exists using the main SKU
           const existingOrder = await EbayOrders.findOne({
             where: {
               orderId: order.orderId,
-              sku: sku
+              sku: product ? product.sku : ebaySku // Use main SKU if product found, otherwise use eBay SKU
             }
           });
 
           if (existingOrder) {
             // If order exists and status is different, handle cancellation
             if (existingOrder.orderStatus !== order.orderFulfillmentStatus) {
-              if (order.orderFulfillmentStatus === 'CANCELLED') {
-                // Reverse the quantity for canceled orders
-                const product = await Products.findOne({ where: { sku } });
-                if (product) {
-                  await product.update({
-                    quantity: sequelize.literal(`quantity + ${quantity}`)
-                  });
-                  logs.push(`Reversed quantity ${quantity} for cancelled order`);
-                }
+              if (order.orderFulfillmentStatus === 'CANCELLED' && product) {
+                await product.update({
+                  quantity: sequelize.literal(`quantity + ${quantity}`)
+                });
+                logs.push(`Reversed quantity ${quantity} for cancelled order`);
               }
               // Update the order status
               await existingOrder.update({ 
@@ -232,11 +257,6 @@ const ebayService = {
             }
             continue;
           }
-
-          // Find the product in our database
-          const product = await Products.findOne({
-            where: { sku }
-          });
           
           if (product) {
             // Check if the order is older than 24 hours
@@ -257,14 +277,18 @@ const ebayService = {
               logs.push(`Skipped quantity update for order older than 24 hours`);
             }
 
-            // Store detailed order data in the EbayOrders table
-            await this.createOrderRecord(order, lineItem, logs);
+            // Store detailed order data in the EbayOrders table using the main SKU
+            await this.createOrderRecord(order, {
+              ...lineItem,
+              sku: product.sku // Use the main SKU for database storage
+            }, logs);
           } else {
             logs.push('Product not found in database');
+            // Store the order with the eBay SKU since we couldn't find a matching product
             await this.createOrderRecord(order, lineItem, logs);
           }
         } catch (error) {
-          console.error(`Error processing line item ${sku} for order ${order.orderId}:`, error.message);
+          console.error(`Error processing line item ${ebaySku} for order ${order.orderId}:`, error.message);
           logs.push(`Error processing line item: ${error.message}`);
           await this.createOrderRecord(order, lineItem, logs);
         }

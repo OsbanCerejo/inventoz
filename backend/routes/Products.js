@@ -77,6 +77,7 @@ router.put("/", async (req, res) => {
         listed: product.listed,
         final: product.final,
         image: product.image,
+        alternativeSku: product.alternativeSku,
       },
       { where: { sku: product.sku } }
     );
@@ -89,7 +90,9 @@ router.put("/", async (req, res) => {
       );
     }
 
-    res.json(product);
+    // Get the updated product data
+    const updatedProduct = await Products.findOne({ where: { sku: product.sku } });
+    res.json(updatedProduct);
   } catch (error) {
     console.error("Error updating product:", error);
     res.status(500).json({ error: "Internal server error" });

@@ -73,6 +73,7 @@ const formikValidationSchema = Yup.object().shape({
   tester: Yup.boolean(),
   isHazmat: Yup.boolean(),
   isLimitedEdition: Yup.boolean(),
+  alternativeSku: Yup.string(),
   //Listings
   buy4lesstoday: Yup.string(),
   onelifeluxuries: Yup.string(),
@@ -99,6 +100,7 @@ function EditProduct() {
   const formikInitialValues = useMemo(
     () => ({
       sku: "" + productObject.sku,
+      alternativeSku: "" + (productObject.alternativeSku || ""),
       brand: "" + productObject.brand,
       itemName: "" + productObject.itemName,
       quantity: "" + productObject.quantity,
@@ -260,6 +262,30 @@ function EditProduct() {
                 sx={{ my: { xs: 2, md: 3 }, p: { xs: 1, md: 4 } }}
               >
                 <strong>{productObject.sku}</strong>
+              </Paper>
+              <Paper
+                variant="outlined"
+                sx={{ my: { xs: 2, md: 3 }, p: { xs: 1, md: 4 } }}
+              >
+                <TextField
+                  fullWidth
+                  id="alternativeSku"
+                  name="alternativeSku"
+                  label="Alternative SKU (for eBay API)"
+                  value={formik.values.alternativeSku}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  error={
+                    formik.touched.alternativeSku &&
+                    Boolean(formik.errors.alternativeSku)
+                  }
+                  helperText={
+                    formik.touched.alternativeSku && 
+                    typeof formik.errors.alternativeSku === 'string' 
+                      ? formik.errors.alternativeSku 
+                      : ''
+                  }
+                />
               </Paper>
             </Container>
           </Grid>
