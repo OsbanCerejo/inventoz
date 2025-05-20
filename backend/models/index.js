@@ -24,6 +24,7 @@ if (config.use_env_variable) {
   );
 }
 
+// Load all models
 fs.readdirSync(__dirname)
   .filter((file) => {
     return (
@@ -34,31 +35,14 @@ fs.readdirSync(__dirname)
     );
   })
   .forEach((file) => {
-    const model = require(path.join(__dirname, file))(
-      sequelize,
-      Sequelize.DataTypes
-    );
+    const model = require(path.join(__dirname, file))(sequelize, Sequelize.DataTypes);
     db[model.name] = model;
   });
 
+// Set up associations
 Object.keys(db).forEach((modelName) => {
   if (db[modelName].associate) {
     db[modelName].associate(db);
-  }
-});
-
-const models = {
-  Products: require("./Products")(sequelize, Sequelize.DataTypes),
-  Inbound: require("./Inbound")(sequelize, Sequelize.DataTypes),
-  ProductDetails: require("./ProductDetails")(sequelize, Sequelize.DataTypes),
-  Listings: require("./Listings")(sequelize, Sequelize.DataTypes),
-  EbayOrders: require("./EbayOrders")(sequelize, Sequelize.DataTypes)
-};
-
-// Call method to set up relationships
-Object.keys(models).forEach((modelName) => {
-  if (models[modelName].associate) {
-    models[modelName].associate(models);
   }
 });
 

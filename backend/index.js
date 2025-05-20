@@ -60,6 +60,9 @@ app.use("/ebayAPI", ebayApiRouter);
 const ebayOrdersRouter = require("./routes/EbayOrders");
 app.use("/ebayOrders", ebayOrdersRouter);
 
+const whatnotRouter = require("./routes/whatnot");
+app.use("/whatnot", whatnotRouter);
+
 sequelize
   .authenticate()
   .then(() => {
