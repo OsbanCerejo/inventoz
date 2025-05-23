@@ -9,7 +9,12 @@ module.exports = (sequelize, DataTypes) => {
   }
   
   Settings.init({
-    whatnot_menu_pass: {
+    whatnot_username: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: 'admin'
+    },
+    whatnot_password: {
       type: DataTypes.STRING,
       allowNull: false,
       defaultValue: '1234'

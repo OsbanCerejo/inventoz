@@ -3,13 +3,18 @@ const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
   const WhatnotLog = sequelize.define('WhatnotLog', {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true
+    },
     barcode: {
       type: DataTypes.STRING,
       allowNull: false
     },
     searchType: {
       type: DataTypes.ENUM('UPC', 'SKU'),
-      allowNull: false
+      allowNull: true
     },
     status: {
       type: DataTypes.ENUM('not_found', 'found', 'multiple_found'),
@@ -19,9 +24,21 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: true
     },
-    quantityReduced: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: false
+    previousQuantity: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    newQuantity: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    userId: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    errors: {
+      type: DataTypes.TEXT,
+      allowNull: true
     }
   }, {
     tableName: 'whatnotLogs',

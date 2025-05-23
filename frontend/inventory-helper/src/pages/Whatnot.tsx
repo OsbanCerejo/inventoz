@@ -25,6 +25,9 @@ import { styled } from '@mui/material/styles';
 
 interface ProductDetails {
   images?: string[];
+  sizeOz?: string;
+  strength?: string;
+  shade?: string;
 }
 
 interface Product {
@@ -36,6 +39,9 @@ interface Product {
   productDetails?: ProductDetails;
   image?: string;
   category?: string;
+  sizeOz?: number;
+  sizeMl?: number;
+  condition?: string;
 }
 
 interface SearchResult {
@@ -57,7 +63,9 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
 
 const Whatnot: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [userId, setUserId] = useState('');
   const [barcode, setBarcode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,12 +86,16 @@ const Whatnot: React.FC = () => {
     setLoading(true);
     
     try {
-      const response = await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/whatnot/verify-password`, { password });
+      const response = await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/whatnot/verify-password`, { 
+        username,
+        password 
+      });
       if (response.data.success) {
         setIsAuthenticated(true);
+        setUserId(response.data.userId);
       }
     } catch (error) {
-      setError('Invalid password');
+      setError('Invalid credentials');
     } finally {
       setLoading(false);
     }
@@ -97,7 +109,10 @@ const Whatnot: React.FC = () => {
     setSearchResult(null);
     
     try {
-      const response = await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/whatnot/search-barcode`, { barcode });
+      const response = await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/whatnot/search-barcode`, { 
+        barcode,
+        userId 
+      });
       if (response.data.success) {
         if (response.data.multiple) {
           setOpenDialog(true);
@@ -129,7 +144,9 @@ const Whatnot: React.FC = () => {
         `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/whatnot/search-barcode`,
         { 
           barcode: product.sku,
-          reduceQuantity: true
+          reduceQuantity: true,
+          userId,
+          isMultipleSelection: true
         }
       );
       
@@ -175,6 +192,14 @@ const Whatnot: React.FC = () => {
           <form onSubmit={handlePasswordSubmit}>
             <TextField
               fullWidth
+              label="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              margin="normal"
+              required
+            />
+            <TextField
+              fullWidth
               type="password"
               label="Password"
               value={password}
@@ -190,7 +215,7 @@ const Whatnot: React.FC = () => {
               sx={{ mt: 2 }}
               disabled={loading}
             >
-              {loading ? <CircularProgress size={24} /> : 'Access Menu'}
+              {loading ? <CircularProgress size={24} /> : 'Login'}
             </Button>
           </form>
           {error && (
@@ -263,7 +288,7 @@ const Whatnot: React.FC = () => {
       <Dialog 
         open={openDialog} 
         onClose={() => setOpenDialog(false)}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
       >
         <DialogTitle>Select Product</DialogTitle>
@@ -276,14 +301,15 @@ const Whatnot: React.FC = () => {
                 onClick={() => handleProductSelect(product)}
                 sx={{
                   display: 'flex',
-                  alignItems: 'center',
+                  alignItems: 'flex-start',
                   gap: 2,
-                  py: 2
+                  py: 2,
+                  borderBottom: '1px solid #eee'
                 }}
               >
-                <Box sx={{ width: 80, height: 80, flexShrink: 0 }}>
+                <Box sx={{ width: 100, height: 100, flexShrink: 0 }}>
                   <img
-                    src={product.image || 'https://via.placeholder.com/80'}
+                    src={product.image || 'https://via.placeholder.com/100'}
                     alt={product.itemName}
                     style={{
                       width: '100%',
@@ -293,12 +319,50 @@ const Whatnot: React.FC = () => {
                   />
                 </Box>
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant="subtitle1" noWrap>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
                     {product.itemName}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    SKU: {product.sku}
-                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        <strong>SKU:</strong> {product.sku}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        <strong>Brand:</strong> {product.brand}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        <strong>Category:</strong> {product.category || 'N/A'}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        <strong>Condition:</strong> {product.condition || 'N/A'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        <strong>UPC:</strong> {product.upc || 'N/A'}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        <strong>Quantity:</strong> {product.quantity}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        <strong>Size:</strong> {product.sizeOz ? `${product.sizeOz}oz` : product.sizeMl ? `${product.sizeMl}ml` : 'N/A'}
+                      </Typography>
+                      {product.productDetails && (
+                        <>
+                          {product.productDetails.strength && (
+                            <Typography variant="body2" color="text.secondary">
+                              <strong>Strength:</strong> {product.productDetails.strength}
+                            </Typography>
+                          )}
+                          {product.productDetails.shade && (
+                            <Typography variant="body2" color="text.secondary">
+                              <strong>Shade:</strong> {product.productDetails.shade}
+                            </Typography>
+                          )}
+                        </>
+                      )}
+                    </Grid>
+                  </Grid>
                 </Box>
               </ListItem>
             ))}
