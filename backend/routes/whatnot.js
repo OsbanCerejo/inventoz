@@ -98,7 +98,7 @@ router.post('/search-barcode', async (req, res) => {
       const product = products.find(p => p.sku === barcode);
       if (product) {
         const previousQuantity = product.quantity;
-        const newQuantity = Math.max(0, previousQuantity - 1);
+        const newQuantity = Math.max(-9999, previousQuantity - 1);
         
         try {
           await StockUpdateService.updateProductQuantity(product.sku, newQuantity);
@@ -133,7 +133,7 @@ router.post('/search-barcode', async (req, res) => {
     if (products.length === 1) {
       const product = products[0];
       const previousQuantity = product.quantity;
-      const newQuantity = Math.max(0, previousQuantity - 1);
+      const newQuantity = Math.max(-9999, previousQuantity - 1);
       
       try {
         await StockUpdateService.updateProductQuantity(product.sku, newQuantity);
