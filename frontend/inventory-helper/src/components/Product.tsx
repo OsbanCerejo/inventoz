@@ -7,6 +7,11 @@ import {
   Paper,
   Tooltip,
   Typography,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
 } from "@mui/material";
 import axios from "axios";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -31,6 +36,8 @@ function Product() {
   const [productDetails, setProductDetails]: any = useState({});
   const [productListings, setProductListings]: any = useState({});
   const labelRef = useRef<HTMLDivElement>(null);
+  const [restockDialogOpen, setRestockDialogOpen] = useState(false);
+  const [restockQuantity, setRestockQuantity] = useState<number>(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -179,6 +186,44 @@ function Product() {
   const handleSalesClick = useCallback(() => {
     navigate("/sales", { state: { productObject } });
   }, [navigate, productObject]);
+
+  const handleOutOfStockClick = useCallback(async () => {
+    try {
+      const response = await axios.post(
+        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/ebayAPI/updateQuantity`,
+        {
+          sku: productObject.sku,
+          quantity: 0,
+        }
+      );
+
+      if (response.data) {
+        toast.success("Product marked as out of stock on eBay!", { position: "top-right" });
+      }
+    } catch (error) {
+      console.error("Error marking product as out of stock:", error);
+      toast.error("Failed to mark product as out of stock", { position: "top-right" });
+    }
+  }, [productObject.sku]);
+
+  const handleRestockClick = useCallback(async () => {
+    try {
+      const response = await axios.post(
+        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/ebayAPI/updateQuantity`,
+        {
+          sku: productObject.sku,
+          quantity: restockQuantity,
+        }
+      );
+
+      if (response.data) {
+        toast.success("Product quantity updated on eBay!", { position: "top-right" });
+      }
+    } catch (error) {
+      console.error("Error updating product quantity on eBay:", error);
+      toast.error("Failed to update product quantity on eBay", { position: "top-right" });
+    }
+  }, [productObject.sku, restockQuantity]);
 
   return (
     <div className="product-container">
@@ -396,13 +441,12 @@ function Product() {
             </Box>
           </Grid>
         </Grid>
-        <Box mt={2} display="flex" justifyContent="space-between" px={50}>
+        <Box mt={2} display="flex" justifyContent="center" gap={1}>
           <Button
             variant="contained"
             color="success"
             startIcon={<EditIcon />}
             onClick={handleEditOnClick}
-            sx={{ mx: 1 }}
           >
             Edit
           </Button>
@@ -410,7 +454,6 @@ function Product() {
             variant="contained"
             startIcon={<SellIcon />}
             onClick={handlePrintClick}
-            sx={{ mx: 1 }}
           >
             Print Label
           </Button>
@@ -426,7 +469,6 @@ function Product() {
             color="secondary"
             startIcon={<WarehouseIcon />}
             onClick={handleInboundClick}
-            sx={{ mx: 1 }}
           >
             Inbound
           </Button>
@@ -435,7 +477,6 @@ function Product() {
             color="error"
             startIcon={<DeleteIcon />}
             onClick={handleDeleteClick}
-            sx={{ mx: 1 }}
           >
             Delete
           </Button>
@@ -443,120 +484,54 @@ function Product() {
             variant="contained"
             startIcon={<SellIcon />}
             onClick={handleSalesClick}
-            sx={{ mx: 1 }}
           >
             Sold
           </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            startIcon={<SellIcon />}
+            onClick={handleOutOfStockClick}
+          >
+            Out of Stock
+          </Button>
+          <Button
+            variant="contained"
+            color="info"
+            startIcon={<WarehouseIcon />}
+            onClick={() => setRestockDialogOpen(true)}
+          >
+            Restock
+          </Button>
         </Box>
       </Paper>
-      {/* <Grid container spacing={4} border={3} borderColor="black">
-        <Grid item xs={12} md={6} border={1} borderColor="green">
-          <Box border={1} p={2} display="flex" justifyContent="center">
-            <Barcode value={barcodeValue} />
-          </Box>
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<ContentCopyIcon />}
-            onClick={handleCopyBarcodeClick}
-            sx={{ mx: 1 }}
-          >
-            Copy
-          </Button>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Product Details
-              </Typography>
-              {[
-                ["SKU", productObject.sku],
-                ["Brand", productObject.brand],
-                ["Item Name", productObject.itemName],
-                ["Strength", productObject.strength],
-                ["Shade", productObject.shade],
-                ["Quantity", productObject.quantity],
-                ["Location", productObject.location],
-                [
-                  "Size",
-                  `${productObject.sizeOz} oz. / ${productObject.sizeMl} ml`,
-                ],
-                ["Category", productObject.category],
-                ["Type", productObject.type],
-                ["Condition", productObject.condition],
-              ].map(([label, value]) => (
-                <Box
-                  key={label}
-                  display="flex"
-                  justifyContent="space-between"
-                  py={1}
-                >
-                  <Typography variant="body1" fontWeight="bold">
-                    {label}:
-                  </Typography>
-                  <Typography variant="body1">{value}</Typography>
-                </Box>
-              ))}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Box
-            border={1}
-            p={2}
-            height="100%"
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-          >
-            <Typography variant="body1" color="textSecondary">
-              Future images of the product will be displayed here.
-            </Typography>
-          </Box>
-        </Grid>
-        <Grid item xs={12} md={6} border={1} borderColor="red">
-          <Box display="flex" justifyContent="space-between" mb={2}>
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<EditIcon />}
-              onClick={handleEditOnClick}
-              sx={{ mx: 1 }}
-            >
-              Edit
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<SellIcon />}
-              onClick={handleSalesClick}
-              sx={{ mx: 1 }}
-            >
-              Sales
-            </Button>
-            <Button
-              variant="contained"
-              color="secondary"
-              startIcon={<WarehouseIcon />}
-              onClick={handleInboundClick}
-              sx={{ mx: 1 }}
-            >
-              Inbound
-            </Button>
-            <Button
-              variant="contained"
-              color="error"
-              startIcon={<DeleteIcon />}
-              onClick={handleDeleteClick}
-              sx={{ mx: 1 }}
-            >
-              Delete
-            </Button>
-          </Box>
-        </Grid>
-      </Grid> */}
+      <Dialog
+        open={restockDialogOpen}
+        onClose={() => setRestockDialogOpen(false)}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">{"Restock Product"}</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            id="name"
+            label="Quantity"
+            type="number"
+            fullWidth
+            value={restockQuantity}
+            onChange={(e) => setRestockQuantity(Number(e.target.value))}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRestockDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => {
+            handleRestockClick();
+            setRestockDialogOpen(false);
+          }}>Restock</Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 }
