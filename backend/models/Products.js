@@ -7,6 +7,10 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         primaryKey: true,
       },
+      alternativeSku: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       brand: {
         type: DataTypes.STRING,
         allowNull: false,

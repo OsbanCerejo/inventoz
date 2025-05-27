@@ -172,7 +172,7 @@ function AddProduct() {
       try {
         // Attempt to add the new product into Products table
         const addProductresponse = await axios.post(
-          "http://localhost:3001/products",
+          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`,
           data
         );
         console.log("Level 1 OnSubmit");
@@ -181,14 +181,14 @@ function AddProduct() {
         if (addProductresponse.data === "Already Exists") {
           toast.error("Product Already Exists!", { position: "top-right" });
         } else if (addProductresponse.data === "Created New") {
-          axios.post("http://localhost:3001/logs/addLog", {
+          axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
             timestamp: new Date().toISOString(),
             type: "Add Product",
             metaData: data,
           });
           // Handle Product Details Insertion
           const addProductDetailsresponse = await axios.post(
-            "http://localhost:3001/productDetails/addProductDetails",
+            `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/productDetails/addProductDetails`,
             data
           );
           console.log("Product Details Response : ", addProductDetailsresponse);
@@ -219,7 +219,7 @@ function AddProduct() {
 
             // Add the product to Inbound table along with the new composite Inbound key
             const inboundResponse = await axios.post(
-              "http://localhost:3001/inbound",
+              `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/inbound`,
               inboundObject
             );
             console.log(inboundResponse);
@@ -235,7 +235,7 @@ function AddProduct() {
             };
             console.log("LISTINGS OBJECT: ", listingsObject);
             const listingsResponse = await axios.post(
-              "http://localhost:3001/listings",
+              `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/listings`,
               listingsObject
             );
             console.log(listingsResponse);
@@ -243,7 +243,7 @@ function AddProduct() {
 
           // Fetch the brand object and update nextNumber
           const brandResponse = await axios.get(
-            "http://localhost:3001/brands",
+            `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`,
             {
               params: { brandName: data.brand },
             }
@@ -253,7 +253,7 @@ function AddProduct() {
             parseInt(brandObjectOnSubmit.nextNumber) + 1;
 
           // Update the brand table with the next number for future
-          await axios.put("http://localhost:3001/brands", brandObjectOnSubmit);
+          await axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`, brandObjectOnSubmit);
           toast.success("Product Added!", { position: "top-right" });
           resetForm();
           navigate("/", { state: { clearFilters: true } });
@@ -286,7 +286,7 @@ function AddProduct() {
         const brandForSku = brandMap.get(fieldValue);
         console.log("Level 1: Brand found for SKU - ", brandForSku);
         // Fetch the brand object from the server
-        const brandResponse = await axios.get("http://localhost:3001/brands", {
+        const brandResponse = await axios.get(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`, {
           params: { brandName: fieldValue },
         });
         const brandObject = brandResponse.data[0];
@@ -295,12 +295,12 @@ function AddProduct() {
         // If the nextNumber is not set, fetch the product count and update it
         if (brandObject.nextNumber.length === 0) {
           const productResponse = await axios.get(
-            `http://localhost:3001/products/findAndCount/${brandForSku}`
+            `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products/findAndCount/${brandForSku}`
           );
           console.log("Level 3: Product count - ", productResponse.data);
           // Update the brand object's nextNumber with the product count
           brandObject.nextNumber = productResponse.data.toString();
-          await axios.put("http://localhost:3001/brands", brandObject);
+          await axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`, brandObject);
           console.log("Level 4");
         }
         // Set the 10th position of the SKU with the formatted nextNumber

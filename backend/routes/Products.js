@@ -1,8 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const { Products } = require("../models");
+const { Products, ProductHistory, StockUpdateHistory } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
+const StockUpdateService = require("../Services/StockUpdateService");
 
 router.get("/", async (req, res) => {
   const listOfProducts = await Products.findAll();
@@ -46,31 +47,56 @@ router.post("/", async (req, res) => {
 router.put("/", async (req, res) => {
   const product = req.body;
   console.log("Edited Product Value in Server : ", product);
-  await Products.update(
-    {
-      brand: product.brand,
-      itemName: product.itemName,
-      quantity: product.quantity,
-      location: product.location,
-      sizeOz: product.sizeOz,
-      sizeMl: product.sizeMl,
-      strength: product.strength,
-      shade: product.shade,
-      formulation: product.formulation,
-      category: product.category,
-      type: product.type,
-      upc: product.upc,
-      warehouseLocations: product.warehouseLocations,
-      batch: product.batch,
-      condition: product.condition,
-      verified: product.verified,
-      listed: product.listed,
-      final: product.final,
-      image: product.image,
-    },
-    { where: { sku: product.sku } }
-  );
-  res.json(product);
+  
+  try {
+    // Get the current product state
+    const currentProduct = await Products.findOne({ where: { sku: product.sku } });
+    
+    if (!currentProduct) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+
+    // Update the product
+    await Products.update(
+      {
+        brand: product.brand,
+        itemName: product.itemName,
+        location: product.location,
+        sizeOz: product.sizeOz,
+        sizeMl: product.sizeMl,
+        strength: product.strength,
+        shade: product.shade,
+        formulation: product.formulation,
+        category: product.category,
+        type: product.type,
+        upc: product.upc,
+        warehouseLocations: product.warehouseLocations,
+        batch: product.batch,
+        condition: product.condition,
+        verified: product.verified,
+        listed: product.listed,
+        final: product.final,
+        image: product.image,
+        alternativeSku: product.alternativeSku,
+      },
+      { where: { sku: product.sku } }
+    );
+
+    // If a quantity is being updated, use the StockUpdateService
+    if (currentProduct.quantity !== product.quantity || product.verified !== currentProduct.verified) {
+      await StockUpdateService.updateProductQuantity(
+          product.sku,
+          product.quantity
+      );
+    }
+
+    // Get the updated product data
+    const updatedProduct = await Products.findOne({ where: { sku: product.sku } });
+    res.json(updatedProduct);
+  } catch (error) {
+    console.error("Error updating product:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 router.delete("/delete/:id", async (req, res) => {
@@ -103,27 +129,22 @@ router.post("/updateQuantities", async (req, res) => {
   const skusToUpdate = req.body;
 
   try {
-    const updatePromises = skusToUpdate.map(async (skuUpdate) => {
+    const updates = await Promise.all(skusToUpdate.map(async (skuUpdate) => {
       const product = await Products.findOne({ where: { sku: skuUpdate.sku } });
-
-      if (product) {
-        const newQuantity = product.quantity - skuUpdate.quantitySold;
-        await product.update({ quantity: newQuantity });
-
-        return {
-          sku: skuUpdate.sku,
-          itemName: product.itemName,
-          oldQuantity: product.quantity,
-          newQuantity: newQuantity,
-        };
+      if (!product) {
+        throw new Error(`Product not found for SKU: ${skuUpdate.sku}`);
       }
-    });
+      return {
+        sku: skuUpdate.sku,
+        newQuantity: product.quantity - skuUpdate.quantitySold
+      };
+    }));
 
-    const updateResults = await Promise.all(updatePromises);
+    const result = await StockUpdateService.updateMultipleProductQuantities(updates);
 
     res.json({
       success: true,
-      updatedProducts: updateResults.filter(Boolean),
+      updatedProducts: result.results.map(r => r.product)
     });
   } catch (error) {
     console.error("Error updating product quantities:", error);

@@ -5,6 +5,8 @@ require("dotenv").config();
 const { Sequelize } = require("sequelize");
 const dbConfig = require("./config/databaseConfig");
 const db = require("./models");
+const stockUpdateCron = require("./cron/stockUpdate");
+const orderProcessingCron = require("./cron/orderProcessing");
 
 app.use(express.json());
 app.use(cors());
@@ -17,6 +19,7 @@ const sequelize = new Sequelize(
   {
     host: dbConfig.host,
     dialect: dbConfig.dialect,
+    logging: false
   }
 );
 
@@ -51,6 +54,15 @@ app.use("/listings", listingsRouter);
 const priceListParserRouter = require("./routes/PricelistParser");
 app.use("/priceListParser", priceListParserRouter);
 
+const ebayApiRouter = require("./routes/EbayAPI");
+app.use("/ebayAPI", ebayApiRouter);
+
+const ebayOrdersRouter = require("./routes/EbayOrders");
+app.use("/ebayOrders", ebayOrdersRouter);
+
+const whatnotRouter = require("./routes/whatnot");
+app.use("/whatnot", whatnotRouter);
+
 sequelize
   .authenticate()
   .then(() => {
@@ -58,8 +70,13 @@ sequelize
     return db.sequelize.sync();
   })
   .then(() => {
-    app.listen(process.env.PORT, () => {
-      console.log(`Server is running on http://localhost:${process.env.PORT}`);
+    // Initialize cron jobs
+    console.log("Initializing cron jobs...");
+    stockUpdateCron;
+    orderProcessingCron;
+    
+    app.listen(process.env.PORT, '0.0.0.0', () => {
+      console.log(`Server is running on http://${process.env.SERVER_IP}:${process.env.PORT}`);
     });
   })
   .catch((err) => {

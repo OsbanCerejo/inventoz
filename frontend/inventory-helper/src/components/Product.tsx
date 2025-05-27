@@ -7,6 +7,11 @@ import {
   Paper,
   Tooltip,
   Typography,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
 } from "@mui/material";
 import axios from "axios";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -31,6 +36,8 @@ function Product() {
   const [productDetails, setProductDetails]: any = useState({});
   const [productListings, setProductListings]: any = useState({});
   const labelRef = useRef<HTMLDivElement>(null);
+  const [restockDialogOpen, setRestockDialogOpen] = useState(false);
+  const [restockQuantity, setRestockQuantity] = useState<number>(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -41,19 +48,25 @@ function Product() {
         setProductListings({});
 
         const { data: product } = await axios.get(
-          `http://localhost:3001/products/byId/${id}?nocache=${Date.now()}`
+          `http://${import.meta.env.VITE_SERVER_IP}:${
+            import.meta.env.VITE_SERVER_PORT
+          }/products/byId/${id}?nocache=${Date.now()}`
         );
         setProductObject(product);
         setBarcodeValue(product.sku);
         const { data: details } = await axios.get(
-          "http://localhost:3001/productDetails/bySku?nocache=${Date.now()",
+          `http://${import.meta.env.VITE_SERVER_IP}:${
+            import.meta.env.VITE_SERVER_PORT
+          }/productDetails/bySku?nocache=${Date.now()}`,
           {
             params: { sku: product.sku },
           }
         );
         setProductDetails(details);
         const { data: listings } = await axios.get(
-          "http://localhost:3001/listings/bySku?nocache=${Date.now()",
+          `http://${import.meta.env.VITE_SERVER_IP}:${
+            import.meta.env.VITE_SERVER_PORT
+          }/listings/bySku?nocache=${Date.now()}`,
           {
             params: { sku: product.sku },
           }
@@ -69,6 +82,7 @@ function Product() {
       setProductObject(location.state.updatedProduct);
       setProductDetails(location.state.updatedDetails || {});
       setProductListings(location.state.updatedListings || {});
+      setBarcodeValue(location.state.updatedProduct.sku);
     } else {
       fetchData(); // Fetch only if no updated product is passed
     }
@@ -93,17 +107,24 @@ function Product() {
     if (passwordToDelete === "1080") {
       try {
         await axios.delete(
-          `http://localhost:3001/products/delete/${productObject.sku}`
+          `http://${import.meta.env.VITE_SERVER_IP}:${
+            import.meta.env.VITE_SERVER_PORT
+          }/products/delete/${productObject.sku}`
         );
         toast.success("Deleted Successfully!", { position: "top-right" });
-        await axios.post("http://localhost:3001/logs/addLog", {
-          timestamp: new Date().toISOString(),
-          type: "Delete Product",
-          metaData: {
-            productObject,
-            productDetails,
-          }, // Log the details of the deleted product
-        });
+        await axios.post(
+          `http://${import.meta.env.VITE_SERVER_IP}:${
+            import.meta.env.VITE_SERVER_PORT
+          }/logs/addLog`,
+          {
+            timestamp: new Date().toISOString(),
+            type: "Delete Product",
+            metaData: {
+              productObject,
+              productDetails,
+            }, // Log the details of the deleted product
+          }
+        );
         navigate("/", { state: { clearFilters: true } });
       } catch (error) {
         console.error("Error deleting the product:", error);
@@ -165,6 +186,44 @@ function Product() {
   const handleSalesClick = useCallback(() => {
     navigate("/sales", { state: { productObject } });
   }, [navigate, productObject]);
+
+  const handleOutOfStockClick = useCallback(async () => {
+    try {
+      const response = await axios.post(
+        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/ebayAPI/updateQuantity`,
+        {
+          sku: productObject.sku,
+          quantity: 0,
+        }
+      );
+
+      if (response.data) {
+        toast.success("Product marked as out of stock on eBay!", { position: "top-right" });
+      }
+    } catch (error) {
+      console.error("Error marking product as out of stock:", error);
+      toast.error("Failed to mark product as out of stock", { position: "top-right" });
+    }
+  }, [productObject.sku]);
+
+  const handleRestockClick = useCallback(async () => {
+    try {
+      const response = await axios.post(
+        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/ebayAPI/updateQuantity`,
+        {
+          sku: productObject.sku,
+          quantity: restockQuantity,
+        }
+      );
+
+      if (response.data) {
+        toast.success("Product quantity updated on eBay!", { position: "top-right" });
+      }
+    } catch (error) {
+      console.error("Error updating product quantity on eBay:", error);
+      toast.error("Failed to update product quantity on eBay", { position: "top-right" });
+    }
+  }, [productObject.sku, restockQuantity]);
 
   return (
     <div className="product-container">
@@ -368,29 +427,26 @@ function Product() {
             >
               <img src={productObject.image} height="auto" />
             </Box>
-            <Tooltip title="Copy" arrow>
-              <Box
-                p={4}
-                sx={{
-                  flex: 0.2,
-                  display: "flex",
-                  flexDirection: "column",
-                  cursor: "pointer",
-                }}
-                onClick={handleCopyBarcodeClick}
-              >
-                <Barcode value={barcodeValue} />
-              </Box>
-            </Tooltip>
+
+            <Box
+              p={4}
+              sx={{
+                flex: 0.2,
+                display: "flex",
+                flexDirection: "column",
+                cursor: "pointer",
+              }}
+            >
+              <Barcode value={barcodeValue} />
+            </Box>
           </Grid>
         </Grid>
-        <Box mt={2} display="flex" justifyContent="space-between" px={50}>
+        <Box mt={2} display="flex" justifyContent="center" gap={1}>
           <Button
             variant="contained"
             color="success"
             startIcon={<EditIcon />}
             onClick={handleEditOnClick}
-            sx={{ mx: 1 }}
           >
             Edit
           </Button>
@@ -398,7 +454,6 @@ function Product() {
             variant="contained"
             startIcon={<SellIcon />}
             onClick={handlePrintClick}
-            sx={{ mx: 1 }}
           >
             Print Label
           </Button>
@@ -414,7 +469,6 @@ function Product() {
             color="secondary"
             startIcon={<WarehouseIcon />}
             onClick={handleInboundClick}
-            sx={{ mx: 1 }}
           >
             Inbound
           </Button>
@@ -423,7 +477,6 @@ function Product() {
             color="error"
             startIcon={<DeleteIcon />}
             onClick={handleDeleteClick}
-            sx={{ mx: 1 }}
           >
             Delete
           </Button>
@@ -431,120 +484,54 @@ function Product() {
             variant="contained"
             startIcon={<SellIcon />}
             onClick={handleSalesClick}
-            sx={{ mx: 1 }}
           >
             Sold
           </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            startIcon={<SellIcon />}
+            onClick={handleOutOfStockClick}
+          >
+            Out of Stock
+          </Button>
+          <Button
+            variant="contained"
+            color="info"
+            startIcon={<WarehouseIcon />}
+            onClick={() => setRestockDialogOpen(true)}
+          >
+            Restock
+          </Button>
         </Box>
       </Paper>
-      {/* <Grid container spacing={4} border={3} borderColor="black">
-        <Grid item xs={12} md={6} border={1} borderColor="green">
-          <Box border={1} p={2} display="flex" justifyContent="center">
-            <Barcode value={barcodeValue} />
-          </Box>
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<ContentCopyIcon />}
-            onClick={handleCopyBarcodeClick}
-            sx={{ mx: 1 }}
-          >
-            Copy
-          </Button>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Product Details
-              </Typography>
-              {[
-                ["SKU", productObject.sku],
-                ["Brand", productObject.brand],
-                ["Item Name", productObject.itemName],
-                ["Strength", productObject.strength],
-                ["Shade", productObject.shade],
-                ["Quantity", productObject.quantity],
-                ["Location", productObject.location],
-                [
-                  "Size",
-                  `${productObject.sizeOz} oz. / ${productObject.sizeMl} ml`,
-                ],
-                ["Category", productObject.category],
-                ["Type", productObject.type],
-                ["Condition", productObject.condition],
-              ].map(([label, value]) => (
-                <Box
-                  key={label}
-                  display="flex"
-                  justifyContent="space-between"
-                  py={1}
-                >
-                  <Typography variant="body1" fontWeight="bold">
-                    {label}:
-                  </Typography>
-                  <Typography variant="body1">{value}</Typography>
-                </Box>
-              ))}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Box
-            border={1}
-            p={2}
-            height="100%"
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-          >
-            <Typography variant="body1" color="textSecondary">
-              Future images of the product will be displayed here.
-            </Typography>
-          </Box>
-        </Grid>
-        <Grid item xs={12} md={6} border={1} borderColor="red">
-          <Box display="flex" justifyContent="space-between" mb={2}>
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<EditIcon />}
-              onClick={handleEditOnClick}
-              sx={{ mx: 1 }}
-            >
-              Edit
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<SellIcon />}
-              onClick={handleSalesClick}
-              sx={{ mx: 1 }}
-            >
-              Sales
-            </Button>
-            <Button
-              variant="contained"
-              color="secondary"
-              startIcon={<WarehouseIcon />}
-              onClick={handleInboundClick}
-              sx={{ mx: 1 }}
-            >
-              Inbound
-            </Button>
-            <Button
-              variant="contained"
-              color="error"
-              startIcon={<DeleteIcon />}
-              onClick={handleDeleteClick}
-              sx={{ mx: 1 }}
-            >
-              Delete
-            </Button>
-          </Box>
-        </Grid>
-      </Grid> */}
+      <Dialog
+        open={restockDialogOpen}
+        onClose={() => setRestockDialogOpen(false)}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">{"Restock Product"}</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            id="name"
+            label="Quantity"
+            type="number"
+            fullWidth
+            value={restockQuantity}
+            onChange={(e) => setRestockQuantity(Number(e.target.value))}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRestockDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => {
+            handleRestockClick();
+            setRestockDialogOpen(false);
+          }}>Restock</Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 }

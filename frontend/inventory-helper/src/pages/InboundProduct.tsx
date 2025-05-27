@@ -59,14 +59,14 @@ function InboundProduct() {
         data.batch;
       data.compositeSku = compositeInboundKey; //Change compositeSKU in data to compositeInboundSku
       axios
-        .put("http://localhost:3001/inbound", {
+        .put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/inbound`, {
           quantity: parseInt(productObject.quantity) + parseInt(data.quantity),
           sku: productObject.sku,
         })
         .then(() => {
           console.log("Quantity Updated in Inventory Table");
         });
-      axios.post("http://localhost:3001/inbound", data).then((response) => {
+      axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/inbound`, data).then((response) => {
         if (response.data === "Created New") {
           toast.success("Success Notification !", {
             position: "top-right",

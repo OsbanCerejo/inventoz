@@ -73,6 +73,7 @@ const formikValidationSchema = Yup.object().shape({
   tester: Yup.boolean(),
   isHazmat: Yup.boolean(),
   isLimitedEdition: Yup.boolean(),
+  alternativeSku: Yup.string(),
   //Listings
   buy4lesstoday: Yup.string(),
   onelifeluxuries: Yup.string(),
@@ -99,6 +100,7 @@ function EditProduct() {
   const formikInitialValues = useMemo(
     () => ({
       sku: "" + productObject.sku,
+      alternativeSku: "" + (productObject.alternativeSku || ""),
       brand: "" + productObject.brand,
       itemName: "" + productObject.itemName,
       quantity: "" + productObject.quantity,
@@ -167,15 +169,15 @@ function EditProduct() {
 
       axios
         .all([
-          axios.put("http://localhost:3001/products", data),
-          axios.put("http://localhost:3001/productDetails", data),
-          axios.put("http://localhost:3001/listings", listingsObject),
+          axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`, data),
+          axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/productDetails`, data),
+          axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/listings`, listingsObject),
         ])
         .then(
           axios.spread((productsRes, productDetailsRes, listingsRes) => {
             console.log("Product Updated to: ", productsRes);
             console.log("Product Details Updated to: ", productDetailsRes);
-            axios.post("http://localhost:3001/logs/addLog", {
+            axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
               timestamp: new Date().toISOString(),
               type: "Edit Product",
               metaData: changes, // Only log the changes
@@ -200,12 +202,13 @@ function EditProduct() {
     return Object.keys(data).reduce((acc, key) => {
       if (!isEqual(data[key], initialValues[key])) {
         acc[key] = {
+          sku: data.sku,
           oldValue: initialValues[key],
           newValue: data[key],
         };
       }
       return acc;
-    }, {} as Record<string, { oldValue: any; newValue: any }>);
+    }, {} as Record<string, { sku: string; oldValue: any; newValue: any }>);
   }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
@@ -259,6 +262,30 @@ function EditProduct() {
                 sx={{ my: { xs: 2, md: 3 }, p: { xs: 1, md: 4 } }}
               >
                 <strong>{productObject.sku}</strong>
+              </Paper>
+              <Paper
+                variant="outlined"
+                sx={{ my: { xs: 2, md: 3 }, p: { xs: 1, md: 4 } }}
+              >
+                <TextField
+                  fullWidth
+                  id="alternativeSku"
+                  name="alternativeSku"
+                  label="Alternative SKU (for eBay API)"
+                  value={formik.values.alternativeSku}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  error={
+                    formik.touched.alternativeSku &&
+                    Boolean(formik.errors.alternativeSku)
+                  }
+                  helperText={
+                    formik.touched.alternativeSku && 
+                    typeof formik.errors.alternativeSku === 'string' 
+                      ? formik.errors.alternativeSku 
+                      : ''
+                  }
+                />
               </Paper>
             </Container>
           </Grid>

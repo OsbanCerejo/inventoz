@@ -1,8 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const { Sales,Products } = require("../models");
+const { Sales, Products } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
+const StockUpdateService = require("../Services/StockUpdateService");
 
 router.post("/", async (req, res) => {
     const saleItem = req.body;
@@ -19,12 +20,14 @@ router.post("/", async (req, res) => {
 });
 
 router.put("/", async (req, res) => {
-    console.log(req.body)
-    await Products.update({ 
-        quantity: req.body.quantity,
-        }, 
-        {where: {sku: req.body.sku}});
-    res.json("Updated");
+    try {
+        const { sku, quantity } = req.body;
+        await StockUpdateService.updateProductQuantity(sku, quantity);
+        res.json("Updated");
+    } catch (error) {
+        console.error("Error updating product quantity:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
 });
 
 module.exports = router;
