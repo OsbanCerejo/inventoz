@@ -73,6 +73,11 @@ function NavBar() {
               </a>
             </li>
             <li className="nav-item">
+              <a className="nav-link" href="/price-list">
+                PriceList(New)
+              </a>
+            </li>
+            <li className="nav-item">
               <a className="nav-link" href="/ebayAPI">
                 EbayAPI
               </a>

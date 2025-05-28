@@ -63,6 +63,9 @@ app.use("/ebayOrders", ebayOrdersRouter);
 const whatnotRouter = require("./routes/whatnot");
 app.use("/whatnot", whatnotRouter);
 
+const priceListRouter = require("./routes/priceList");
+app.use("/api/price-list", priceListRouter);
+
 sequelize
   .authenticate()
   .then(() => {
@@ -72,8 +75,8 @@ sequelize
   .then(() => {
     // Initialize cron jobs
     console.log("Initializing cron jobs...");
-    stockUpdateCron;
-    orderProcessingCron;
+    // stockUpdateCron;
+    // orderProcessingCron;
     
     app.listen(process.env.PORT, '0.0.0.0', () => {
       console.log(`Server is running on http://${process.env.SERVER_IP}:${process.env.PORT}`);

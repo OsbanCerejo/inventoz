@@ -1,8 +1,8 @@
 const express = require("express");
 const multer = require("multer");
-const XLSX = require("xlsx");
 const path = require("path");
 const fs = require("fs");
+const ExcelParser = require("../utils/excelParser");
 
 const router = express.Router();
 
@@ -32,65 +32,70 @@ router.post("/upload", upload.array("files"), (req, res) => {
 
     req.files.forEach((file) => {
       const filePath = path.join(uploadDir, file.filename);
-      const workbook = XLSX.readFile(filePath);
-      const sheetName = workbook.SheetNames[0];
-      const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+      
+      // Parse Excel file with smart header detection
+      const { headers, rows, headerMapping } = ExcelParser.parseExcel(filePath, {
+        maxRowsToCheck: 30,
+        minHeaderLength: 2
+      });
 
-      data.forEach((row) => {
-        if (row.UPC) {
+      // Process rows with mapped headers
+      rows.forEach((row) => {
+        const mappedRow = {};
+        Object.entries(row).forEach(([originalHeader, value]) => {
+          const standardHeader = headerMapping[originalHeader];
+          if (standardHeader === 'upc' || standardHeader === 'price') {
+            mappedRow[standardHeader] = value;
+          }
+        });
+
+        // Only add rows that have both UPC and price
+        if (mappedRow.upc && mappedRow.price) {
           uploadedData.push({
-            upc: row.UPC.toString().trim(),
-            data: row,
-            filename: file.filename,
+            upc: mappedRow.upc.toString().trim(),
+            price: parseFloat(mappedRow.price),
+            filename: file.filename
           });
         }
       });
     });
 
-    res.status(200).json({ message: "Files processed successfully!" });
+    res.status(200).json({ 
+      message: "Files processed successfully!",
+      totalRecords: uploadedData.length
+    });
   } catch (error) {
     console.error("Error processing files:", error);
-    res.status(500).json({ error: "Failed to process files" });
+    res.status(500).json({ error: "Failed to process files: " + error.message });
   }
 });
 
 // Search by UPC
 router.get("/search", (req, res) => {
   const { upc } = req.query;
-  console.log("UPC Searched: ", upc);
-  console.log("UPC SEARCHED IN FILE : ", uploadedData);
   if (!upc) {
     return res.status(400).json({ error: "UPC is required" });
   }
 
-  const results = uploadedData.filter((entry) => entry.upc === upc);
-
-  if (results.length > 0) {
-    res.status(200).json(results);
-  } else {
-    res.status(404).json({ message: "No matching records found" });
-  }
+  const results = uploadedData.filter(item => item.upc === upc);
+  res.json(results);
 });
 
-// Clear uploadedData on page refresh by adding an endpoint
+// Clear uploaded data
 router.get("/clearPriceLists", (req, res) => {
   uploadedData = [];
-  res.status(200).json({ message: "Session data cleared successfully" });
+  res.json({ message: "Price lists cleared successfully" });
 });
 
-// Remove data associated with deleted files
+// Remove specific file data
 router.post("/removePriceLists", (req, res) => {
   const { filename } = req.body;
   if (!filename) {
     return res.status(400).json({ error: "Filename is required" });
   }
 
-  // Remove entries belonging to the deleted file
-  uploadedData = uploadedData.filter((entry) => entry.filename !== filename);
-
-  res
-    .status(200)
-    .json({ message: `Data for ${filename} removed successfully` });
+  uploadedData = uploadedData.filter(item => item.filename !== filename);
+  res.json({ message: "Price list removed successfully" });
 });
 
 module.exports = router;
