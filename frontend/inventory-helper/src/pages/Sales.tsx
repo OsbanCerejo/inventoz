@@ -31,7 +31,6 @@ function Sales() {
     compositeSalesSku: "",
   };
 
-  //   console.log(newDate);
   const formikValidationSchema = Yup.object().shape({
     sku: Yup.string(),
     vendor: Yup.string(),
@@ -43,7 +42,6 @@ function Sales() {
     initialValues: formikInitialValues,
     validationSchema: formikValidationSchema,
     onSubmit: (data) => {
-      //   console.log(productObject);
       const compositeSalesKey =
         data.sku +
         "-" +
@@ -103,7 +101,7 @@ function Sales() {
                     onChange={(event) => {
                       if (event) {
                         setNewDate(event);
-                        formik.setFieldValue("date", newDate);
+                        formik.setFieldValue("date", event);
                       }
                     }}
                   />
