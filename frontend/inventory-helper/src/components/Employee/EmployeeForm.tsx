@@ -12,7 +12,8 @@ import {
   DialogActions,
   Alert,
   CircularProgress,
-  IconButton
+  IconButton,
+  Link
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { toast } from 'react-toastify';
@@ -211,17 +212,31 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ open, onClose, onEmployeeAd
             )}
           </Box>
 
-          <FormControlLabel
-            control={
-              <Checkbox
-                name="termsAndConditionsSigned"
-                checked={formData.termsAndConditionsSigned}
-                onChange={handleInputChange}
-              />
-            }
-            label="I agree to the terms and conditions"
-            sx={{ mt: 2 }}
-          />
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Please review and download the{' '}
+              <Link
+                href="/Confidentiality_and_Non_Compete_Agreement_NJ.docx"
+                download
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Confidentiality and Non-Compete Agreement
+              </Link>
+              {' '}before proceeding.
+            </Typography>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  name="termsAndConditionsSigned"
+                  checked={formData.termsAndConditionsSigned}
+                  onChange={handleInputChange}
+                />
+              }
+              label="I have reviewed and agree to the Confidentiality and Non-Compete Agreement"
+              sx={{ mt: 1 }}
+            />
+          </Box>
         </Box>
       </DialogContent>
 
