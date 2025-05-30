@@ -7,6 +7,7 @@ const dbConfig = require("./config/databaseConfig");
 const db = require("./models");
 const stockUpdateCron = require("./cron/stockUpdate");
 const orderProcessingCron = require("./cron/orderProcessing");
+const path = require("path");
 
 app.use(express.json());
 app.use(cors());
@@ -65,6 +66,12 @@ app.use("/whatnot", whatnotRouter);
 
 const priceListRouter = require("./routes/priceList");
 app.use("/api/price-list", priceListRouter);
+
+const employeeInfoRouter = require("./routes/EmployeeInformation");
+app.use("/api/employee-info", employeeInfoRouter);
+
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 sequelize
   .authenticate()

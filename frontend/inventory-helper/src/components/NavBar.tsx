@@ -87,6 +87,11 @@ function NavBar() {
                 Whatnot
               </a>
             </li>
+            <li className="nav-item">
+              <a className="nav-link" href="/employee-info">
+                Employee Info
+              </a>
+            </li>
           </ul>
         </div>
       </nav>

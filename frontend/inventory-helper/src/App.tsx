@@ -16,6 +16,7 @@ import PriceListParser from "./pages/PriceListParser";
 import EbayApi from "./pages/EbayApi";
 import Whatnot from "./pages/Whatnot";
 import PriceList from "./pages/PriceList";
+import EmployeeInformation from "./pages/EmployeeInformation";
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
             <Route path="/ebayAPI" Component={EbayApi}></Route>
             <Route path="/whatnot" Component={Whatnot}></Route>
             <Route path="/price-list" Component={PriceList}></Route>
+            <Route path="/employee-info" Component={EmployeeInformation}></Route>
           </Routes>
         </div>
       </Router>
