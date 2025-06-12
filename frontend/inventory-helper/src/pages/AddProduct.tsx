@@ -165,33 +165,59 @@ function AddProduct() {
     validationSchema: formikValidationSchema,
     onSubmit: async (data, { resetForm }) => {
       // Set the batch value to "NA" if inbound is false
-      formik.values.batch = formik.values.inbound ? formik.values.batch : "NA";
-
-      console.log("Product Data :::::::  ", data);
+      if (!formik.values.inbound) {
+        data.batch = "NA";
+      }
 
       try {
-        // Attempt to add the new product into Products table
         const addProductresponse = await axios.post(
           `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`,
           data
         );
-        console.log("Level 1 OnSubmit");
 
-        // Handle response for product creation
-        if (addProductresponse.data === "Already Exists") {
-          toast.error("Product Already Exists!", { position: "top-right" });
-        } else if (addProductresponse.data === "Created New") {
-          axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
+        if (addProductresponse.data === "Created New") {
+          // Log the product creation
+          await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
             timestamp: new Date().toISOString(),
-            type: "Add Product",
-            metaData: data,
+            type: "Product",
+            action: "create",
+            entityType: "product",
+            entityId: data.sku,
+            changes: [{
+              sku: data.sku,
+              changes: []
+            }],
+            newState: data,
+            metaData: {
+              message: "New product created",
+              inbound: data.inbound,
+              batch: data.batch
+            }
           });
+
           // Handle Product Details Insertion
           const addProductDetailsresponse = await axios.post(
             `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/productDetails/addProductDetails`,
             data
           );
           console.log("Product Details Response : ", addProductDetailsresponse);
+
+          // Log product details creation
+          await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
+            timestamp: new Date().toISOString(),
+            type: "Product",
+            action: "create",
+            entityType: "product_details",
+            entityId: data.sku,
+            changes: [{
+              sku: data.sku,
+              changes: []
+            }],
+            newState: data,
+            metaData: {
+              message: "New product details created"
+            }
+          });
 
           // Handle inbound logic if inbound is true
           if (formik.values.inbound) {
@@ -223,43 +249,35 @@ function AddProduct() {
               inboundObject
             );
             console.log(inboundResponse);
+
+            // Log inbound creation
+            await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
+              timestamp: new Date().toISOString(),
+              type: "Product",
+              action: "create",
+              entityType: "inbound",
+              entityId: compositeInboundKey,
+              changes: [{
+                sku: data.sku,
+                changes: []
+              }],
+              newState: inboundObject,
+              metaData: {
+                message: "New inbound record created",
+                sku: data.sku,
+                batch: data.batch
+              }
+            });
           }
 
-          // Handle Listed Logic
-          if (formik.values.listed) {
-            const listingsObject = {
-              sku: data.sku,
-              ebayBuy4LessToday: data.buy4lesstoday,
-              ebayOneLifeLuxuries4: data.onelifeluxuries,
-              walmartOneLifeLuxuries: data.walmart,
-            };
-            console.log("LISTINGS OBJECT: ", listingsObject);
-            const listingsResponse = await axios.post(
-              `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/listings`,
-              listingsObject
-            );
-            console.log(listingsResponse);
-          }
-
-          // Fetch the brand object and update nextNumber
-          const brandResponse = await axios.get(
-            `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`,
-            {
-              params: { brandName: data.brand },
-            }
-          );
-          const brandObjectOnSubmit = brandResponse.data[0];
-          brandObjectOnSubmit.nextNumber =
-            parseInt(brandObjectOnSubmit.nextNumber) + 1;
-
-          // Update the brand table with the next number for future
-          await axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`, brandObjectOnSubmit);
-          toast.success("Product Added!", { position: "top-right" });
+          toast.success("Product Added Successfully!", { position: "top-right" });
           resetForm();
-          navigate("/", { state: { clearFilters: true } });
+        } else {
+          toast.error("Product Already Exists!", { position: "top-right" });
         }
       } catch (error) {
-        console.error("Error during form submission:", error);
+        console.error("Error adding product:", error);
+        toast.error("Failed to add product", { position: "top-right" });
       }
     },
   });
