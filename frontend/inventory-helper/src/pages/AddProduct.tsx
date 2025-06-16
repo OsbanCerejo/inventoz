@@ -269,6 +269,35 @@ function AddProduct() {
               }
             });
           }
+          // Handle Listed Logic
+          if (formik.values.listed) {
+            const listingsObject = {
+              sku: data.sku,
+              ebayBuy4LessToday: data.buy4lesstoday,
+              ebayOneLifeLuxuries4: data.onelifeluxuries,
+              walmartOneLifeLuxuries: data.walmart,
+            };
+            console.log("LISTINGS OBJECT: ", listingsObject);
+            const listingsResponse = await axios.post(
+              `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/listings`,
+              listingsObject
+            );
+            console.log(listingsResponse);
+          }
+
+          // Fetch the brand object and update nextNumber
+          const brandResponse = await axios.get(
+            `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`,
+            {
+              params: { brandName: data.brand },
+            }
+          );
+          const brandObjectOnSubmit = brandResponse.data[0];
+          brandObjectOnSubmit.nextNumber =
+            parseInt(brandObjectOnSubmit.nextNumber) + 1;
+
+          // Update the brand table with the next number for future
+          await axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`, brandObjectOnSubmit);
 
           toast.success("Product Added Successfully!", { position: "top-right" });
           resetForm();
