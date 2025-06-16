@@ -82,6 +82,20 @@ const formikValidationSchema = Yup.object().shape({
   warehouseLocations: Yup.string(),
 });
 
+interface ChangeRecord {
+  field: string;
+  oldValue: any;
+  newValue: any;
+}
+
+interface ListingsObject {
+  sku: string;
+  ebayBuy4LessToday: string;
+  ebayOneLifeLuxuries4: string;
+  walmartOneLifeLuxuries: string;
+  [key: string]: string;
+}
+
 function EditProduct() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -157,10 +171,10 @@ function EditProduct() {
     initialValues: formikInitialValues,
     validationSchema: formikValidationSchema,
     onSubmit: (data) => {
-      const changes = getChangedFields(data, formikInitialValues);
-      console.log("CHANGES : ", changes)
+      const productChanges = getChangedFields(data, formikInitialValues);
+      console.log("CHANGES : ", productChanges)
 
-      const listingsObject = {
+      const listingsObject: ListingsObject = {
         sku: data.sku,
         ebayBuy4LessToday: data.buy4lesstoday,
         ebayOneLifeLuxuries4: data.onelifeluxuries,
@@ -177,11 +191,66 @@ function EditProduct() {
           axios.spread((productsRes, productDetailsRes, listingsRes) => {
             console.log("Product Updated to: ", productsRes);
             console.log("Product Details Updated to: ", productDetailsRes);
-            axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
-              timestamp: new Date().toISOString(),
-              type: "Edit Product",
-              metaData: changes, // Only log the changes
+            
+            // Log product details changes
+            if (Object.keys(productChanges).length > 0) {
+              const changesArray: ChangeRecord[] = Object.entries(productChanges).map(([field, value]) => ({
+                field,
+                oldValue: formikInitialValues[field as keyof typeof formikInitialValues],
+                newValue: value
+              }));
+
+              axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
+                timestamp: new Date().toISOString(),
+                type: "Product",
+                action: "update",
+                entityType: "product_details",
+                entityId: data.sku,
+                changes: [{
+                  sku: data.sku,
+                  changes: changesArray
+                }],
+                previousState: formikInitialValues,
+                newState: data,
+                metaData: {
+                  message: "Product details updated",
+                  updatedFields: Object.keys(productChanges)
+                }
+              });
+            }
+
+            // Log listings changes if any
+            const listingsChangesArray: ChangeRecord[] = [];
+            Object.keys(listingsObject).forEach(key => {
+              if (listingsObject[key] !== productListings[key]) {
+                listingsChangesArray.push({
+                  field: key,
+                  oldValue: productListings[key] || '',
+                  newValue: listingsObject[key]
+                });
+              }
             });
+
+            if (listingsChangesArray.length > 0) {
+              axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
+                timestamp: new Date().toISOString(),
+                type: "Product",
+                action: "update",
+                entityType: "listings",
+                entityId: data.sku,
+                changes: [{
+                  sku: data.sku,
+                  changes: listingsChangesArray
+                }],
+                previousState: productListings,
+                newState: listingsObject,
+                metaData: {
+                  message: "Product listings updated",
+                  updatedFields: listingsChangesArray.map(change => change.field)
+                }
+              });
+            }
+
             navigate(`/products/${data.sku}`, {
               state: {
                 updatedProduct: productsRes.data, 
@@ -194,7 +263,6 @@ function EditProduct() {
         .catch((error) => {
           console.error("There was an error updating the product: ", error);
         });
-      // navigate("/", { state: { clearFilters: true } });
     },
   });
 

@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { Products, ProductHistory, StockUpdateHistory } = require("../models");
+const { Products, ProductHistory, StockUpdateHistory, Logs } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 const StockUpdateService = require("../Services/StockUpdateService");
@@ -31,17 +31,36 @@ router.get("/search", async (req, res) => {
 
 router.post("/", async (req, res) => {
   const product = req.body;
-  // await Products.create(product);
-  const [found, created] = await Products.findOrCreate({
-    where: { sku: product.sku },
-    defaults: product,
-  });
-  if (created) {
-    console.log("Created New");
-  } else {
-    console.log("Already Exists");
+  try {
+    const [found, created] = await Products.findOrCreate({
+      where: { sku: product.sku },
+      defaults: product,
+    });
+
+    if (created) {
+      // Log the product creation
+      await Logs.create({
+        type: "Product",
+        action: "create",
+        entityType: "product",
+        entityId: product.sku,
+        changes: [{
+          sku: product.sku,
+          changes: []
+        }],
+        newState: product,
+        metaData: {
+          message: "New product created"
+        }
+      });
+      res.json("Created New");
+    } else {
+      res.json("Already Exists");
+    }
+  } catch (error) {
+    console.error("Error creating product:", error);
+    res.status(500).json({ error: "Failed to create product" });
   }
-  res.json(created ? "Created New" : "Already Exists");
 });
 
 router.put("/", async (req, res) => {
@@ -55,6 +74,9 @@ router.put("/", async (req, res) => {
     if (!currentProduct) {
       return res.status(404).json({ error: "Product not found" });
     }
+
+    // Store the previous state
+    const previousState = currentProduct.toJSON();
 
     // Update the product
     await Products.update(
@@ -92,6 +114,38 @@ router.put("/", async (req, res) => {
 
     // Get the updated product data
     const updatedProduct = await Products.findOne({ where: { sku: product.sku } });
+    
+    // Calculate changes
+    const changes = [];
+    Object.keys(product).forEach(key => {
+      if (JSON.stringify(previousState[key]) !== JSON.stringify(product[key])) {
+        changes.push({
+          field: key,
+          oldValue: previousState[key],
+          newValue: product[key]
+        });
+      }
+    });
+
+    // Log the product update
+    await Logs.create({
+      type: "Product",
+      action: "update",
+      entityType: "product",
+      entityId: product.sku,
+      changes: [{
+        sku: product.sku,
+        changes: changes
+      }],
+      previousState: previousState,
+      newState: updatedProduct.toJSON(),
+      metaData: {
+        message: "Product updated",
+        quantityChanged: currentProduct.quantity !== product.quantity,
+        verificationChanged: currentProduct.verified !== product.verified
+      }
+    });
+
     res.json(updatedProduct);
   } catch (error) {
     console.error("Error updating product:", error);
