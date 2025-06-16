@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 function NavBar() {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
   const toggleNavbar = () => {
     setIsOpen(!isOpen);
@@ -13,12 +15,17 @@ function NavBar() {
     navigate("/", { state: { clearFilters: true } });
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
+
   return (
     <div>
       <nav className="navbar navbar-expand-lg navbar-light bg-light">
-        <a className="navbar-brand" href="/">
+        <Link className="navbar-brand" to="/">
           Inventoz
-        </a>
+        </Link>
         <button className="navbar-toggler" type="button" onClick={toggleNavbar}>
           <span className="navbar-toggler-icon"></span>
         </button>
@@ -29,18 +36,19 @@ function NavBar() {
         >
           <ul className="navbar-nav mr-auto">
             <li className="nav-item active">
-              <a
+              <Link
                 className="nav-link"
+                to="/"
                 onClick={handleHomeClick}
                 style={{ cursor: "pointer" }}
               >
                 Home
-              </a>
+              </Link>
             </li>
             <li className="nav-item">
-              <a className="nav-link" href="/addProduct">
+              <Link className="nav-link" to="/addProduct">
                 Add Product
-              </a>
+              </Link>
             </li>
             {/* <li className="nav-item">
               <a className="nav-link" href="/listings">
@@ -48,14 +56,14 @@ function NavBar() {
               </a>
             </li> */}
             <li className="nav-item">
-              <a className="nav-link" href="/inbound/showAll">
+              <Link className="nav-link" to="/inbound/showAll">
                 Inbound
-              </a>
+              </Link>
             </li>
             <li className="nav-item">
-              <a className="nav-link" href="/orders/showAll">
+              <Link className="nav-link" to="/orders/showAll">
                 Orders
-              </a>
+              </Link>
             </li>
             {/* <li className="nav-item">
               <a className="nav-link" href="/sephoraSearch">
@@ -63,36 +71,50 @@ function NavBar() {
               </a>
             </li> */}
             <li className="nav-item">
-              <a className="nav-link" href="/orders/packingMode">
+              <Link className="nav-link" to="/orders/packingMode">
                 Packing
-              </a>
+              </Link>
             </li>
             <li className="nav-item">
-              <a className="nav-link" href="/priceListParser">
+              <Link className="nav-link" to="/priceListParser">
                 PriceList
-              </a>
+              </Link>
             </li>
             <li className="nav-item">
-              <a className="nav-link" href="/price-list">
+              <Link className="nav-link" to="/price-list">
                 PriceList(New)
-              </a>
+              </Link>
             </li>
             <li className="nav-item">
-              <a className="nav-link" href="/ebayAPI">
+              <Link className="nav-link" to="/ebayAPI">
                 EbayAPI
-              </a>
+              </Link>
             </li>
             <li className="nav-item">
-              <a className="nav-link" href="/whatnot">
+              <Link className="nav-link" to="/whatnot">
                 Whatnot
-              </a>
+              </Link>
             </li>
             <li className="nav-item">
-              <a className="nav-link" href="/employee-info">
+              <Link className="nav-link" to="/employee-info">
                 Employee Info
-              </a>
+              </Link>
             </li>
           </ul>
+          {user && (
+            <div className="navbar-nav ml-auto">
+              <span className="nav-item nav-link">
+                {user.username} ({user.role})
+              </span>
+              <button
+                className="btn btn-outline-danger"
+                onClick={handleLogout}
+                style={{ marginLeft: "10px" }}
+              >
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </nav>
     </div>

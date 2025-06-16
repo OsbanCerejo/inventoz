@@ -24,6 +24,10 @@ const sequelize = new Sequelize(
   }
 );
 
+// Authentication routes
+const authRouter = require("./routes/auth");
+app.use("/auth", authRouter);
+
 //Routers
 const productRouter = require("./routes/Products");
 app.use("/products", productRouter);

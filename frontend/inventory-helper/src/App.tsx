@@ -17,35 +17,154 @@ import EbayApi from "./pages/EbayApi";
 import Whatnot from "./pages/Whatnot";
 import PriceList from "./pages/PriceList";
 import EmployeeInformation from "./pages/EmployeeInformation";
+import Login from "./pages/Login";
+import { AuthProvider } from "./context/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { useAuth } from "./context/AuthContext";
 
-function App() {
+function AppContent() {
+  const { isAuthenticated } = useAuth();
+
   return (
     <div className="app-container">
       <Router>
-        <NavBar />
+        {isAuthenticated && <NavBar />}
         <div className="main-content">
           <Routes>
-            <Route path="/" Component={Home}></Route>
-            <Route path="/addProduct" Component={AddProduct}></Route>
-            <Route path="/products/:id" Component={Product}></Route>
-            <Route path="/editProduct" Component={EditProduct}></Route>
-            <Route path="/search" Component={Search}></Route>
-            <Route path="/inbound" Component={InboundProduct}></Route>
-            <Route path="/inbound/showAll" Component={InboundData}></Route>
-            <Route path="/sales" Component={Sales}></Route>
-            <Route path="/orders/showAll" Component={AllOrders}></Route>
-            <Route path="/orders/packingMode" Component={PackingMode}></Route>
-            {/* <Route path="/sephoraSearch" Component={SephoraSearch}></Route> */}
-            <Route path="/pricelistParser" Component={PriceListParser}></Route>
-            <Route path="/ebayAPI" Component={EbayApi}></Route>
-            <Route path="/whatnot" Component={Whatnot}></Route>
-            <Route path="/price-list" Component={PriceList}></Route>
-            <Route path="/employee-info" Component={EmployeeInformation}></Route>
+            <Route path="/login" element={<Login />} />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <Home />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/addProduct"
+              element={
+                <ProtectedRoute>
+                  <AddProduct />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/products/:id"
+              element={
+                <ProtectedRoute>
+                  <Product />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/editProduct"
+              element={
+                <ProtectedRoute>
+                  <EditProduct />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/search"
+              element={
+                <ProtectedRoute>
+                  <Search />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/inbound"
+              element={
+                <ProtectedRoute>
+                  <InboundProduct />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/inbound/showAll"
+              element={
+                <ProtectedRoute>
+                  <InboundData />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/sales"
+              element={
+                <ProtectedRoute>
+                  <Sales />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/orders/showAll"
+              element={
+                <ProtectedRoute>
+                  <AllOrders />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/orders/packingMode"
+              element={
+                <ProtectedRoute>
+                  <PackingMode />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/pricelistParser"
+              element={
+                <ProtectedRoute>
+                  <PriceListParser />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/ebayAPI"
+              element={
+                <ProtectedRoute>
+                  <EbayApi />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/whatnot"
+              element={
+                <ProtectedRoute>
+                  <Whatnot />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/price-list"
+              element={
+                <ProtectedRoute>
+                  <PriceList />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/employee-info"
+              element={
+                <ProtectedRoute>
+                  <EmployeeInformation />
+                </ProtectedRoute>
+              }
+            />
           </Routes>
         </div>
       </Router>
       <ToastContainer />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
