@@ -36,19 +36,13 @@ function NavBar() {
         >
           <ul className="navbar-nav mr-auto">
             <li className="nav-item active">
-              <Link
-                className="nav-link"
-                to="/"
+              <button
+                className="nav-link btnk"
                 onClick={handleHomeClick}
-                style={{ cursor: "pointer" }}
+                style={{ cursor: "pointer", background: "none", border: "none" }}
               >
-                Home
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link className="nav-link" to="/addProduct">
-                Add Product
-              </Link>
+                Products
+              </button>
             </li>
             {/* <li className="nav-item">
               <a className="nav-link" href="/listings">
@@ -76,20 +70,15 @@ function NavBar() {
               </Link>
             </li>
             <li className="nav-item">
-              <Link className="nav-link" to="/priceListParser">
+              <Link className="nav-link" to="/price-list">
                 PriceList
               </Link>
             </li>
-            <li className="nav-item">
-              <Link className="nav-link" to="/price-list">
-                PriceList(New)
-              </Link>
-            </li>
-            <li className="nav-item">
+            {/* <li className="nav-item">
               <Link className="nav-link" to="/ebayAPI">
                 EbayAPI
               </Link>
-            </li>
+            </li> */}
             <li className="nav-item">
               <Link className="nav-link" to="/whatnot">
                 Whatnot

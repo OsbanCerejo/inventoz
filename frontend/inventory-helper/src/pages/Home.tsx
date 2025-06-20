@@ -2,6 +2,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import ProductList from "../components/ProductList";
 import { useLocation, useNavigate } from "react-router-dom";
+import { Button, Box, Stack } from "@mui/material";
 
 function Home() {
   // State Variables
@@ -152,23 +153,32 @@ function Home() {
 
   return (
     <div>
-      <div style={{ textAlign: "center" }}>
-        <button
-          onClick={handleRefresh}
-          style={{
-            backgroundColor: "red",
-            color: "white",
-            padding: "10px",
-            border: "none",
-            borderRadius: "5px",
-          }}
-        >
-          Refresh
-        </button>
-      </div>
+      <Box mt={4} mb={3} px={2} display="flex" justifyContent="space-between" sx={{ minHeight: 64, alignItems: 'unset' }}>
+        <h1 style={{ margin: 0, fontWeight: 600, fontSize: '2.2rem', letterSpacing: '-0.5px' }}>Products</h1>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <Button
+            variant="contained"
+            color="primary"
+            size="large"
+            style={{ fontWeight: 500, textTransform: 'none', boxShadow: 'none' }}
+            onClick={() => navigate("/addProduct")}
+          >
+            Add Product
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            size="large"
+            style={{ fontWeight: 500, textTransform: 'none', boxShadow: 'none' }}
+            onClick={handleRefresh}
+          >
+            Refresh
+          </Button>
+        </Stack>
+      </Box>
       <ProductList
         products={sortedAndFilteredProducts}
-        heading={heading}
+        heading={""}
         handleSort={handleSort}
         sortConfig={sortConfig}
         filterConfig={filterConfig}

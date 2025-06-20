@@ -1,0 +1,32 @@
+{
+  "admin": {
+    "orders": ["view", "create", "edit", "delete"],
+    "pricelist": ["view", "create", "edit", "delete"],
+    "products": ["view", "create", "edit", "delete"],
+    "inbound": ["view", "create", "edit", "delete"],
+    "addProduct": ["view", "create", "edit", "delete"],
+    "packing": ["view"],
+    "whatnot": ["view", "create", "edit", "delete"],
+    "employeeInfo": ["view", "create", "edit", "delete"],
+    "users": ["view", "create", "edit", "delete"],
+    "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "employeeInfo", "users"]
+  },
+  "listing": {
+    "menu": []
+  },
+  "packing": {
+    "packing": ["view"],
+    "menu": ["packing"]
+  },
+  "warehouse_l1": {
+    "whatnot": ["view"],
+    "menu": ["whatnot"]
+  },
+  "warehouse_l2": {
+    "pricelist": ["view"],
+    "menu": ["pricelist"]
+  },
+  "accounts": {
+    "menu": []
+  }
+} 

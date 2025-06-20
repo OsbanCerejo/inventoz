@@ -12,7 +12,6 @@ import { ToastContainer } from "react-toastify";
 import AllOrders from "./pages/AllOrders";
 import "./App.css";
 import PackingMode from "./pages/PackingMode";
-import PriceListParser from "./pages/PriceListParser";
 import EbayApi from "./pages/EbayApi";
 import Whatnot from "./pages/Whatnot";
 import PriceList from "./pages/PriceList";
@@ -109,14 +108,6 @@ function AppContent() {
               element={
                 <ProtectedRoute>
                   <PackingMode />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/pricelistParser"
-              element={
-                <ProtectedRoute>
-                  <PriceListParser />
                 </ProtectedRoute>
               }
             />
