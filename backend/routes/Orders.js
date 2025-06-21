@@ -2,9 +2,11 @@ const express = require("express");
 const router = express.Router();
 const axios = require("axios");
 const authService = require("../Services/AuthService");
+const { auth } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 const service = new authService();
 
-router.get("/allOrders", async (req, res) => {
+router.get("/allOrders", auth, checkPermission('orders', 'view'), async (req, res) => {
   const TOKEN = process.env.API_KEY_ENCODED;
 
   const SHIPSTATION_URL = "https://ssapi.shipstation.com/orders";
@@ -47,7 +49,7 @@ router.get("/allOrders", async (req, res) => {
 });
 
 // Fetch order details by order ID
-router.get("/order/:orderNumber", async (req, res) => {
+router.get("/order/:orderNumber", auth, checkPermission('orders', 'view'), async (req, res) => {
   const TOKEN = process.env.API_KEY_ENCODED;
 
   const SHIPSTATION_URL = "https://ssapi.shipstation.com/orders";

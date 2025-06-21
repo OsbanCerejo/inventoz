@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { User } = require('../models');
-const { auth, adminAuth } = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 const { ValidationError, Op } = require('sequelize');
 
-// Get all users (admin only)
-router.get('/', adminAuth, async (req, res) => {
+// Get all users (users permission required)
+router.get('/', auth, checkPermission('users', 'view'), async (req, res) => {
   try {
     const users = await User.findAll({
       attributes: ['id', 'name', 'username', 'email', 'role', 'isActive', 'createdAt', 'updatedAt'],
@@ -21,8 +22,8 @@ router.get('/', adminAuth, async (req, res) => {
   }
 });
 
-// Get user by ID (admin only)
-router.get('/:id', adminAuth, async (req, res) => {
+// Get user by ID (users permission required)
+router.get('/:id', auth, checkPermission('users', 'view'), async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id, {
       attributes: ['id', 'name', 'username', 'email', 'role', 'isActive', 'createdAt', 'updatedAt']
@@ -43,8 +44,8 @@ router.get('/:id', adminAuth, async (req, res) => {
   }
 });
 
-// Create new user (admin only)
-router.post('/', adminAuth, async (req, res) => {
+// Create new user (users permission required)
+router.post('/', auth, checkPermission('users', 'create'), async (req, res) => {
   try {
     const { name, username, email, password, role } = req.body;
 
@@ -108,8 +109,8 @@ router.post('/', adminAuth, async (req, res) => {
   }
 });
 
-// Update user (admin only)
-router.put('/:id', adminAuth, async (req, res) => {
+// Update user (users permission required)
+router.put('/:id', auth, checkPermission('users', 'edit'), async (req, res) => {
   try {
     const { name, username, email, password, role, isActive } = req.body;
     const userId = req.params.id;
@@ -182,8 +183,8 @@ router.put('/:id', adminAuth, async (req, res) => {
   }
 });
 
-// Delete user (admin only)
-router.delete('/:id', adminAuth, async (req, res) => {
+// Delete user (users permission required)
+router.delete('/:id', auth, checkPermission('users', 'delete'), async (req, res) => {
   try {
     const userId = req.params.id;
 
@@ -214,8 +215,8 @@ router.delete('/:id', adminAuth, async (req, res) => {
   }
 });
 
-// Toggle user active status (admin only)
-router.patch('/:id/toggle-status', adminAuth, async (req, res) => {
+// Toggle user active status (users permission required)
+router.patch('/:id/toggle-status', auth, checkPermission('users', 'edit'), async (req, res) => {
   try {
     const userId = req.params.id;
 

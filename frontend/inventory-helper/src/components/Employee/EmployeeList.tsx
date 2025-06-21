@@ -20,6 +20,7 @@ import {
 } from '@mui/material';
 import { Close as CloseIcon, Download as DownloadIcon } from '@mui/icons-material';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../context/AuthContext';
 
 interface Employee {
   id: number;
@@ -46,10 +47,16 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ refreshTrigger }) => {
   const [loading, setLoading] = useState(true);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { token } = useAuth();
 
   const fetchEmployees = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/employee-info/all`);
+      const response = await fetch(`${API_BASE_URL}/employee-info/all`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
       if (!response.ok) {
         throw new Error('Failed to fetch employees');
@@ -66,13 +73,14 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ refreshTrigger }) => {
 
   useEffect(() => {
     fetchEmployees();
-  }, [refreshTrigger]);
+  }, [refreshTrigger, token]);
 
   const handleStatusChange = async (id: number, newStatus: 'approved' | 'rejected') => {
     try {
       const response = await fetch(`${API_BASE_URL}/employee-info/${id}/status`, {
         method: 'PATCH',
         headers: {
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ status: newStatus })
@@ -236,7 +244,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ refreshTrigger }) => {
                   </Typography>
                   <Button
                     startIcon={<DownloadIcon />}
-                    href={`${API_BASE_URL}/uploads/${selectedEmployee.photoIdPath}`}
+                    href={`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/uploads/${selectedEmployee.photoIdPath.split('/').pop()}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >

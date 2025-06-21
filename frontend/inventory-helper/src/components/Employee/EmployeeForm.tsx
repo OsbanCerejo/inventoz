@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../context/AuthContext';
 
 interface FormData {
   firstName: string;
@@ -49,6 +50,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ open, onClose, onEmployeeAd
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { token } = useAuth();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -82,6 +84,9 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ open, onClose, onEmployeeAd
 
       const response = await fetch(`${API_BASE_URL}/employee-info/submit`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formDataToSend
       });
 

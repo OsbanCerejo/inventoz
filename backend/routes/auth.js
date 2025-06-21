@@ -3,6 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
 const { auth, adminAuth } = require('../middleware/auth');
+const { getUserPermissions } = require('../middleware/permissions');
 const { ValidationError, Op } = require('sequelize');
 
 // Login route
@@ -82,6 +83,9 @@ router.get('/me', auth, async (req, res) => {
     });
   }
 });
+
+// Get user permissions
+router.get('/permissions', auth, getUserPermissions);
 
 // Create user (admin only)
 router.post('/users', adminAuth, async (req, res) => {

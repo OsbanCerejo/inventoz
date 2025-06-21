@@ -4,8 +4,10 @@ const { Inbound, Products } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 const StockUpdateService = require("../Services/StockUpdateService");
+const { auth } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 
-router.post("/", async (req, res) => {
+router.post("/", auth, checkPermission('inbound', 'create'), async (req, res) => {
   const inboundItem = req.body;
   console.log("Inbound object in backend is : ", inboundItem);
   console.log;
@@ -22,7 +24,7 @@ router.post("/", async (req, res) => {
   res.json(created ? "Created New" : "Already Exists");
 });
 
-router.put("/", async (req, res) => {
+router.put("/", auth, checkPermission('inbound', 'edit'), async (req, res) => {
   try {
     const { sku, quantity } = req.body;
     await StockUpdateService.updateProductQuantity(sku, quantity);
@@ -33,7 +35,7 @@ router.put("/", async (req, res) => {
   }
 });
 
-router.get("/", async (req, res) => {
+router.get("/", auth, checkPermission('inbound', 'view'), async (req, res) => {
   const listOfInbound = await Inbound.findAll({
     include: {
       model: Products,
@@ -43,7 +45,7 @@ router.get("/", async (req, res) => {
   res.json(listOfInbound);
 });
 
-router.get("/search/:itemName", async (req, res) => {
+router.get("/search/:itemName", auth, checkPermission('inbound', 'view'), async (req, res) => {
   const searchQuery = req.params.itemName;
   const searchResults = await Inbound.findAll({
     where: { sku: { [Op.like]: searchQuery + "%" } },

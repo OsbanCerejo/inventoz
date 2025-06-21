@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { Settings, Products, WhatnotLog } = require('../models');
 const { auth } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 const { Op } = require('sequelize');
 const axios = require('axios');
 const StockUpdateService = require('../Services/StockUpdateService');
@@ -26,7 +27,7 @@ const determineSearchType = async (barcode) => {
 };
 
 // Search product by barcode
-router.post('/search-barcode', auth, async (req, res) => {
+router.post('/search-barcode', auth, checkPermission('whatnot', 'view'), async (req, res) => {
   try {
     const { barcode, reduceQuantity, isMultipleSelection } = req.body;
     if (!barcode) {
@@ -145,7 +146,7 @@ router.post('/search-barcode', auth, async (req, res) => {
 });
 
 // Get Whatnot logs
-router.get('/logs', async (req, res) => {
+router.get('/logs', auth, checkPermission('whatnot', 'view'), async (req, res) => {
   try {
     const logs = await WhatnotLog.findAll({
       include: [{

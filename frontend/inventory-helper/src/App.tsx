@@ -21,9 +21,24 @@ import Login from "./pages/Login";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./context/AuthContext";
+import { CircularProgress, Box } from "@mui/material";
 
 function AppContent() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Show loading spinner while permissions are being fetched
+  if (isLoading) {
+    return (
+      <Box 
+        display="flex" 
+        justifyContent="center" 
+        alignItems="center" 
+        minHeight="100vh"
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <div className="app-container">
@@ -35,7 +50,7 @@ function AppContent() {
             <Route
               path="/"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute menuItem="products">
                   <Home />
                 </ProtectedRoute>
               }
@@ -43,7 +58,7 @@ function AppContent() {
             <Route
               path="/addProduct"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="products" action="create">
                   <AddProduct />
                 </ProtectedRoute>
               }
@@ -51,7 +66,7 @@ function AppContent() {
             <Route
               path="/products/:id"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="products" action="view">
                   <Product />
                 </ProtectedRoute>
               }
@@ -59,7 +74,7 @@ function AppContent() {
             <Route
               path="/editProduct"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="products" action="edit">
                   <EditProduct />
                 </ProtectedRoute>
               }
@@ -67,7 +82,7 @@ function AppContent() {
             <Route
               path="/search"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="products" action="view">
                   <Search />
                 </ProtectedRoute>
               }
@@ -75,7 +90,7 @@ function AppContent() {
             <Route
               path="/inbound"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="inbound" action="create">
                   <InboundProduct />
                 </ProtectedRoute>
               }
@@ -83,7 +98,7 @@ function AppContent() {
             <Route
               path="/inbound/showAll"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute menuItem="inbound">
                   <InboundData />
                 </ProtectedRoute>
               }
@@ -91,7 +106,7 @@ function AppContent() {
             <Route
               path="/sales"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="sales" action="view">
                   <Sales />
                 </ProtectedRoute>
               }
@@ -99,7 +114,7 @@ function AppContent() {
             <Route
               path="/orders/showAll"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute menuItem="orders">
                   <AllOrders />
                 </ProtectedRoute>
               }
@@ -107,7 +122,7 @@ function AppContent() {
             <Route
               path="/orders/packingMode"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute menuItem="packing">
                   <PackingMode />
                 </ProtectedRoute>
               }
@@ -115,7 +130,7 @@ function AppContent() {
             <Route
               path="/ebayAPI"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="ebay" action="view">
                   <EbayApi />
                 </ProtectedRoute>
               }
@@ -123,7 +138,7 @@ function AppContent() {
             <Route
               path="/whatnot"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute menuItem="whatnot">
                   <Whatnot />
                 </ProtectedRoute>
               }
@@ -131,7 +146,7 @@ function AppContent() {
             <Route
               path="/price-list"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute menuItem="pricelist">
                   <PriceList />
                 </ProtectedRoute>
               }
@@ -139,7 +154,7 @@ function AppContent() {
             <Route
               path="/employee-info"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute menuItem="employeeInfo">
                   <EmployeeInformation />
                 </ProtectedRoute>
               }
@@ -147,7 +162,7 @@ function AppContent() {
             <Route
               path="/users"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute menuItem="users">
                   <Users />
                 </ProtectedRoute>
               }

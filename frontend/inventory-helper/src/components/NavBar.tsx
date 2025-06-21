@@ -7,7 +7,7 @@ function NavBar() {
   const [isOpen, setIsOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, hasMenuAccess, isLoading } = useAuth();
 
   const toggleNavbar = () => {
     setIsOpen(!isOpen);
@@ -27,6 +27,34 @@ function NavBar() {
     navigate("/login");
     setShowUserMenu(false);
   };
+
+  // Menu items configuration
+  const menuItems = [
+    { key: 'products', label: 'Products', path: '/', onClick: handleHomeClick, isButton: true },
+    { key: 'inbound', label: 'Inbound', path: '/inbound/showAll' },
+    { key: 'orders', label: 'Orders', path: '/orders/showAll' },
+    { key: 'packing', label: 'Packing', path: '/orders/packingMode' },
+    { key: 'pricelist', label: 'PriceList', path: '/price-list' },
+    { key: 'whatnot', label: 'Whatnot', path: '/whatnot' },
+    { key: 'employeeInfo', label: 'Employees', path: '/employee-info' }
+  ];
+
+  // If still loading permissions, show minimal navbar
+  if (isLoading) {
+    return (
+      <div>
+        <nav className="navbar navbar-expand-lg navbar-light bg-light" style={{ position: "relative" }}>
+          <div className="navbar-brand" style={{ position: "relative", zIndex: 1 }}>
+            Inventoz
+          </div>
+          <div style={{ marginLeft: 'auto', padding: '0.5rem 1rem' }}>
+            Loading...
+          </div>
+        </nav>
+      </div>
+    );
+  }
+
   return (
     <div>
       <nav className="navbar navbar-expand-lg navbar-light bg-light" style={{ position: "relative" }}>
@@ -63,60 +91,30 @@ function NavBar() {
           style={{ position: "relative", zIndex: 1 }}
         >
           <ul className="navbar-nav mr-auto">
-            <li className="nav-item active">
-              <button
-                className="nav-link btnk"
-                onClick={handleHomeClick}
-                style={{ cursor: "pointer", background: "none", border: "none" }}
-              >
-                Products
-              </button>
-            </li>
-            {/* <li className="nav-item">
-              <a className="nav-link" href="/listings">
-                Listings
-              </a>
-            </li> */}
-            <li className="nav-item">
-              <Link className="nav-link" to="/inbound/showAll">
-                Inbound
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link className="nav-link" to="/orders/showAll">
-                Orders
-              </Link>
-            </li>
-            {/* <li className="nav-item">
-              <a className="nav-link" href="/sephoraSearch">
-                Sephora
-              </a>
-            </li> */}
-            <li className="nav-item">
-              <Link className="nav-link" to="/orders/packingMode">
-                Packing
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link className="nav-link" to="/price-list">
-                PriceList
-              </Link>
-            </li>
-            {/* <li className="nav-item">
-              <Link className="nav-link" to="/ebayAPI">
-                EbayAPI
-              </Link>
-            </li> */}
-            <li className="nav-item">
-              <Link className="nav-link" to="/whatnot">
-                Whatnot
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link className="nav-link" to="/employee-info">
-                Employees
-              </Link>
-            </li>
+            {menuItems.map((item) => {
+              // Check if user has access to this menu item
+              if (!hasMenuAccess(item.key)) {
+                return null;
+              }
+
+              return (
+                <li key={item.key} className="nav-item">
+                  {item.isButton ? (
+                    <button
+                      className="nav-link btnk"
+                      onClick={item.onClick}
+                      style={{ cursor: "pointer", background: "none", border: "none" }}
+                    >
+                      {item.label}
+                    </button>
+                  ) : (
+                    <Link className="nav-link" to={item.path}>
+                      {item.label}
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           {user && (
             <div className="navbar-nav ml-auto" style={{ position: "relative", zIndex: 9999 }}>
@@ -186,7 +184,7 @@ function NavBar() {
                       </div>
                     </div>
                     <div className="dropdown-divider" style={{ margin: "0" }}></div>
-                    {user.role === 'admin' && (
+                    {hasMenuAccess('users') && (
                       <>
                         <Link
                           className="dropdown-item"
@@ -241,20 +239,6 @@ function NavBar() {
           )}
         </div>
       </nav>
-      {/* Overlay to close dropdown when clicking outside */}
-      {/* {showUserMenu && (
-        <div 
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 9998
-          }}
-          onClick={() => setShowUserMenu(false)}
-        />
-      )} */}
     </div>
   );
 }

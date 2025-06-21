@@ -56,7 +56,7 @@ const Login = () => {
       });
 
       const { token, user } = response.data;
-      login(token, user);
+      await login(token, user);
       navigate('/', { replace: true });
     } catch (err: any) {
       setError(err.response?.data?.error || 'An error occurred during login');

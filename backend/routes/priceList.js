@@ -8,6 +8,8 @@ const { PriceListFile, PriceListProduct } = require('../models');
 const { Op } = require('sequelize');
 const { sequelize } = require('../models');
 const ExcelParser = require('../utils/excelParser');
+const { auth } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 
 // Configure multer for file upload
 const storage = multer.diskStorage({
@@ -38,7 +40,7 @@ const upload = multer({
 });
 
 // Upload price list file
-router.post('/upload-file', upload.single('file'), async (req, res) => {
+router.post('/upload-file', auth, checkPermission('pricelist', 'create'), upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -65,7 +67,7 @@ router.post('/upload-file', upload.single('file'), async (req, res) => {
 });
 
 // Get all price list files
-router.get('/files', async (req, res) => {
+router.get('/files', auth, checkPermission('pricelist', 'view'), async (req, res) => {
   try {
     const files = await PriceListFile.findAll({
       order: [['createdAt', 'DESC']],
@@ -79,7 +81,7 @@ router.get('/files', async (req, res) => {
 });
 
 // Get file headers
-router.get('/file/:id/headers', async (req, res) => {
+router.get('/file/:id/headers', auth, checkPermission('pricelist', 'view'), async (req, res) => {
   try {
     const file = await PriceListFile.findByPk(req.params.id);
     if (!file) {
@@ -102,7 +104,7 @@ router.get('/file/:id/headers', async (req, res) => {
 });
 
 // Update header mapping
-router.put('/file/:id/mapping', async (req, res) => {
+router.put('/file/:id/mapping', auth, checkPermission('pricelist', 'edit'), async (req, res) => {
   try {
     const { mapping } = req.body;
     const file = await PriceListFile.findByPk(req.params.id);
@@ -136,7 +138,7 @@ router.put('/file/:id/mapping', async (req, res) => {
 });
 
 // Search products
-router.get('/search-products', async (req, res) => {
+router.get('/search-products', auth, checkPermission('pricelist', 'view'), async (req, res) => {
   try {
     const { query } = req.query;
     const where = {};
@@ -166,7 +168,7 @@ router.get('/search-products', async (req, res) => {
 });
 
 // Delete price list file and associated products
-router.delete('/file/:id', async (req, res) => {
+router.delete('/file/:id', auth, checkPermission('pricelist', 'delete'), async (req, res) => {
   try {
     const file = await PriceListFile.findByPk(req.params.id);
     if (!file) {
@@ -198,7 +200,7 @@ router.delete('/file/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Error deleting file:', error);
-    res.status(500).json({ error: 'Failed to delete file and associated products' });
+    res.status(500).json({ error: 'Failed to delete file' });
   }
 });
 
