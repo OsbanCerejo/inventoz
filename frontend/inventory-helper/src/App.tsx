@@ -16,6 +16,7 @@ import EbayApi from "./pages/EbayApi";
 import Whatnot from "./pages/Whatnot";
 import PriceList from "./pages/PriceList";
 import EmployeeInformation from "./pages/EmployeeInformation";
+import Users from "./pages/Users";
 import Login from "./pages/Login";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -140,6 +141,14 @@ function AppContent() {
               element={
                 <ProtectedRoute>
                   <EmployeeInformation />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users"
+              element={
+                <ProtectedRoute>
+                  <Users />
                 </ProtectedRoute>
               }
             />

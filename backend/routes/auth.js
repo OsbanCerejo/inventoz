@@ -44,6 +44,7 @@ router.post('/login', async (req, res) => {
       token,
       user: {
         id: user.id,
+        name: user.name,
         username: user.username,
         email: user.email,
         role: user.role
@@ -69,6 +70,7 @@ router.get('/me', auth, async (req, res) => {
   try {
     res.json({
       id: req.user.id,
+      name: req.user.name,
       username: req.user.username,
       email: req.user.email,
       role: req.user.role
@@ -84,7 +86,7 @@ router.get('/me', auth, async (req, res) => {
 // Create user (admin only)
 router.post('/users', adminAuth, async (req, res) => {
   try {
-    const { username, email, password, role } = req.body;
+    const { name, username, email, password, role } = req.body;
 
     // Validate input
     if (!username || !email || !password) {
@@ -107,6 +109,7 @@ router.post('/users', adminAuth, async (req, res) => {
     }
 
     const user = await User.create({
+      name,
       username,
       email,
       password,
@@ -115,6 +118,7 @@ router.post('/users', adminAuth, async (req, res) => {
 
     res.status(201).json({
       id: user.id,
+      name: user.name,
       username: user.username,
       email: user.email,
       role: user.role
