@@ -321,6 +321,12 @@ function EditProduct() {
 
   return (
     <div>
+      <Box sx={{ mt: 4, mb: 3, px: 2 }}>
+        <Typography variant="h4" component="h1" sx={{ mb: 0 }}>
+          Edit Product
+        </Typography>
+      </Box>
+      
       <form onSubmit={formik.handleSubmit} onKeyDown={handleKeyDown}>
         <Grid container spacing={0} justifyContent="center">
           <Grid item xs={3}>

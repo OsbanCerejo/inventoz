@@ -68,7 +68,7 @@ const Login = () => {
   return (
     <Container component="main" maxWidth="xs">
       <StyledPaper elevation={3}>
-        <Typography component="h1" variant="h5" gutterBottom>
+        <Typography component="h1" variant="h4" gutterBottom>
           Sign in to Inventoz
         </Typography>
         <StyledForm onSubmit={handleSubmit}>

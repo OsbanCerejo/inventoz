@@ -2,7 +2,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import ProductList from "../components/ProductList";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Button, Box, Stack } from "@mui/material";
+import { Button, Box, Stack, Typography } from "@mui/material";
 
 function Home() {
   // State Variables
@@ -153,8 +153,10 @@ function Home() {
 
   return (
     <div>
-      <Box mt={4} mb={3} px={2} display="flex" justifyContent="space-between" sx={{ minHeight: 64, alignItems: 'unset' }}>
-        <h1 style={{ margin: 0, fontWeight: 600, fontSize: '2.2rem', letterSpacing: '-0.5px' }}>Products</h1>
+      <Box mt={4} mb={3} px={2} display="flex" justifyContent="space-between" alignItems="center">
+        <Typography variant="h4" component="h1" sx={{ mb: 0 }}>
+          Products
+        </Typography>
         <Stack direction="row" spacing={2} alignItems="center">
           <Button
             variant="contained"

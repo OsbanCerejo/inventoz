@@ -62,10 +62,6 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
 }));
 
 const Whatnot: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [userId, setUserId] = useState('');
   const [barcode, setBarcode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,31 +71,10 @@ const Whatnot: React.FC = () => {
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isAuthenticated && barcodeInputRef.current) {
+    if (barcodeInputRef.current) {
       barcodeInputRef.current.focus();
     }
-  }, [isAuthenticated]);
-
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    
-    try {
-      const response = await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/whatnot/verify-password`, { 
-        username,
-        password 
-      });
-      if (response.data.success) {
-        setIsAuthenticated(true);
-        setUserId(response.data.userId);
-      }
-    } catch (error) {
-      setError('Invalid credentials');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, []);
 
   const handleBarcodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,8 +85,7 @@ const Whatnot: React.FC = () => {
     
     try {
       const response = await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/whatnot/search-barcode`, { 
-        barcode,
-        userId 
+        barcode
       });
       if (response.data.success) {
         if (response.data.multiple) {
@@ -145,7 +119,6 @@ const Whatnot: React.FC = () => {
         { 
           barcode: product.sku,
           reduceQuantity: true,
-          userId,
           isMultipleSelection: true
         }
       );
@@ -182,57 +155,15 @@ const Whatnot: React.FC = () => {
     }
   };
 
-  if (!isAuthenticated) {
-    return (
-      <Box sx={{ maxWidth: 400, mx: 'auto', mt: 4, p: 3 }}>
-        <Paper elevation={3} sx={{ p: 4 }}>
-          <Typography variant="h5" gutterBottom>
-            Whatnot Menu Access
-          </Typography>
-          <form onSubmit={handlePasswordSubmit}>
-            <TextField
-              fullWidth
-              label="Username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              margin="normal"
-              required
-            />
-            <TextField
-              fullWidth
-              type="password"
-              label="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              margin="normal"
-              required
-            />
-            <Button
-              fullWidth
-              type="submit"
-              variant="contained"
-              color="primary"
-              sx={{ mt: 2 }}
-              disabled={loading}
-            >
-              {loading ? <CircularProgress size={24} /> : 'Login'}
-            </Button>
-          </form>
-          {error && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {error}
-            </Alert>
-          )}
-        </Paper>
-      </Box>
-    );
-  }
-
   return (
-    <Box sx={{ maxWidth: 1200, mx: 'auto', mt: 4, p: 3 }}>
+    <Box sx={{ mt: 4, px: 3 }}>
+      <Typography variant="h4" component="h1" sx={{ mb: 3 }}>
+        Whatnot
+      </Typography>
+      
       <Paper elevation={3} sx={{ p: 4, mb: 4 }}>
         <Typography variant="h5" gutterBottom>
-          Whatnot Barcode Scanner
+          Barcode Scanner
         </Typography>
         <form onSubmit={handleBarcodeSubmit}>
           <Grid container spacing={2} alignItems="center">

@@ -22,27 +22,6 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// Verify admin credentials
-router.post('/verify-admin', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    const settings = await Settings.findOne({
-      where: {
-        employee_info_username: username,
-        employee_info_password: password
-      }
-    });
-    
-    if (!settings) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    }
-    
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
 // Submit new employee information
 router.post('/submit', upload.single('photoId'), async (req, res) => {
   try {

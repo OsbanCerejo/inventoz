@@ -151,10 +151,11 @@ const Users: React.FC = () => {
 
   return (
     <Box sx={{ mt: 4, px: 3 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-        <Typography variant="h4" component="h1">
-          User Management
-        </Typography>
+      <Typography variant="h4" component="h1" sx={{ mb: 3 }}>
+        Users
+      </Typography>
+      
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
         <Button
           variant="contained"
           startIcon={<AddIcon />}

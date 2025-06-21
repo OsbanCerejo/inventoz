@@ -307,7 +307,7 @@ const PriceList: React.FC = () => {
   return (
     <Box sx={{ mt: 4, mb: 4, px: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h4" component="h1">
+        <Typography variant="h4" component="h1" sx={{ mb: 0 }}>
           Price List
         </Typography>
         <Button

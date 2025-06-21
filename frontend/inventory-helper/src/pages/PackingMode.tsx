@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { Grid } from "@mui/material";
+import { Grid, Typography, Box } from "@mui/material";
 
 type Item = {
   sku: string;
@@ -109,6 +109,12 @@ const OrderDetails = () => {
 
   return (
     <div>
+      <Box sx={{ mt: 4, mb: 3, px: 2 }}>
+        <Typography variant="h4" component="h1" sx={{ mb: 0 }}>
+          Packing Mode
+        </Typography>
+      </Box>
+      
       <Grid container spacing={0} textAlign={"center"}>
         <Grid item xs={12}>
           <h1>Order Details</h1>

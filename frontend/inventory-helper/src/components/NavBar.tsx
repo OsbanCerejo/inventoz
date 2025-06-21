@@ -114,7 +114,7 @@ function NavBar() {
             </li>
             <li className="nav-item">
               <Link className="nav-link" to="/employee-info">
-                Employee Info
+                Employees
               </Link>
             </li>
           </ul>

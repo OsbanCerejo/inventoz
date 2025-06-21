@@ -1,7 +1,7 @@
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { toast } from "react-toastify";
-
+import { Typography, Box } from "@mui/material";
 
 const EbayAPI = () => {
   const [sku, setSku] = useState("");
@@ -97,6 +97,12 @@ const EbayAPI = () => {
   };
   return (
     <div>
+      <Box sx={{ mt: 4, mb: 3, px: 2 }}>
+        <Typography variant="h4" component="h1" sx={{ mb: 0 }}>
+          eBay API
+        </Typography>
+      </Box>
+      
       <h2>eBay Listing Updater</h2>
 
       <div style={{ marginBottom: "1rem" }}>
