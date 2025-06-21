@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Container,
   Typography,
   Paper,
   Button,
@@ -306,7 +305,7 @@ const PriceList: React.FC = () => {
   }, []);
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <Box sx={{ mt: 4, mb: 4, px: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
         <Typography variant="h4" component="h1">
           Price List
@@ -466,7 +465,7 @@ const PriceList: React.FC = () => {
           <LinearProgress variant="determinate" value={importProgress} />
         </Box>
       )}
-    </Container>
+    </Box>
   );
 };
 

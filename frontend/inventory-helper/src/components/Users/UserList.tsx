@@ -3,8 +3,6 @@ import { User } from '../../types/User';
 import { 
   Edit as EditIcon, 
   Delete as DeleteIcon, 
-  PersonOff as PersonOffIcon,
-  PersonAdd as PersonAddIcon,
   People as PeopleIcon
 } from '@mui/icons-material';
 import {
@@ -29,7 +27,6 @@ interface UserListProps {
   users: User[];
   onEdit: (user: User) => void;
   onDelete: (userId: number) => void;
-  onToggleStatus: (userId: number) => void;
   currentUserId?: number;
 }
 
@@ -38,7 +35,6 @@ const UserList: React.FC<UserListProps> = ({
   users, 
   onEdit, 
   onDelete, 
-  onToggleStatus, 
   currentUserId 
 }) => {
   const getRoleDisplayName = (role: User['role']) => {
@@ -112,7 +108,6 @@ const UserList: React.FC<UserListProps> = ({
                   <TableCell><strong>Username</strong></TableCell>
                   <TableCell><strong>Email</strong></TableCell>
                   <TableCell><strong>Role</strong></TableCell>
-                  <TableCell><strong>Status</strong></TableCell>
                   <TableCell><strong>Created</strong></TableCell>
                   <TableCell><strong>Actions</strong></TableCell>
                 </TableRow>
@@ -148,13 +143,6 @@ const UserList: React.FC<UserListProps> = ({
                       />
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={user.isActive ? 'Active' : 'Inactive'}
-                        color={user.isActive ? 'success' : 'default'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
                       <Typography variant="body2" color="text.secondary">
                         {user.createdAt ? formatDate(user.createdAt) : 'N/A'}
                       </Typography>
@@ -173,20 +161,6 @@ const UserList: React.FC<UserListProps> = ({
                         
                         {user.id !== currentUserId && (
                           <>
-                            <Tooltip title={user.isActive ? 'Deactivate User' : 'Activate User'}>
-                              <IconButton
-                                size="small"
-                                color={user.isActive ? 'warning' : 'success'}
-                                onClick={() => onToggleStatus(user.id)}
-                              >
-                                {user.isActive ? (
-                                  <PersonOffIcon fontSize="small" />
-                                ) : (
-                                  <PersonAddIcon fontSize="small" />
-                                )}
-                              </IconButton>
-                            </Tooltip>
-                            
                             <Tooltip title="Delete User">
                               <IconButton
                                 size="small"

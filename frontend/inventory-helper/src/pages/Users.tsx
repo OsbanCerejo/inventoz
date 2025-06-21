@@ -7,7 +7,6 @@ import UserList from '../components/Users/UserList';
 import { User } from '../types/User';
 import { Add as AddIcon } from '@mui/icons-material';
 import {
-  Container,
   Typography,
   Button,
   Box,
@@ -109,21 +108,6 @@ const Users: React.FC = () => {
     }
   };
 
-  const handleToggleStatus = async (userId: number) => {
-    try {
-      const response = await axios.patch(`${API_BASE_URL}/users/${userId}/toggle-status`, {}, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      setUsers(users.map(user => user.id === userId ? response.data : user));
-      toast.success('User status updated successfully');
-    } catch (error: any) {
-      console.error('Error toggling user status:', error);
-      toast.error(error.response?.data?.error || 'Failed to update user status');
-    }
-  };
-
   const handleEditUser = (user: User) => {
     setEditingUser(user);
     setShowForm(true);
@@ -147,26 +131,26 @@ const Users: React.FC = () => {
   // Check if current user is admin
   if (!currentUser) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
+      <Box sx={{ mt: 4, px: 3 }}>
         <Alert severity="info">
           Loading user information...
         </Alert>
-      </Container>
+      </Box>
     );
   }
 
   if (currentUser?.role !== 'admin') {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
+      <Box sx={{ mt: 4, px: 3 }}>
         <Alert severity="error">
           Access denied. Admin privileges required.
         </Alert>
-      </Container>
+      </Box>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4 }}>
+    <Box sx={{ mt: 4, px: 3 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
         <Typography variant="h4" component="h1">
           User Management
@@ -199,11 +183,10 @@ const Users: React.FC = () => {
           users={users}
           onEdit={handleEditUser}
           onDelete={handleDeleteUser}
-          onToggleStatus={handleToggleStatus}
           currentUserId={currentUser?.id}
         />
       )}
-    </Container>
+    </Box>
   );
 };
 
