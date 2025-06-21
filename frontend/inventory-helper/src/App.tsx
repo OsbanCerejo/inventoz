@@ -20,6 +20,7 @@ import Users from "./pages/Users";
 import Login from "./pages/Login";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import RoleBasedHome from "./components/RoleBasedHome";
 import { useAuth } from "./context/AuthContext";
 import { CircularProgress, Box } from "@mui/material";
 
@@ -50,15 +51,17 @@ function AppContent() {
             <Route
               path="/"
               element={
-                <ProtectedRoute menuItem="products">
-                  <Home />
+                <ProtectedRoute>
+                  <RoleBasedHome>
+                    <Home />
+                  </RoleBasedHome>
                 </ProtectedRoute>
               }
             />
             <Route
               path="/addProduct"
               element={
-                <ProtectedRoute resource="products" action="create">
+                <ProtectedRoute resource="addProduct" action="create">
                   <AddProduct />
                 </ProtectedRoute>
               }
