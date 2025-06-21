@@ -31,12 +31,12 @@ function NavBar() {
     <div>
       <nav className="navbar navbar-expand-lg navbar-light bg-light" style={{ position: "relative" }}>
         {/* Role Watermark */}
-        {/* {user && (
+        {user && (
           <div style={{
             position: "absolute",
             top: "50%",
-            right: "200px",
-            transform: "translateY(-50%)",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
             fontSize: "16px",
             color: "#fd7e14",
             fontWeight: "700",
@@ -48,7 +48,7 @@ function NavBar() {
           }}>
             {user.role}
           </div>
-        )} */}
+        )}
         
         <Link className="navbar-brand" to="/" style={{ position: "relative", zIndex: 1 }}>
           Inventoz
