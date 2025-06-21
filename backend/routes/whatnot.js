@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { Settings, Products, WhatnotLog } = require('../models');
+const { auth } = require('../middleware/auth');
 const { Op } = require('sequelize');
 const axios = require('axios');
-const StockUpdateService = require('../services/StockUpdateService');
+const StockUpdateService = require('../Services/StockUpdateService');
 
 // Helper function to determine search type
 const determineSearchType = async (barcode) => {
@@ -25,7 +26,7 @@ const determineSearchType = async (barcode) => {
 };
 
 // Search product by barcode
-router.post('/search-barcode', async (req, res) => {
+router.post('/search-barcode', auth, async (req, res) => {
   try {
     const { barcode, reduceQuantity, isMultipleSelection } = req.body;
     if (!barcode) {
@@ -47,7 +48,8 @@ router.post('/search-barcode', async (req, res) => {
       barcode,
       searchType: isMultipleSelection ? 'UPC' : await determineSearchType(barcode),
       status: products.length === 0 ? 'not_found' : products.length === 1 ? 'found' : 'multiple_found',
-      sku: products.length > 0 ? products[0].sku : null
+      sku: products.length > 0 ? products[0].sku : null,
+      userId: req.user.id.toString()
     });
 
     if (products.length === 0) {

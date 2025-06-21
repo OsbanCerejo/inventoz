@@ -1,8 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const axios = require("axios");
-const authService = require("../Services/AuthService");
-const service = new authService();
+const service = require("../Services/ebayService");
 const fs = require("fs");
 const { parse } = require("csv-parse");
 const path = require("path");
