@@ -182,16 +182,10 @@ function NavBar() {
                               {user.username}
                             </div>
                           )}
-                          <div style={{ 
-                            textTransform: "capitalize",
-                            fontWeight: "500"
-                          }}>
-                            {user.role}
-                          </div>
                         </div>
                       </div>
                     </div>
-                    <div className="dropdown-divider"></div>
+                    <div className="dropdown-divider" style={{ margin: "0" }}></div>
                     {user.role === 'admin' && (
                       <>
                         <Link
@@ -203,7 +197,7 @@ function NavBar() {
                             border: "none", 
                             width: "100%", 
                             textAlign: "left",
-                            padding: "8px 16px",
+                            padding: "12px 16px",
                             textDecoration: "none",
                             color: "#212529",
                             display: "flex",
@@ -229,7 +223,7 @@ function NavBar() {
                         border: "none", 
                         width: "100%", 
                         textAlign: "left",
-                        padding: "8px 16px",
+                        padding: "12px 16px",
                         color: "#dc3545",
                         fontSize: "14px",
                         cursor: "pointer",
