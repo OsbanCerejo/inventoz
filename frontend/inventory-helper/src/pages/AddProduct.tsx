@@ -301,6 +301,7 @@ function AddProduct() {
 
           toast.success("Product Added Successfully!", { position: "top-right" });
           resetForm();
+          navigate("/", { state: { clearFilters: true } });
         } else {
           toast.error("Product Already Exists!", { position: "top-right" });
         }
