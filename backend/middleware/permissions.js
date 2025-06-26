@@ -99,6 +99,7 @@ const checkMenuAccess = (menuItem) => {
 
 /**
  * Get user permissions for frontend
+ * This function returns the complete permission structure from role-permissions.json
  */
 const getUserPermissions = (req, res) => {
   try {
@@ -115,17 +116,27 @@ const getUserPermissions = (req, res) => {
     const roleConfig = rolePermissions[userRole];
 
     if (!roleConfig) {
-      return res.status(403).json({ error: 'Invalid user role' });
+      console.error(`Role configuration not found for role: ${userRole}`);
+      return res.status(403).json({ 
+        error: `Invalid user role: ${userRole}. Please contact administrator.` 
+      });
     }
 
-    res.json({
+    // Return the complete role configuration including all permissions and menu items
+    // This ensures the frontend gets the exact same structure as defined in role-permissions.json
+    const response = {
       role: userRole,
       permissions: roleConfig,
       menu: roleConfig.menu || []
-    });
+    };
+
+    console.log(`Permissions returned for role ${userRole}:`, response);
+    res.json(response);
   } catch (error) {
     console.error('Get user permissions error:', error);
-    res.status(500).json({ error: 'Internal server error while getting permissions' });
+    res.status(500).json({ 
+      error: 'Internal server error while getting permissions. Please try again.' 
+    });
   }
 };
 

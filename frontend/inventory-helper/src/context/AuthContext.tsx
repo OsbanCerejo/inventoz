@@ -59,76 +59,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setPermissions(response.data);
     } catch (error) {
       console.error('Failed to fetch user permissions:', error);
-      console.log('Using default permissions for role:', user?.role);
-      // Set default permissions based on user role to prevent blank page
-      if (user) {
-        const defaultPermissions = getDefaultPermissions(user.role);
-        console.log('Default permissions set:', defaultPermissions);
-        setPermissions(defaultPermissions);
-      }
+      // Don't set default permissions - let the backend handle all permission logic
+      // This ensures we only manage permissions in role-permissions.json
+      setPermissions(null);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Get default permissions based on user role
-  const getDefaultPermissions = (role: string): UserPermissions => {
-    const rolePermissions = {
-      admin: {
-        role: 'admin',
-        permissions: {
-          orders: ['view', 'create', 'edit', 'delete'],
-          pricelist: ['view', 'create', 'edit', 'delete'],
-          products: ['view', 'create', 'edit', 'delete'],
-          inbound: ['view', 'create', 'edit', 'delete'],
-          addProduct: ['view', 'create', 'edit', 'delete'],
-          packing: ['view'],
-          whatnot: ['view', 'create', 'edit', 'delete'],
-          employeeInfo: ['view', 'create', 'edit', 'delete'],
-          users: ['view', 'create', 'edit', 'delete']
-        },
-        menu: ['orders', 'pricelist', 'products', 'inbound', 'packing', 'whatnot', 'employeeInfo', 'users']
-      },
-      packing: {
-        role: 'packing',
-        permissions: {
-          packing: ['view']
-        },
-        menu: ['packing']
-      },
-      warehouse_l1: {
-        role: 'warehouse_l1',
-        permissions: {
-          whatnot: ['view'],
-          products: ['view', 'create', 'edit'],
-          inbound: ['view', 'create']
-        },
-        menu: ['products','whatnot']
-      },
-      warehouse_l2: {
-        role: 'warehouse_l2',
-        permissions: {
-          pricelist: ['view']
-        },
-        menu: ['pricelist']
-      },
-      listing: {
-        role: 'listing',
-        permissions: {},
-        menu: []
-      },
-      accounts: {
-        role: 'accounts',
-        permissions: {},
-        menu: []
-      }
-    };
-
-    return rolePermissions[role as keyof typeof rolePermissions] || {
-      role,
-      permissions: {},
-      menu: []
-    };
   };
 
   useEffect(() => {
@@ -176,15 +112,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const hasPermission = (resource: string, action: string): boolean => {
-    if (!permissions) return false;
+    if (!permissions) {
+      console.warn(`Permission check failed: permissions not loaded for resource '${resource}', action '${action}'`);
+      return false;
+    }
     
     const resourcePermissions = permissions.permissions[resource];
-    return resourcePermissions ? resourcePermissions.includes(action) : false;
+    if (!resourcePermissions) {
+      console.warn(`No permissions found for resource '${resource}' in role '${permissions.role}'`);
+      return false;
+    }
+    
+    const hasAccess = resourcePermissions.includes(action);
+    if (!hasAccess) {
+      console.warn(`Action '${action}' not allowed for resource '${resource}' in role '${permissions.role}'`);
+    }
+    
+    return hasAccess;
   };
 
   const hasMenuAccess = (menuItem: string): boolean => {
-    if (!permissions) return false;
-    return permissions.menu.includes(menuItem);
+    if (!permissions) {
+      console.warn(`Menu access check failed: permissions not loaded for menu item '${menuItem}'`);
+      return false;
+    }
+    
+    const hasAccess = permissions.menu.includes(menuItem);
+    if (!hasAccess) {
+      console.warn(`Menu item '${menuItem}' not accessible for role '${permissions.role}'`);
+    }
+    
+    return hasAccess;
   };
 
   return (

@@ -18,42 +18,8 @@ function NavBar() {
   };
 
   const handleHomeClick = () => {
-    // Role-based home navigation
-    if (!user) return;
-    
-    const roleDefaults = {
-      admin: '/', // Products page
-      packing: '/orders/packingMode', // Packing mode
-      warehouse_l1: '/whatnot', // Whatnot page
-      warehouse_l2: '/price-list', // Price list page
-      listing: '/', // Products page (fallback)
-      accounts: '/' // Products page (fallback)
-    };
-
-    const defaultPath = roleDefaults[user.role as keyof typeof roleDefaults] || '/';
-    
-    // Check if user has access to their default page
-    const hasAccessToDefault = (() => {
-      switch (user.role) {
-        case 'admin':
-          return hasMenuAccess('products');
-        case 'packing':
-          return hasMenuAccess('packing');
-        case 'warehouse_l1':
-          return hasMenuAccess('whatnot');
-        case 'warehouse_l2':
-          return hasMenuAccess('pricelist');
-        default:
-          return hasMenuAccess('products');
-      }
-    })();
-
-    // Navigate to default page if user has access, otherwise to products
-    if (hasAccessToDefault) {
-      navigate(defaultPath, { state: { clearFilters: true } });
-    } else {
-      navigate('/', { state: { clearFilters: true } });
-    }
+    // Navigate to products page (home)
+    navigate('/', { state: { clearFilters: true } });
   };
 
   const handleLogout = () => {
