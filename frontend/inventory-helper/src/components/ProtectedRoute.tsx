@@ -34,14 +34,27 @@ const ProtectedRoute = ({
     return <Navigate to="/" replace />;
   }
 
-  // Check resource permission
+  // Check resource permission (if specified)
   if (resource && !hasPermission(resource, action)) {
+    console.warn(`Access denied: User ${user?.role} does not have ${action} permission for ${resource}`);
     return <Navigate to="/" replace />;
   }
 
-  // Check menu access
+  // Check menu access (if specified)
   if (menuItem && !hasMenuAccess(menuItem)) {
+    console.warn(`Access denied: User ${user?.role} does not have menu access for ${menuItem}`);
     return <Navigate to="/" replace />;
+  }
+
+  // If both resource and menuItem are specified, user must have BOTH permissions
+  if (resource && menuItem) {
+    const hasResourcePermission = hasPermission(resource, action);
+    const hasMenuAccessPermission = hasMenuAccess(menuItem);
+    
+    if (!hasResourcePermission || !hasMenuAccessPermission) {
+      console.warn(`Access denied: User ${user?.role} missing required permissions - Resource: ${hasResourcePermission}, Menu: ${hasMenuAccessPermission}`);
+      return <Navigate to="/" replace />;
+    }
   }
 
   return <>{children}</>;
