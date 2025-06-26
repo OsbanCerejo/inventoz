@@ -99,9 +99,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       warehouse_l1: {
         role: 'warehouse_l1',
         permissions: {
-          whatnot: ['view']
+          whatnot: ['view'],
+          products: ['view', 'create', 'edit'],
+          inbound: ['view', 'create']
         },
-        menu: ['whatnot']
+        menu: ['products','whatnot']
       },
       warehouse_l2: {
         role: 'warehouse_l2',

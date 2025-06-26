@@ -12,15 +12,22 @@
     "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "employeeInfo", "users"]
   },
   "listing": {
-    "menu": []
+    "addProduct": ["view", "create", "edit"],
+    "products": ["view", "create", "edit"],
+    "inbound": ["view", "create"],
+    "menu": ["products", "inbound"]
   },
   "packing": {
     "packing": ["view"],
+    "products": ["view"],
+    "orders": ["view"],
     "menu": ["packing"]
   },
   "warehouse_l1": {
+    "products": ["view", "create", "edit"],
+    "inbound": ["view", "create"],
     "whatnot": ["view"],
-    "menu": ["whatnot"]
+    "menu": ["products", "inbound", "whatnot"]
   },
   "warehouse_l2": {
     "pricelist": ["view"],
