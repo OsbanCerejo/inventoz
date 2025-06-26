@@ -18,7 +18,8 @@ import {
 import axios from "axios";
 import { toast } from "react-toastify";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 function AllOrders() {
   const [groupedOrders, setGroupedOrders] = useState<any>({});
@@ -28,7 +29,9 @@ function AllOrders() {
   });
   const [approveOrders, setApproveOrders] = useState(false);
   const [productsData, setProductsData] = useState<any[]>([]);
+  const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchOrders();
@@ -170,6 +173,7 @@ function AllOrders() {
     const logData = {
       timestamp: new Date().toISOString(),
       type: "Sales Update",
+      userId: user?.id?.toString(),
       metaData: skusToUpdate,
     };
 

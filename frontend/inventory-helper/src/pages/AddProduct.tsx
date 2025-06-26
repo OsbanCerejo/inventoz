@@ -36,10 +36,12 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import countriesData from "../../../data/countries.json";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 function AddProduct() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { productObject, productDetails } = location.state || {};
   const [generatedSku, setGeneratedSku] = useState("");
   const today = new Date();
@@ -183,6 +185,7 @@ function AddProduct() {
             action: "create",
             entityType: "product",
             entityId: data.sku,
+            userId: user?.id?.toString(),
             changes: [{
               sku: data.sku,
               changes: []
@@ -209,6 +212,7 @@ function AddProduct() {
             action: "create",
             entityType: "product_details",
             entityId: data.sku,
+            userId: user?.id?.toString(),
             changes: [{
               sku: data.sku,
               changes: []
@@ -257,6 +261,7 @@ function AddProduct() {
               action: "create",
               entityType: "inbound",
               entityId: compositeInboundKey,
+              userId: user?.id?.toString(),
               changes: [{
                 sku: data.sku,
                 changes: []

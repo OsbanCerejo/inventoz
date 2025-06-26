@@ -46,6 +46,7 @@ router.post("/", auth, checkPermission('products', 'create'), async (req, res) =
         action: "create",
         entityType: "product",
         entityId: product.sku,
+        userId: req.user.id.toString(),
         changes: [{
           sku: product.sku,
           changes: []
@@ -135,6 +136,7 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
       action: "update",
       entityType: "product",
       entityId: product.sku,
+      userId: req.user.id.toString(),
       changes: [{
         sku: product.sku,
         changes: changes
