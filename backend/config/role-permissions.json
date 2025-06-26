@@ -21,7 +21,7 @@
     "packing": ["view"],
     "products": ["view"],
     "orders": ["view"],
-    "menu": ["packing", "products", "orders"]
+    "menu": ["packing"]
   },
   "warehouse_l1": {
     "products": ["view", "create", "edit"],
