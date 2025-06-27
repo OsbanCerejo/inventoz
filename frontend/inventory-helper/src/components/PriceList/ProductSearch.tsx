@@ -13,6 +13,8 @@ import {
   CircularProgress
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
+import axios from 'axios';
+import { useAuth } from '../../context/AuthContext';
 
 interface Product {
   id: string;
@@ -25,6 +27,7 @@ interface Product {
 }
 
 const ProductSearch: React.FC = () => {
+  const { token } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,19 +44,19 @@ const ProductSearch: React.FC = () => {
       setError(null);
 
       try {
-        const response = await fetch(
-          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/api/price-list/search-products?query=${encodeURIComponent(searchQuery)}`
+        const response = await axios.get(
+          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/api/price-list/search-products`,
+          {
+            params: { query: searchQuery },
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to search products');
-        }
-
-        const data = await response.json();
-        setProducts(data);
+        setProducts(response.data);
       } catch (err: any) {
-        setError(err.message || 'Failed to search products. Please try again.');
+        setError(err.response?.data?.error || err.message || 'Failed to search products. Please try again.');
         console.error('Error searching products:', err);
       } finally {
         setLoading(false);
@@ -62,7 +65,7 @@ const ProductSearch: React.FC = () => {
 
     const debounceTimer = setTimeout(searchProducts, 500);
     return () => clearTimeout(debounceTimer);
-  }, [searchQuery]);
+  }, [searchQuery, token]);
 
   return (
     <Box sx={{ p: 3 }}>
