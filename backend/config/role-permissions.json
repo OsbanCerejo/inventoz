@@ -25,7 +25,7 @@
   },
   "warehouse_l1": {
     "products": ["view", "create", "edit"],
-    "inbound": ["view", "create"],
+    "inbound": ["view", "create", "edit"],
     "whatnot": ["view"],
     "menu": ["products", "inbound", "whatnot"]
   },
