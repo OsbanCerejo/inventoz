@@ -27,6 +27,7 @@ import { Delete as DeleteIcon, Upload as UploadIcon } from '@mui/icons-material'
 import { styled } from '@mui/material/styles';
 import ProductSearch from '../components/PriceList/ProductSearch';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
 
 const API_URL = `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/api`;
 
@@ -69,6 +70,7 @@ interface HeaderResponse {
 }
 
 const PriceList: React.FC = () => {
+  const { token } = useAuth();
   const [files, setFiles] = useState<PriceListFile[]>([]);
   const [openNameDialog, setOpenNameDialog] = useState(false);
   const [openMappingDialog, setOpenMappingDialog] = useState(false);
@@ -116,40 +118,39 @@ const PriceList: React.FC = () => {
     formData.append('customName', customName);
 
     try {
-      const response = await fetch(
-        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/api/price-list/upload-file`,
+      const response = await axios.post(
+        `${API_URL}/price-list/upload-file`,
+        formData,
         {
-          method: 'POST',
-          body: formData,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Upload failed');
-      }
-
-      const uploadedFile = await response.json();
+      const uploadedFile = response.data;
       setFiles([...files, uploadedFile]);
       setSelectedFile(uploadedFile); // Update selectedFile with the uploaded file data
       setSuccess('File uploaded successfully');
       
       // Fetch headers for mapping
-      const headersResponse = await fetch(
-        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/api/price-list/file/${uploadedFile.id}/headers`
+      const headersResponse = await axios.get(
+        `${API_URL}/price-list/file/${uploadedFile.id}/headers`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
       
-      if (!headersResponse.ok) {
-        throw new Error('Failed to fetch headers');
-      }
-
-      const headersData: HeaderResponse = await headersResponse.json();
+      const headersData: HeaderResponse = headersResponse.data;
       setHeaders(headersData.headers);
       setHeaderRowIndex(headersData.headerRowIndex);
       setHeaderMessage(headersData.message);
       setOpenMappingDialog(true);
     } catch (err: any) {
-      setError(err.message || 'Failed to upload file');
+      setError(err.response?.data?.error || err.message || 'Failed to upload file');
     }
   };
 
@@ -165,97 +166,58 @@ const PriceList: React.FC = () => {
     }
 
     try {
-      const response = await fetch(
-        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/api/price-list/file/${selectedFile.id}/mapping`,
+      const response = await axios.put(
+        `${API_URL}/price-list/file/${selectedFile.id}/mapping`,
+        { mapping },
         {
-          method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ mapping }),
         }
       );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update mapping');
-      }
 
       setOpenMappingDialog(false);
       setSuccess('Mapping updated successfully. Processing file...');
       
-      // Start polling for progress
-      const pollInterval = setInterval(async () => {
-        const progressResponse = await fetch(
-          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/api/price-list/files`
-        );
-        
-        if (progressResponse.ok) {
-          const updatedFiles = await progressResponse.json();
-          const currentFile = updatedFiles.find((f: PriceListFile) => f.id === selectedFile.id);
-          
-          if (currentFile) {
-            setFiles(updatedFiles);
-            if (currentFile.status === 'completed' || currentFile.status === 'failed') {
-              clearInterval(pollInterval);
-              setImportProgress(100);
-              
-              let message = '';
-              if (currentFile.status === 'completed') {
-                message = `Import completed successfully!\n`;
-                message += `- ${currentFile.productCount} products imported\n`;
-                if (currentFile.skippedCount > 0) {
-                  message += `- ${currentFile.skippedCount} rows skipped (invalid data)\n`;
-                }
-                setSuccess(message);
-              } else {
-                message = `Import failed!\n`;
-                if (currentFile.productCount > 0) {
-                  message += `- ${currentFile.productCount} products were imported before failure\n`;
-                }
-                if (currentFile.errorCount > 0) {
-                  message += `- ${currentFile.errorCount} errors occurred\n`;
-                }
-                if (currentFile.skippedCount > 0) {
-                  message += `- ${currentFile.skippedCount} rows were skipped\n`;
-                }
-                setError(message);
-              }
-            } else {
-              setImportProgress(currentFile.productCount);
-            }
-          }
-        }
-      }, 1000);
+      // Update the file in the list
+      const updatedFile = response.data;
+      setFiles(files.map(file => 
+        file.id === updatedFile.id ? updatedFile : file
+      ));
+      
+      // Start processing
+      handleProcessFile();
     } catch (err: any) {
-      setError(err.message || 'Failed to update mapping');
+      setError(err.response?.data?.error || err.message || 'Failed to update mapping');
     }
   };
 
   const handleDelete = async (fileId: string) => {
     try {
-      const response = await fetch(
-        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/api/price-list/file/${fileId}`,
+      const response = await axios.delete(
+        `${API_URL}/price-list/file/${fileId}`,
         {
-          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Delete failed');
-      }
 
       setFiles(files.filter(file => file.id !== fileId));
       setSuccess('File deleted successfully');
     } catch (err: any) {
-      setError(err.message || 'Failed to delete file');
+      setError(err.response?.data?.error || err.message || 'Failed to delete file');
     }
   };
 
   const fetchFiles = async () => {
     try {
-      const response = await axios.get(`${API_URL}/price-list/files`);
+      const response = await axios.get(`${API_URL}/price-list/files`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       setFiles(response.data);
     } catch (error) {
       console.error('Error fetching files:', error);
@@ -271,6 +233,10 @@ const PriceList: React.FC = () => {
       const response = await axios.post(`${API_URL}/price-list/process-file`, {
         fileId: selectedFile.id,
         headerMapping: mapping
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       // Show success message with detailed stats
