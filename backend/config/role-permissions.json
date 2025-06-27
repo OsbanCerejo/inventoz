@@ -9,12 +9,14 @@
     "whatnot": ["view", "create", "edit", "delete"],
     "employeeInfo": ["view", "create", "edit", "delete"],
     "users": ["view", "create", "edit", "delete"],
+    "sales": ["view", "create", "edit", "delete"],
     "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "employeeInfo", "users"]
   },
   "listing": {
     "addProduct": ["view", "create", "edit"],
     "products": ["view", "create", "edit"],
     "inbound": ["view", "create"],
+    "sales": ["view", "create", "edit"],
     "menu": ["products", "inbound"]
   },
   "packing": {
@@ -25,7 +27,9 @@
   },
   "warehouse_l1": {
     "products": ["view", "create", "edit"],
+    "addProduct": ["view", "create", "edit"],
     "inbound": ["view", "create", "edit"],
+    "sales": ["view", "create", "edit"],
     "whatnot": ["view"],
     "menu": ["products", "inbound", "whatnot"]
   },
