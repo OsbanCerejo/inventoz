@@ -26,11 +26,13 @@ import { toast } from "react-toastify";
 import Barcode from "./Barcode";
 import PrintableLabel from "./PrintableLabel";
 import { useReactToPrint } from "react-to-print";
+import { useAuth } from "../context/AuthContext";
 
 function Product() {
   let { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const [productObject, setProductObject]: any = useState({});
   const [barcodeValue, setBarcodeValue] = useState(productObject.sku);
   const [productDetails, setProductDetails]: any = useState({});
@@ -119,6 +121,7 @@ function Product() {
           {
             timestamp: new Date().toISOString(),
             type: "Delete Product",
+            userId: user?.id?.toString(),
             metaData: {
               productObject,
               productDetails,
@@ -135,7 +138,7 @@ function Product() {
         position: "top-right",
       });
     }
-  }, [navigate, productObject]);
+  }, [navigate, productObject, user]);
 
   const handleInboundClick = useCallback(() => {
     navigate("/inbound", { state: { productObject } });

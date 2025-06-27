@@ -1,0 +1,39 @@
+{
+  "admin": {
+    "orders": ["view", "create", "edit", "delete"],
+    "pricelist": ["view", "create", "edit", "delete"],
+    "products": ["view", "create", "edit", "delete"],
+    "inbound": ["view", "create", "edit", "delete"],
+    "addProduct": ["view", "create", "edit", "delete"],
+    "packing": ["view"],
+    "whatnot": ["view", "create", "edit", "delete"],
+    "employeeInfo": ["view", "create", "edit", "delete"],
+    "users": ["view", "create", "edit", "delete"],
+    "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "employeeInfo", "users"]
+  },
+  "listing": {
+    "addProduct": ["view", "create", "edit"],
+    "products": ["view", "create", "edit"],
+    "inbound": ["view", "create"],
+    "menu": ["products", "inbound"]
+  },
+  "packing": {
+    "packing": ["view"],
+    "products": ["view"],
+    "orders": ["view"],
+    "menu": ["packing"]
+  },
+  "warehouse_l1": {
+    "products": ["view", "create", "edit"],
+    "inbound": ["view", "create", "edit"],
+    "whatnot": ["view"],
+    "menu": ["products", "inbound", "whatnot"]
+  },
+  "warehouse_l2": {
+    "pricelist": ["view"],
+    "menu": ["pricelist"]
+  },
+  "accounts": {
+    "menu": []
+  }
+}

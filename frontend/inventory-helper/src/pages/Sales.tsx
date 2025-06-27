@@ -67,6 +67,10 @@ function Sales() {
   });
   return (
     <Container>
+      <Typography variant="h4" component="h1" sx={{ mt: 4, mb: 3 }}>
+        Sales
+      </Typography>
+      
       <form onSubmit={formik.handleSubmit}>
         <Container component="main" maxWidth="sm" sx={{ mb: 4 }}>
           <Paper
@@ -74,7 +78,9 @@ function Sales() {
             sx={{ my: { xs: 3, md: 3 }, p: { xs: 1, md: 4 } }}
           >
             <Box m={2} pt={3}>
-              <Typography variant="h4"> SKU: {productObject.sku}</Typography>
+              <Typography variant="h6" color="text.secondary">
+                SKU: {productObject.sku}
+              </Typography>
             </Box>
 
             <Box m={2} pt={3}>

@@ -86,6 +86,12 @@ function SephoraSearch() {
 
   return (
     <div>
+      <Box sx={{ mt: 4, mb: 3, px: 2 }}>
+        <Typography variant="h4" component="h1" sx={{ mb: 0 }}>
+          Sephora Search
+        </Typography>
+      </Box>
+      
       <p>3360372058878</p>
       <p>3605971618444</p>
       <Grid container spacing={0}>

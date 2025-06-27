@@ -12,18 +12,34 @@ import { ToastContainer } from "react-toastify";
 import AllOrders from "./pages/AllOrders";
 import "./App.css";
 import PackingMode from "./pages/PackingMode";
-import PriceListParser from "./pages/PriceListParser";
 import EbayApi from "./pages/EbayApi";
 import Whatnot from "./pages/Whatnot";
 import PriceList from "./pages/PriceList";
 import EmployeeInformation from "./pages/EmployeeInformation";
+import Users from "./pages/Users";
 import Login from "./pages/Login";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import RoleBasedHome from "./components/RoleBasedHome";
 import { useAuth } from "./context/AuthContext";
+import { CircularProgress, Box } from "@mui/material";
 
 function AppContent() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Show loading spinner while permissions are being fetched
+  if (isLoading) {
+    return (
+      <Box 
+        display="flex" 
+        justifyContent="center" 
+        alignItems="center" 
+        minHeight="100vh"
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <div className="app-container">
@@ -35,15 +51,17 @@ function AppContent() {
             <Route
               path="/"
               element={
-                <ProtectedRoute>
-                  <Home />
+                <ProtectedRoute resource="products" action="view" menuItem="products">
+                  <RoleBasedHome>
+                    <Home />
+                  </RoleBasedHome>
                 </ProtectedRoute>
               }
             />
             <Route
               path="/addProduct"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="addProduct" action="create" menuItem="products">
                   <AddProduct />
                 </ProtectedRoute>
               }
@@ -51,7 +69,7 @@ function AppContent() {
             <Route
               path="/products/:id"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="products" action="view" menuItem="products">
                   <Product />
                 </ProtectedRoute>
               }
@@ -59,7 +77,7 @@ function AppContent() {
             <Route
               path="/editProduct"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="products" action="edit" menuItem="products">
                   <EditProduct />
                 </ProtectedRoute>
               }
@@ -67,7 +85,7 @@ function AppContent() {
             <Route
               path="/search"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="products" action="view" menuItem="products">
                   <Search />
                 </ProtectedRoute>
               }
@@ -75,7 +93,7 @@ function AppContent() {
             <Route
               path="/inbound"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="inbound" action="create" menuItem="inbound">
                   <InboundProduct />
                 </ProtectedRoute>
               }
@@ -83,7 +101,7 @@ function AppContent() {
             <Route
               path="/inbound/showAll"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute menuItem="inbound">
                   <InboundData />
                 </ProtectedRoute>
               }
@@ -91,7 +109,7 @@ function AppContent() {
             <Route
               path="/sales"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="sales" action="view" menuItem="orders">
                   <Sales />
                 </ProtectedRoute>
               }
@@ -99,7 +117,7 @@ function AppContent() {
             <Route
               path="/orders/showAll"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="orders" action="view" menuItem="orders">
                   <AllOrders />
                 </ProtectedRoute>
               }
@@ -107,23 +125,15 @@ function AppContent() {
             <Route
               path="/orders/packingMode"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="packing" action="view" menuItem="packing">
                   <PackingMode />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/pricelistParser"
-              element={
-                <ProtectedRoute>
-                  <PriceListParser />
                 </ProtectedRoute>
               }
             />
             <Route
               path="/ebayAPI"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="ebay" action="view" menuItem="orders">
                   <EbayApi />
                 </ProtectedRoute>
               }
@@ -131,7 +141,7 @@ function AppContent() {
             <Route
               path="/whatnot"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="whatnot" action="view" menuItem="whatnot">
                   <Whatnot />
                 </ProtectedRoute>
               }
@@ -139,7 +149,7 @@ function AppContent() {
             <Route
               path="/price-list"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="pricelist" action="view" menuItem="pricelist">
                   <PriceList />
                 </ProtectedRoute>
               }
@@ -147,8 +157,16 @@ function AppContent() {
             <Route
               path="/employee-info"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute resource="employeeInfo" action="view" menuItem="employeeInfo">
                   <EmployeeInformation />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users"
+              element={
+                <ProtectedRoute resource="users" action="view" menuItem="users">
+                  <Users />
                 </ProtectedRoute>
               }
             />

@@ -103,8 +103,6 @@ function ProductList({
 
   return (
     <>
-      <h1>{heading}</h1>
-      <br></br>
       <Pagination
         productsPerPage={productsPerPage}
         totalProducts={products.length}

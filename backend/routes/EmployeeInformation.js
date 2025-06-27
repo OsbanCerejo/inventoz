@@ -4,6 +4,8 @@ const multer = require('multer');
 const path = require('path');
 const { EmployeeInformation, Settings } = require('../models');
 const fs = require('fs');
+const { auth } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -22,29 +24,8 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// Verify admin credentials
-router.post('/verify-admin', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    const settings = await Settings.findOne({
-      where: {
-        employee_info_username: username,
-        employee_info_password: password
-      }
-    });
-    
-    if (!settings) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    }
-    
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
 // Submit new employee information
-router.post('/submit', upload.single('photoId'), async (req, res) => {
+router.post('/submit', auth, checkPermission('employeeInfo', 'create'), upload.single('photoId'), async (req, res) => {
   try {
     const {
       firstName,
@@ -77,7 +58,7 @@ router.post('/submit', upload.single('photoId'), async (req, res) => {
 });
 
 // Get all employee information
-router.get('/all', async (req, res) => {
+router.get('/all', auth, checkPermission('employeeInfo', 'view'), async (req, res) => {
   try {
     const employees = await EmployeeInformation.findAll({
       order: [['createdAt', 'DESC']]
@@ -89,7 +70,7 @@ router.get('/all', async (req, res) => {
 });
 
 // Update employee status
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status', auth, checkPermission('employeeInfo', 'edit'), async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -107,7 +88,7 @@ router.patch('/:id/status', async (req, res) => {
 });
 
 // Upload additional documents
-router.post('/:id/documents', upload.array('documents', 5), async (req, res) => {
+router.post('/:id/documents', auth, checkPermission('employeeInfo', 'edit'), upload.array('documents', 5), async (req, res) => {
   try {
     const { id } = req.params;
     const employee = await EmployeeInformation.findByPk(id);

@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const { User } = require('../models');
 
 const auth = async (req, res, next) => {
   try {
@@ -9,7 +9,7 @@ const auth = async (req, res, next) => {
       throw new Error();
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
     const user = await User.findOne({ where: { id: decoded.id } });
 
     if (!user) {
@@ -26,12 +26,26 @@ const auth = async (req, res, next) => {
 
 const adminAuth = async (req, res, next) => {
   try {
-    await auth(req, res, () => {
-      if (req.user.role !== 'admin') {
-        return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
-      }
-      next();
-    });
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ error: 'Please authenticate.' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const user = await User.findOne({ where: { id: decoded.id } });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Please authenticate.' });
+    }
+
+    if (user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    }
+
+    req.token = token;
+    req.user = user;
+    next();
   } catch (error) {
     res.status(401).json({ error: 'Please authenticate.' });
   }

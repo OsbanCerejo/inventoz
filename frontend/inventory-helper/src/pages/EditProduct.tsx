@@ -32,6 +32,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import countriesData from "../../../data/countries.json";
 import { isEqual } from "lodash";
+import { useAuth } from "../context/AuthContext";
 
 const formikValidationSchema = Yup.object().shape({
   sku: Yup.string().required("Please enter a valid SKU"),
@@ -99,6 +100,7 @@ interface ListingsObject {
 function EditProduct() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const productObject = location.state.productObject;
   const productDetails = location.state.productDetails || {};
@@ -206,6 +208,7 @@ function EditProduct() {
                 action: "update",
                 entityType: "product_details",
                 entityId: data.sku,
+                userId: user?.id?.toString(),
                 changes: [{
                   sku: data.sku,
                   changes: changesArray
@@ -238,6 +241,7 @@ function EditProduct() {
                 action: "update",
                 entityType: "listings",
                 entityId: data.sku,
+                userId: user?.id?.toString(),
                 changes: [{
                   sku: data.sku,
                   changes: listingsChangesArray
@@ -321,6 +325,12 @@ function EditProduct() {
 
   return (
     <div>
+      <Box sx={{ mt: 4, mb: 3, px: 2 }}>
+        <Typography variant="h4" component="h1" sx={{ mb: 0 }}>
+          Edit Product
+        </Typography>
+      </Box>
+      
       <form onSubmit={formik.handleSubmit} onKeyDown={handleKeyDown}>
         <Grid container spacing={0} justifyContent="center">
           <Grid item xs={3}>

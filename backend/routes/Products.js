@@ -4,19 +4,21 @@ const { Products, ProductHistory, StockUpdateHistory, Logs } = require("../model
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 const StockUpdateService = require("../Services/StockUpdateService");
+const { auth } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 
-router.get("/", async (req, res) => {
+router.get("/", auth, checkPermission('products', 'view'), async (req, res) => {
   const listOfProducts = await Products.findAll();
   res.json(listOfProducts);
 });
 
-router.get("/byId/:id", async (req, res) => {
+router.get("/byId/:id", auth, checkPermission('products', 'view'), async (req, res) => {
   const id = req.params.id;
   const product = await Products.findByPk(id);
   res.json(product);
 });
 
-router.get("/search", async (req, res) => {
+router.get("/search", auth, checkPermission('products', 'view'), async (req, res) => {
   const { searchString, searchType } = req.query;
   console.log(searchType);
   const searchResults = await Products.findAll({
@@ -29,7 +31,7 @@ router.get("/search", async (req, res) => {
   res.json(searchResults);
 });
 
-router.post("/", async (req, res) => {
+router.post("/", auth, checkPermission('products', 'create'), async (req, res) => {
   const product = req.body;
   try {
     const [found, created] = await Products.findOrCreate({
@@ -44,6 +46,7 @@ router.post("/", async (req, res) => {
         action: "create",
         entityType: "product",
         entityId: product.sku,
+        userId: req.user.id.toString(),
         changes: [{
           sku: product.sku,
           changes: []
@@ -63,7 +66,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.put("/", async (req, res) => {
+router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
   const product = req.body;
   console.log("Edited Product Value in Server : ", product);
   
@@ -133,6 +136,7 @@ router.put("/", async (req, res) => {
       action: "update",
       entityType: "product",
       entityId: product.sku,
+      userId: req.user.id.toString(),
       changes: [{
         sku: product.sku,
         changes: changes
@@ -153,7 +157,7 @@ router.put("/", async (req, res) => {
   }
 });
 
-router.delete("/delete/:id", async (req, res) => {
+router.delete("/delete/:id", auth, checkPermission('products', 'delete'), async (req, res) => {
   const id = req.params.id;
   const status = await Products.destroy({
     where: {
@@ -163,7 +167,7 @@ router.delete("/delete/:id", async (req, res) => {
   res.json(status);
 });
 
-router.get("/findAndCount/:skuPrefix", async (req, res) => {
+router.get("/findAndCount/:skuPrefix", auth, checkPermission('products', 'view'), async (req, res) => {
   console.log("Here inside find and count all in backend");
   const skuPrefix = req.params.skuPrefix;
   const { count, rows } = await Products.findAndCountAll({
@@ -179,7 +183,7 @@ router.get("/findAndCount/:skuPrefix", async (req, res) => {
   res.json(count + 1);
 });
 
-router.post("/updateQuantities", async (req, res) => {
+router.post("/updateQuantities", auth, checkPermission('products', 'edit'), async (req, res) => {
   const skusToUpdate = req.body;
 
   try {
@@ -198,11 +202,15 @@ router.post("/updateQuantities", async (req, res) => {
 
     res.json({
       success: true,
-      updatedProducts: result.results.map(r => r.product)
+      message: "Quantities updated successfully",
+      result
     });
   } catch (error) {
-    console.error("Error updating product quantities:", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    console.error("Error updating quantities:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 });
 

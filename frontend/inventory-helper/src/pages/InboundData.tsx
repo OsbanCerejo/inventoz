@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
 import InboundList from "../components/InboundList";
+import { Typography, Box } from "@mui/material";
 
 function InboundData() {
   const [listOfInbound, setListOfInbound] = useState<any[]>([]);
@@ -18,9 +19,6 @@ function InboundData() {
   }>({ key: "", value: "" });
   const [currentPage, setCurrentPage] = useState(1);
   const [productsPerPage] = useState(20);
-
-  // Constants
-  const heading = "Inbound Data";
 
   useEffect(() => {
     fetchInbound();
@@ -109,9 +107,14 @@ function InboundData() {
 
   return (
     <div>
+      <Box sx={{ mt: 4, mb: 3, px: 2 }}>
+        <Typography variant="h4" component="h1" sx={{ mb: 0 }}>
+          Inbound Data
+        </Typography>
+      </Box>
       <InboundList
         products={sortedAndFilteredInbound}
-        heading={heading}
+        heading=""
         handleSort={handleSort}
         sortConfig={sortConfig}
         filterConfig={filterConfig}

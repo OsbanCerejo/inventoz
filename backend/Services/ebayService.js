@@ -213,7 +213,7 @@ const ebayService = {
         let logs = [];
         
         if(ebaySku === undefined){
-          console.error(`Missing SKU in order: ${order.orderId}`);
+          // console.error(`Missing SKU in order: ${order.orderId}`);
           break;
         }
 

@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { Settings, Products, WhatnotLog } = require('../models');
+const { auth } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 const { Op } = require('sequelize');
 const axios = require('axios');
-const StockUpdateService = require('../services/StockUpdateService');
+const StockUpdateService = require('../Services/StockUpdateService');
 
 // Helper function to determine search type
 const determineSearchType = async (barcode) => {
@@ -24,46 +26,12 @@ const determineSearchType = async (barcode) => {
   return skuProduct ? 'SKU' : null;
 };
 
-// Verify Whatnot credentials
-router.post('/verify-password', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    const settings = await Settings.findOne({
-      where: {
-        whatnot_username: username,
-        whatnot_password: password
-      }
-    });
-    
-    if (!settings) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    }
-    
-    res.json({ 
-      success: true,
-      userId: settings.id // Return the actual ID from the settings table
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
 // Search product by barcode
-router.post('/search-barcode', async (req, res) => {
+router.post('/search-barcode', auth, checkPermission('whatnot', 'view'), async (req, res) => {
   try {
-    const { barcode, reduceQuantity, userId, isMultipleSelection } = req.body;
+    const { barcode, reduceQuantity, isMultipleSelection } = req.body;
     if (!barcode) {
       return res.status(400).json({ success: false, message: 'Barcode is required' });
-    }
-
-    if (!userId) {
-      return res.status(401).json({ success: false, message: 'User ID is required' });
-    }
-
-    // Verify the user exists
-    const user = await Settings.findByPk(userId);
-    if (!user) {
-      return res.status(401).json({ success: false, message: 'Invalid user ID' });
     }
 
     // Search for products with matching UPC or SKU
@@ -82,7 +50,7 @@ router.post('/search-barcode', async (req, res) => {
       searchType: isMultipleSelection ? 'UPC' : await determineSearchType(barcode),
       status: products.length === 0 ? 'not_found' : products.length === 1 ? 'found' : 'multiple_found',
       sku: products.length > 0 ? products[0].sku : null,
-      userId: userId
+      userId: req.user.id.toString()
     });
 
     if (products.length === 0) {
@@ -178,7 +146,7 @@ router.post('/search-barcode', async (req, res) => {
 });
 
 // Get Whatnot logs
-router.get('/logs', async (req, res) => {
+router.get('/logs', auth, checkPermission('whatnot', 'view'), async (req, res) => {
   try {
     const logs = await WhatnotLog.findAll({
       include: [{

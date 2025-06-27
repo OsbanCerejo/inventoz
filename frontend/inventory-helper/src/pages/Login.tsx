@@ -56,7 +56,7 @@ const Login = () => {
       });
 
       const { token, user } = response.data;
-      login(token, user);
+      await login(token, user);
       navigate('/', { replace: true });
     } catch (err: any) {
       setError(err.response?.data?.error || 'An error occurred during login');
@@ -68,7 +68,7 @@ const Login = () => {
   return (
     <Container component="main" maxWidth="xs">
       <StyledPaper elevation={3}>
-        <Typography component="h1" variant="h5" gutterBottom>
+        <Typography component="h1" variant="h4" gutterBottom>
           Sign in to Inventoz
         </Typography>
         <StyledForm onSubmit={handleSubmit}>

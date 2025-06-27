@@ -7,6 +7,10 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true,
       autoIncrement: true
     },
+    name: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
     username: {
       type: DataTypes.STRING,
       allowNull: false,
@@ -25,8 +29,12 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false
     },
     role: {
-      type: DataTypes.ENUM('admin', 'user'),
-      defaultValue: 'user'
+      type: DataTypes.ENUM('admin', 'listing', 'packing', 'warehouse_l1', 'warehouse_l2', 'accounts'),
+      defaultValue: 'listing'
+    },
+    isActive: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
     }
   }, {
     hooks: {
