@@ -9,6 +9,7 @@
     "whatnot": ["view", "create", "edit", "delete"],
     "employeeInfo": ["view", "create", "edit", "delete"],
     "users": ["view", "create", "edit", "delete"],
+    "sales": ["view", "create", "edit", "delete"],
     "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "employeeInfo", "users"]
   },
   "listing": {
