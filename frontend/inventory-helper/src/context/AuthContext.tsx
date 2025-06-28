@@ -26,6 +26,10 @@ interface AuthContextType {
   isLoading: boolean;
   hasPermission: (resource: string, action: string) => boolean;
   hasMenuAccess: (menuItem: string) => boolean;
+  getPermissionError: (resource: string, action: string) => string | null;
+  getMenuAccessError: (menuItem: string) => string | null;
+  checkPermissionWithDetails: (resource: string, action: string) => { hasAccess: boolean; error: string | null };
+  checkMenuAccessWithDetails: (menuItem: string) => { hasAccess: boolean; error: string | null };
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -145,6 +149,68 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return hasAccess;
   };
 
+  const getPermissionError = (resource: string, action: string): string | null => {
+    if (!permissions) {
+      return 'Permissions not loaded';
+    }
+    
+    const resourcePermissions = permissions.permissions[resource];
+    if (!resourcePermissions) {
+      return `No permissions found for resource '${resource}' in role '${permissions.role}'`;
+    }
+    
+    const hasAccess = resourcePermissions.includes(action);
+    if (!hasAccess) {
+      return `Action '${action}' not allowed for resource '${resource}' in role '${permissions.role}'`;
+    }
+    
+    return null;
+  };
+
+  const getMenuAccessError = (menuItem: string): string | null => {
+    if (!permissions) {
+      return 'Permissions not loaded';
+    }
+    
+    const hasAccess = permissions.menu.includes(menuItem);
+    if (!hasAccess) {
+      return `Menu item '${menuItem}' not accessible for role '${permissions.role}'`;
+    }
+    
+    return null;
+  };
+
+  const checkPermissionWithDetails = (resource: string, action: string): { hasAccess: boolean; error: string | null } => {
+    if (!permissions) {
+      return { hasAccess: false, error: 'Permissions not loaded' };
+    }
+    
+    const resourcePermissions = permissions.permissions[resource];
+    if (!resourcePermissions) {
+      return { hasAccess: false, error: `No permissions found for resource '${resource}' in role '${permissions.role}'` };
+    }
+    
+    const hasAccess = resourcePermissions.includes(action);
+    if (!hasAccess) {
+      return { hasAccess: false, error: `Action '${action}' not allowed for resource '${resource}' in role '${permissions.role}'` };
+    }
+    
+    return { hasAccess: true, error: null };
+  };
+
+  const checkMenuAccessWithDetails = (menuItem: string): { hasAccess: boolean; error: string | null } => {
+    if (!permissions) {
+      return { hasAccess: false, error: 'Permissions not loaded' };
+    }
+    
+    const hasAccess = permissions.menu.includes(menuItem);
+    if (!hasAccess) {
+      return { hasAccess: false, error: `Menu item '${menuItem}' not accessible for role '${permissions.role}'` };
+    }
+    
+    return { hasAccess: true, error: null };
+  };
+
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -155,7 +221,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       isAuthenticated,
       isLoading,
       hasPermission,
-      hasMenuAccess
+      hasMenuAccess,
+      getPermissionError,
+      getMenuAccessError,
+      checkPermissionWithDetails,
+      checkMenuAccessWithDetails
     }}>
       {children}
     </AuthContext.Provider>

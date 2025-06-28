@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import ProductList from "../components/ProductList";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button, Box, Stack, Typography } from "@mui/material";
+import PermissionGuard from "../components/PermissionGuard";
 
 function Home() {
   // State Variables
@@ -158,15 +159,33 @@ function Home() {
           Products
         </Typography>
         <Stack direction="row" spacing={2} alignItems="center">
-          <Button
-            variant="contained"
-            color="primary"
-            size="large"
-            style={{ fontWeight: 500, textTransform: 'none', boxShadow: 'none' }}
-            onClick={() => navigate("/addProduct")}
+          <PermissionGuard
+            resource="products"
+            action="create"
+            fallback={
+              <Button
+                variant="contained"
+                color="primary"
+                size="large"
+                style={{ fontWeight: 500, textTransform: 'none', boxShadow: 'none' }}
+                disabled
+                title="You don't have permission to create products"
+              >
+                Add Product
+              </Button>
+            }
+            showError={false}
           >
-            Add Product
-          </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              size="large"
+              style={{ fontWeight: 500, textTransform: 'none', boxShadow: 'none' }}
+              onClick={() => navigate("/addProduct")}
+            >
+              Add Product
+            </Button>
+          </PermissionGuard>
           <Button
             variant="contained"
             color="error"
