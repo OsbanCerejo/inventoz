@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import Home from "./pages/Home";
+import Products from "./pages/Products";
 import AddProduct from "./pages/AddProduct";
 import Product from "./components/Product";
 import NavBar from "./components/NavBar";
@@ -51,10 +52,18 @@ function AppContent() {
             <Route
               path="/"
               element={
-                <ProtectedRoute resource="products" action="view" menuItem="products">
+                <ProtectedRoute>
                   <RoleBasedHome>
                     <Home />
                   </RoleBasedHome>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/products"
+              element={
+                <ProtectedRoute resource="products" action="view" menuItem="products">
+                  <Products />
                 </ProtectedRoute>
               }
             />

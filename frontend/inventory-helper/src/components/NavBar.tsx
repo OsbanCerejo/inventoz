@@ -18,8 +18,8 @@ function NavBar() {
   };
 
   const handleHomeClick = () => {
-    // Navigate to products page (home)
-    navigate('/', { state: { clearFilters: true } });
+    // Navigate to products page
+    navigate('/products', { state: { clearFilters: true } });
   };
 
   const handleLogout = () => {
@@ -31,7 +31,7 @@ function NavBar() {
 
   // Menu items configuration
   const menuItems = [
-    { key: 'products', label: 'Products', path: '/', onClick: handleHomeClick, isButton: true },
+    { key: 'products', label: 'Products', path: '/products', onClick: handleHomeClick, isButton: true },
     { key: 'inbound', label: 'Inbound', path: '/inbound/showAll' },
     { key: 'orders', label: 'Orders', path: '/orders/showAll' },
     { key: 'packing', label: 'Packing', path: '/orders/packingMode' },
