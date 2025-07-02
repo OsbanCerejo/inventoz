@@ -8,7 +8,13 @@ const { auth } = require('../middleware/auth');
 const { checkPermission } = require('../middleware/permissions');
 
 router.get("/", auth, checkPermission('products', 'view'), async (req, res) => {
-  const listOfProducts = await Products.findAll();
+  const db = require("../models");
+  const listOfProducts = await db.Products.findAll({
+    include: [{
+      model: db.ProductDetails,
+      required: false
+    }]
+  });
   res.json(listOfProducts);
 });
 
