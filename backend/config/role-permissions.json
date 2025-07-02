@@ -15,7 +15,7 @@
   "listing": {
     "addProduct": ["view", "create", "edit"],
     "products": ["view", "create", "edit"],
-    "inbound": ["view", "create"],
+    "inbound": ["view", "create", "edit"],
     "sales": ["view", "create", "edit"],
     "menu": ["products", "inbound", "addProduct"]
   },

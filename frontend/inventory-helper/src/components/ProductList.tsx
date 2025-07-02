@@ -220,7 +220,7 @@ function ProductList({
                 </td>
                 <td style={{ width: "8%" }}>{product.brand}</td>
                 <td>{product.itemName}</td>
-                <td style={{ width: "5%" }}>{product.sizeOz}</td>
+                <td style={{ width: "5%" }}>{product.sizeOz} Oz</td>
                 <td>{product.strength}</td>
                 <td style={{ width: "8%" }}>{product.shade}</td>
                 <td style={{ width: "8%" }}>{product.location}</td>
