@@ -10,14 +10,14 @@
     "employeeInfo": ["view", "create", "edit", "delete"],
     "users": ["view", "create", "edit", "delete"],
     "sales": ["view", "create", "edit", "delete"],
-    "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "employeeInfo", "users"]
+    "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "employeeInfo", "users", "addProduct" ]
   },
   "listing": {
     "addProduct": ["view", "create", "edit"],
     "products": ["view", "create", "edit"],
     "inbound": ["view", "create", "edit"],
     "sales": ["view", "create", "edit"],
-    "menu": ["products", "inbound"]
+    "menu": ["products", "inbound", "addProduct"]
   },
   "packing": {
     "packing": ["view"],
@@ -31,7 +31,7 @@
     "inbound": ["view", "create", "edit"],
     "sales": ["view", "create", "edit"],
     "whatnot": ["view"],
-    "menu": ["products", "inbound", "whatnot"]
+    "menu": ["products", "inbound", "whatnot","addProduct"]
   },
   "warehouse_l2": {
     "pricelist": ["view"],

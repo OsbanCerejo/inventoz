@@ -1,196 +1,154 @@
-import axios from "axios";
-import { useEffect, useState } from "react";
-import ProductList from "../components/ProductList";
-import { useLocation, useNavigate } from "react-router-dom";
-import { Button, Box, Stack, Typography } from "@mui/material";
+import { useNavigate } from "react-router-dom";
+import { Box, Grid, Card, CardContent, Typography, Button } from "@mui/material";
+import { 
+  Inventory as InventoryIcon,
+  LocalShipping as InboundIcon,
+  ShoppingCart as OrdersIcon,
+  LocalShipping as PackingIcon,
+  AttachMoney as PriceListIcon,
+  Store as WhatnotIcon,
+  People as EmployeeIcon,
+  Add as AddProductIcon
+} from '@mui/icons-material';
+import PermissionGuard from "../components/PermissionGuard";
+import { useAuth } from "../context/AuthContext";
 
 function Home() {
-  // State Variables
-  const [listOfProducts, setListOfProducts] = useState<any[]>([]);
-  const location = useLocation();
   const navigate = useNavigate();
+  const { hasMenuAccess } = useAuth();
 
-  const [sortConfig, setSortConfig] = useState<{
-    key: string | null;
-    direction: string;
-  }>({
-    key: null,
-    direction: "asc",
-  });
-  const [filterConfig, setFilterConfig] = useState<
-    { key: string; value: string }[]
-  >([]);
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const [productsPerPage] = useState(20);
-
-  // Constants
-  const heading = "Products";
-
-  // Fetch initial product list on component mount
-  useEffect(() => {
-    // Clear filters if navigated with the clearFilters state
-    if (location.state?.clearFilters) {
-      fetchProducts();
-      setSortConfig({ key: "sku", direction: "asc" });
-      setFilterConfig([]);
-      setCurrentPage(1);
-      localStorage.removeItem("sortConfig");
-      localStorage.removeItem("filterConfig");
-      localStorage.removeItem("currentPage");
-
-      navigate(location.pathname, { replace: true, state: {} });
+  const dashboardItems = [
+    {
+      title: "Products",
+      description: "View and manage all products in inventory",
+      icon: <InventoryIcon sx={{ fontSize: 40, color: '#1976d2' }} />,
+      path: "/products",
+      menuKey: "products",
+      color: "#e3f2fd"
+    },
+    {
+      title: "Add Product",
+      description: "Add new products to the inventory",
+      icon: <AddProductIcon sx={{ fontSize: 40, color: '#2e7d32' }} />,
+      path: "/addProduct",
+      menuKey: "addProduct",
+      action: "create",
+      color: "#e8f5e8"
+    },
+    {
+      title: "Inbound",
+      description: "Manage incoming inventory and shipments",
+      icon: <InboundIcon sx={{ fontSize: 40, color: '#ed6c02' }} />,
+      path: "/inbound/showAll",
+      menuKey: "inbound",
+      color: "#fff4e5"
+    },
+    {
+      title: "Orders",
+      description: "View and manage all orders",
+      icon: <OrdersIcon sx={{ fontSize: 40, color: '#9c27b0' }} />,
+      path: "/orders/showAll",
+      menuKey: "orders",
+      color: "#f3e5f5"
+    },
+    {
+      title: "Packing Mode",
+      description: "Efficient order packing interface",
+      icon: <PackingIcon sx={{ fontSize: 40, color: '#d32f2f' }} />,
+      path: "/orders/packingMode",
+      menuKey: "packing",
+      color: "#ffebee"
+    },
+    {
+      title: "Price List",
+      description: "Manage product pricing and lists",
+      icon: <PriceListIcon sx={{ fontSize: 40, color: '#388e3c' }} />,
+      path: "/price-list",
+      menuKey: "pricelist",
+      color: "#e8f5e8"
+    },
+    {
+      title: "Whatnot",
+      description: "Whatnot platform integration",
+      icon: <WhatnotIcon sx={{ fontSize: 40, color: '#7b1fa2' }} />,
+      path: "/whatnot",
+      menuKey: "whatnot",
+      color: "#f3e5f5"
+    },
+    {
+      title: "Employees",
+      description: "Manage employee information",
+      icon: <EmployeeIcon sx={{ fontSize: 40, color: '#1976d2' }} />,
+      path: "/employee-info",
+      menuKey: "employeeInfo",
+      color: "#e3f2fd"
     }
-
-    const savedProducts = localStorage.getItem("listOfProducts");
-    const savedSortConfig = localStorage.getItem("sortConfig");
-    const savedFilterConfig = localStorage.getItem("filterConfig");
-    const savedCurrentPage = localStorage.getItem("currentPage");
-
-    if (savedProducts) {
-      setListOfProducts(JSON.parse(savedProducts));
-    } else {
-      fetchProducts();
-    }
-
-    if (savedSortConfig) {
-      setSortConfig(JSON.parse(savedSortConfig));
-    }
-
-    if (savedFilterConfig) {
-      const parsedFilterConfig = JSON.parse(savedFilterConfig);
-      if (Array.isArray(parsedFilterConfig)) {
-        setFilterConfig(parsedFilterConfig);
-      } else {
-        console.warn("savedFilterConfig is not an array", parsedFilterConfig);
-        setFilterConfig([]);
-      }
-    }
-
-    if (savedCurrentPage) {
-      setCurrentPage(parseInt(savedCurrentPage, 10));
-    }
-  }, [location.state]);
-
-  const fetchProducts = async () => {
-    try {
-      const response = await axios.get(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`);
-      setListOfProducts(response.data);
-      localStorage.setItem("listOfProducts", JSON.stringify(response.data));
-    } catch (error) {
-      console.error("Error fetching products:", error);
-    }
-  };
-
-  // Function to handle sorting
-  const handleSort = (columnKey: string) => {
-    let direction = "asc";
-    if (sortConfig.key === columnKey && sortConfig.direction === "asc") {
-      direction = "desc";
-    }
-    const newSortConfig = { key: columnKey, direction };
-    setSortConfig({ key: columnKey, direction });
-    localStorage.setItem("sortConfig", JSON.stringify(newSortConfig));
-  };
-
-  const handleFilterChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    columnKey: string
-  ) => {
-    const { value } = e.target;
-    const newFilterConfig = filterConfig.filter((f) => f.key !== columnKey);
-    if (value) {
-      newFilterConfig.push({ key: columnKey, value });
-    }
-    setFilterConfig(newFilterConfig);
-    localStorage.setItem("filterConfig", JSON.stringify(newFilterConfig));
-    paginate(1);
-  };
-
-  const sortedAndFilteredProducts = listOfProducts
-    .filter((product) => {
-      return filterConfig.every(({ key, value }) => {
-        const productValue = product[key];
-        return productValue
-          ? productValue.toLowerCase().includes(value.toLowerCase())
-          : false;
-      });
-    })
-    .sort((a, b) => {
-      if (sortConfig.key) {
-        const aValue = a[sortConfig.key];
-        const bValue = b[sortConfig.key];
-
-        if (sortConfig.key === "quantity") {
-          return sortConfig.direction === "asc"
-            ? aValue - bValue
-            : bValue - aValue;
-        } else {
-          const aStr = aValue?.toString().toLowerCase() ?? "";
-          const bStr = bValue?.toString().toLowerCase() ?? "";
-          if (aStr < bStr) return sortConfig.direction === "asc" ? -1 : 1;
-          if (aStr > bStr) return sortConfig.direction === "asc" ? 1 : -1;
-          return 0;
-        }
-      }
-      return 0;
-    });
-
-  const paginate = (pageNumber: number) => {
-    setCurrentPage(pageNumber);
-    localStorage.setItem("currentPage", pageNumber.toString());
-  };
-
-  const handleRefresh = () => {
-    fetchProducts();
-    setSortConfig({ key: null, direction: "asc" });
-    setFilterConfig([]);
-    setCurrentPage(1);
-    localStorage.removeItem("sortConfig");
-    localStorage.removeItem("filterConfig");
-    localStorage.removeItem("currentPage");
-  };
+  ];
 
   return (
-    <div>
-      <Box mt={4} mb={3} px={2} display="flex" justifyContent="space-between" alignItems="center">
-        <Typography variant="h4" component="h1" sx={{ mb: 0 }}>
-          Products
-        </Typography>
-        <Stack direction="row" spacing={2} alignItems="center">
-          <Button
-            variant="contained"
-            color="primary"
-            size="large"
-            style={{ fontWeight: 500, textTransform: 'none', boxShadow: 'none' }}
-            onClick={() => navigate("/addProduct")}
-          >
-            Add Product
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            size="large"
-            style={{ fontWeight: 500, textTransform: 'none', boxShadow: 'none' }}
-            onClick={handleRefresh}
-          >
-            Refresh
-          </Button>
-        </Stack>
-      </Box>
-      <ProductList
-        products={sortedAndFilteredProducts}
-        heading={""}
-        handleSort={handleSort}
-        sortConfig={sortConfig}
-        filterConfig={filterConfig}
-        handleFilterChange={handleFilterChange}
-        currentPage={currentPage}
-        productsPerPage={productsPerPage}
-        paginate={paginate}
-        totalProducts={listOfProducts.length}
-      ></ProductList>
-    </div>
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" component="h1" sx={{ mb: 4, fontWeight: 600, color: '#1976d2' }}>
+        Welcome to Inventoz
+      </Typography>
+      <Typography variant="h6" sx={{ mb: 4, color: '#666' }}>
+        Select a section to get started
+      </Typography>
+      
+      <Grid container spacing={3}>
+        {dashboardItems
+          .filter((item) => {
+            // Check if user has access to this menu item
+            return hasMenuAccess(item.menuKey);
+          })
+          .map((item) => (
+            <Grid item xs={12} sm={6} md={4} lg={3} key={item.title}>
+              <Card 
+                sx={{ 
+                  height: '100%',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    transform: 'translateY(-4px)',
+                    boxShadow: '0 8px 25px rgba(0,0,0,0.15)'
+                  },
+                  backgroundColor: item.color
+                }}
+                onClick={() => navigate(item.path)}
+              >
+                <CardContent sx={{ 
+                  textAlign: 'center', 
+                  p: 3,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '100%'
+                }}>
+                  <Box sx={{ mb: 2 }}>
+                    {item.icon}
+                  </Box>
+                  <Typography variant="h6" component="h2" sx={{ mb: 1, fontWeight: 600 }}>
+                    {item.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {item.description}
+                  </Typography>
+                  <Button 
+                    variant="contained" 
+                    size="small"
+                    sx={{ 
+                      textTransform: 'none',
+                      fontWeight: 500
+                    }}
+                  >
+                    Open
+                  </Button>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+      </Grid>
+    </Box>
   );
 }
 
