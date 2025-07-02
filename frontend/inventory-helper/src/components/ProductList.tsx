@@ -4,6 +4,7 @@ import {
   ArrowDropDown,
   Sort,
   ContentCopy,
+  Science,
 } from "@mui/icons-material";
 import Pagination from "./Pagination";
 import { IconButton } from "@mui/material";
@@ -219,7 +220,12 @@ function ProductList({
                   {product.sku}
                 </td>
                 <td style={{ width: "8%" }}>{product.brand}</td>
-                <td>{product.itemName}</td>
+                <td>
+                  {product.itemName}
+                  {product.ProductDetail?.tester && (
+                    <Science sx={{ color: "red", fontSize: 20, ml: 1, verticalAlign: "middle" }} />
+                  )}
+                </td>
                 <td style={{ width: "5%" }}>{product.sizeOz} Oz</td>
                 <td>{product.strength}</td>
                 <td style={{ width: "8%" }}>{product.shade}</td>
