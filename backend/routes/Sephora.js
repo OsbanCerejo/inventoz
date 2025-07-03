@@ -8,8 +8,8 @@ const HOST = process.env.X_RAPID_HOST;
 
 router.get("/search", async (req, res) => {
   const { searchString, searchType } = req.query;
-  console.log(searchType);
-  console.log(searchString);
+  // console.log(searchType);
+  // console.log(searchString);
 
   try {
     const response = await axios.get(`${BASE_URL}/products/search-by-barcode`, {
@@ -32,8 +32,8 @@ router.get("/search", async (req, res) => {
 
 router.get("/getMoreDetails", async (req, res) => {
   const { productId, skuId } = req.query;
-  console.log("Product ID : ", productId);
-  console.log("SKU ID : ", skuId);
+  // console.log("Product ID : ", productId);
+  // console.log("SKU ID : ", skuId);
 
   try {
     const response = await axios.get(`${BASE_URL}/us/products/v2/detail`, {

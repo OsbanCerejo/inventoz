@@ -130,7 +130,7 @@ const getUserPermissions = (req, res) => {
       menu: roleConfig.menu || []
     };
 
-    console.log(`Permissions returned for role ${userRole}:`, response);
+    // console.log(`Permissions returned for role ${userRole}:`, response);
     res.json(response);
   } catch (error) {
     console.error('Get user permissions error:', error);

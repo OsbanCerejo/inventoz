@@ -6,16 +6,16 @@ const Op = Sequelize.Op;
 
 router.post("/", async (req, res) => {
   const listingsObject = req.body;
-  console.log("Listings object in backend is : ", listingsObject);
+  // console.log("Listings object in backend is : ", listingsObject);
 
   const [found, created] = await Listings.findOrCreate({
     where: { sku: listingsObject.sku },
     defaults: listingsObject,
   });
   if (created) {
-    console.log("Created New");
+    // console.log("Created New");
   } else {
-    console.log("Already Exists");
+    // console.log("Already Exists");
   }
   res.json(created ? "Created New" : "Already Exists");
 });
@@ -59,33 +59,33 @@ router.put("/", async (req, res) => {
 
 router.post("/updateQuantities", async (req, res) => {
   const listingsUpdates = req.body; // An array of updates with sku, quantitySold, and storeId
-  console.log("UPdate quantities by store in router: ", listingsUpdates)
+  // console.log("UPdate quantities by store in router: ", listingsUpdates)
   try {
     const updatePromises = listingsUpdates.map(
       async ({ sku, quantitySold, storeId }) => {
         // Find the existing listing for the SKU
         const listing = await Listings.findByPk(sku);
-        console.log("LISTINGS :", listing)
+        // console.log("LISTINGS :", listing)
         if (!listing) {
-          console.log("LISTINGS ENTRY NOT FOUND")
+          // console.log("LISTINGS ENTRY NOT FOUND")
           return `Listing not found for SKU: ${sku}`;
         }
         // Determine the column to update based on the storeId
         let columnToUpdate;
         if (storeId === 983189) {
           columnToUpdate = "ebayBuy4LessToday";
-          console.log("COLUMN TO UPDATE: " ,columnToUpdate)
+          // console.log("COLUMN TO UPDATE: " ,columnToUpdate)
         } else if (storeId === 1034120) {
           columnToUpdate = "ebayOneLifeLuxuries4";
-          console.log("COLUMN TO UPDATE: " ,columnToUpdate)
+          // console.log("COLUMN TO UPDATE: " ,columnToUpdate)
         } else if (storeId === 1040538) {
           columnToUpdate = "walmartOneLifeLuxuries";
-          console.log("COLUMN TO UPDATE: " ,columnToUpdate)
+          // console.log("COLUMN TO UPDATE: " ,columnToUpdate)
         } else {
-          console.log("INSIDE else:::")
+          // console.log("INSIDE else:::")
           return `Invalid storeId: ${storeId} for SKU: ${sku}`;
         }
-        console.log("COLUMN TO UPDATE: " ,columnToUpdate)
+        // console.log("COLUMN TO UPDATE: " ,columnToUpdate)
         
         // Decrement the quantity for the specified store column
         const newQuantity = Math.max(

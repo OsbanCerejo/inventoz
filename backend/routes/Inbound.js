@@ -9,16 +9,16 @@ const { checkPermission } = require('../middleware/permissions');
 
 router.post("/", auth, checkPermission('inbound', 'create'), async (req, res) => {
   const inboundItem = req.body;
-  console.log("Inbound object in backend is : ", inboundItem);
+  // console.log("Inbound object in backend is : ", inboundItem);
 
   const [found, created] = await Inbound.findOrCreate({
     where: { compositeSku: inboundItem.compositeSku },
     defaults: inboundItem,
   });
   if (created) {
-    console.log("Created New");
+    // console.log("Created New");
   } else {
-    console.log("Already Exists");
+    // console.log("Already Exists");
   }
   res.json(created ? "Created New" : "Already Exists");
 });

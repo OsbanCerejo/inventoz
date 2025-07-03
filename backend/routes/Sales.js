@@ -12,9 +12,9 @@ router.post("/", async (req, res) => {
         defaults: saleItem
     });
     if(created) {
-        console.log("Created New")
+        // console.log("Created New")
     } else {
-        console.log("Already Exists")
+        // console.log("Already Exists")
     }
     res.json(created ? "Created New" : "Already Exists");
 });

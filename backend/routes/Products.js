@@ -27,7 +27,7 @@ router.get("/byId/:id", auth, checkPermission('products', 'view'), async (req, r
 
 router.get("/search", auth, checkPermission('products', 'view'), async (req, res) => {
   const { searchString, searchType } = req.query;
-  console.log(searchType);
+  // console.log(searchType);
   const searchResults = await Products.findAll({
     where: {
       [searchType]: {
@@ -75,7 +75,7 @@ router.post("/", auth, checkPermission('products', 'create'), async (req, res) =
 
 router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
   const product = req.body;
-  console.log("Edited Product Value in Server : ", product);
+  // console.log("Edited Product Value in Server : ", product);
   
   try {
     // Get the current product state
@@ -193,7 +193,7 @@ router.delete("/delete/:id", auth, checkPermission('products', 'delete'), async 
 });
 
 router.get("/findAndCount/:skuPrefix", auth, checkPermission('products', 'view'), async (req, res) => {
-  console.log("Here inside find and count all in backend");
+  // console.log("Here inside find and count all in backend");
   const skuPrefix = req.params.skuPrefix;
   const { count, rows } = await Products.findAndCountAll({
     where: {

@@ -4,7 +4,7 @@ const ebayService = require('../Services/ebayService');
 // Schedule the job to run every 30 seconds
 cron.schedule('*/30 * * * * *', async () => {
   try {
-    console.log('Starting stock update cron job...');
+    // console.log('Starting stock update cron job...');
     const result = await ebayService.processPendingUpdates();
     
     if (!result.success) {

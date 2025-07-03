@@ -6,7 +6,7 @@ const { Op } = require('sequelize');
 // Schedule the job to run every minute
 cron.schedule('* * * * *', async () => {
   try {
-    console.log('Starting order processing cron job...');
+    // console.log('Starting order processing cron job...');
     
     // Get all orders from eBay API without time filter
     const orders = await ebayService.getOrders();

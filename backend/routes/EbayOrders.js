@@ -6,7 +6,7 @@ const { Products, EbayOrders } = require('../models');
 // Manual sync orders endpoint
 router.get('/sync', async (req, res) => {
     try {
-        console.log('Starting manual order sync...');
+        // console.log('Starting manual order sync...');
         
         // Get orders from eBay API
         const orders = await ebayService.getOrders();
