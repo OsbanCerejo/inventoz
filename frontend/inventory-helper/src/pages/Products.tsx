@@ -61,7 +61,14 @@ function Products() {
     }
 
     if (savedProducts) {
-      setListOfProducts(JSON.parse(savedProducts));
+      const parsedProducts = JSON.parse(savedProducts);
+      const hasNewStructure = parsedProducts.length > 0 && parsedProducts[0].ProductDetail !== undefined;
+      
+      if (hasNewStructure) {
+        setListOfProducts(parsedProducts);
+      } else {
+        fetchProducts();
+      }
     } else {
       fetchProducts();
     }
