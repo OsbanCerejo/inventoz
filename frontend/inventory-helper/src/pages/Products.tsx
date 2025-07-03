@@ -33,10 +33,17 @@ function Products() {
   // Fetch initial product list on component mount
   useEffect(() => {
     // Versioning: clear cache if version changed
-    const savedVersion = localStorage.getItem("dataVersion");
-    if (savedVersion !== DATA_VERSION) {
-      localStorage.clear();
-      localStorage.setItem("dataVersion", DATA_VERSION);
+    try {
+      const savedVersion = localStorage.getItem("dataVersion");
+      if (savedVersion !== DATA_VERSION) {
+        localStorage.clear();
+        localStorage.setItem("dataVersion", DATA_VERSION);
+      }
+    } catch (error) {
+      console.warn("localStorage error:", error);
+      // If localStorage fails, just fetch fresh data
+      fetchProducts();
+      return;
     }
 
     // Clear filters if navigated with the clearFilters state
@@ -45,17 +52,29 @@ function Products() {
       setSortConfig({ key: "sku", direction: "asc" });
       setFilterConfig([]);
       setCurrentPage(1);
-      localStorage.removeItem("sortConfig");
-      localStorage.removeItem("filterConfig");
-      localStorage.removeItem("currentPage");
+      try {
+        localStorage.removeItem("sortConfig");
+        localStorage.removeItem("filterConfig");
+        localStorage.removeItem("currentPage");
+      } catch (error) {
+        console.warn("localStorage error:", error);
+      }
 
       navigate(location.pathname, { replace: true, state: {} });
     }
 
-    const savedProducts = localStorage.getItem("listOfProducts");
-    const savedSortConfig = localStorage.getItem("sortConfig");
-    const savedFilterConfig = localStorage.getItem("filterConfig");
-    const savedCurrentPage = localStorage.getItem("currentPage");
+    let savedProducts, savedSortConfig, savedFilterConfig, savedCurrentPage;
+    
+    try {
+      savedProducts = localStorage.getItem("listOfProducts");
+      savedSortConfig = localStorage.getItem("sortConfig");
+      savedFilterConfig = localStorage.getItem("filterConfig");
+      savedCurrentPage = localStorage.getItem("currentPage");
+    } catch (error) {
+      console.warn("localStorage error:", error);
+      fetchProducts();
+      return;
+    }
 
     if (savedProducts) {
       setListOfProducts(JSON.parse(savedProducts));
@@ -86,7 +105,12 @@ function Products() {
     try {
       const response = await axios.get(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`);
       setListOfProducts(response.data);
-      localStorage.setItem("listOfProducts", JSON.stringify(response.data));
+      try {
+        localStorage.setItem("listOfProducts", JSON.stringify(response.data));
+      } catch (error) {
+        console.warn("Failed to save products to localStorage:", error);
+        // Continue without caching if localStorage is full
+      }
     } catch (error) {
       console.error("Error fetching products:", error);
     }
@@ -100,7 +124,11 @@ function Products() {
     }
     const newSortConfig = { key: columnKey, direction };
     setSortConfig({ key: columnKey, direction });
-    localStorage.setItem("sortConfig", JSON.stringify(newSortConfig));
+    try {
+      localStorage.setItem("sortConfig", JSON.stringify(newSortConfig));
+    } catch (error) {
+      console.warn("Failed to save sort config to localStorage:", error);
+    }
   };
 
   const handleFilterChange = (
@@ -113,7 +141,11 @@ function Products() {
       newFilterConfig.push({ key: columnKey, value });
     }
     setFilterConfig(newFilterConfig);
-    localStorage.setItem("filterConfig", JSON.stringify(newFilterConfig));
+    try {
+      localStorage.setItem("filterConfig", JSON.stringify(newFilterConfig));
+    } catch (error) {
+      console.warn("Failed to save filter config to localStorage:", error);
+    }
     paginate(1);
   };
 
@@ -148,7 +180,11 @@ function Products() {
 
   const paginate = (pageNumber: number) => {
     setCurrentPage(pageNumber);
-    localStorage.setItem("currentPage", pageNumber.toString());
+    try {
+      localStorage.setItem("currentPage", pageNumber.toString());
+    } catch (error) {
+      console.warn("Failed to save current page to localStorage:", error);
+    }
   };
 
   const handleRefresh = () => {
@@ -156,9 +192,13 @@ function Products() {
     setSortConfig({ key: null, direction: "asc" });
     setFilterConfig([]);
     setCurrentPage(1);
-    localStorage.removeItem("sortConfig");
-    localStorage.removeItem("filterConfig");
-    localStorage.removeItem("currentPage");
+    try {
+      localStorage.removeItem("sortConfig");
+      localStorage.removeItem("filterConfig");
+      localStorage.removeItem("currentPage");
+    } catch (error) {
+      console.warn("Failed to clear localStorage:", error);
+    }
   };
 
   return (

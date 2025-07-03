@@ -12,7 +12,8 @@ router.get("/", auth, checkPermission('products', 'view'), async (req, res) => {
   const listOfProducts = await db.Products.findAll({
     include: [{
       model: db.ProductDetails,
-      required: false
+      required: false,
+      attributes: ['tester']
     }]
   });
   res.json(listOfProducts);
