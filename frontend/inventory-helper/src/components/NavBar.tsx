@@ -23,7 +23,7 @@ function NavBar() {
   };
 
   const handleLogout = () => {
-    console.log('Logout button clicked!');
+    // console.log('Logout button clicked!');
     logout();
     navigate("/login");
     setShowUserMenu(false);

@@ -69,7 +69,7 @@ const OrderDetails = () => {
       const response = await axios.get(
         `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/orders/order/${orderId}`
       );
-      console.log(response.data);
+      // console.log(response.data);
       setOrderDetails(response.data);
       setError("");
     } catch (error) {
