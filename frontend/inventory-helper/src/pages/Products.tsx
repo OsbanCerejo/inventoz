@@ -5,6 +5,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button, Box, Stack, Typography } from "@mui/material";
 import PermissionGuard from "../components/PermissionGuard";
 
+const DATA_VERSION = 'v2'; // Increment this when backend data shape changes
+
 function Products() {
   // State Variables
   const [listOfProducts, setListOfProducts] = useState<any[]>([]);
@@ -30,6 +32,13 @@ function Products() {
 
   // Fetch initial product list on component mount
   useEffect(() => {
+    // Versioning: clear cache if version changed
+    const savedVersion = localStorage.getItem("dataVersion");
+    if (savedVersion !== DATA_VERSION) {
+      localStorage.clear();
+      localStorage.setItem("dataVersion", DATA_VERSION);
+    }
+
     // Clear filters if navigated with the clearFilters state
     if (location.state?.clearFilters) {
       fetchProducts();
