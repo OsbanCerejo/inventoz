@@ -113,20 +113,6 @@ function Product() {
           }/products/delete/${productObject.sku}`
         );
         toast.success("Deleted Successfully!", { position: "top-right" });
-        await axios.post(
-          `http://${import.meta.env.VITE_SERVER_IP}:${
-            import.meta.env.VITE_SERVER_PORT
-          }/logs/addLog`,
-          {
-            timestamp: new Date().toISOString(),
-            type: "Delete Product",
-            userId: user?.id?.toString(),
-            metaData: {
-              productObject,
-              productDetails,
-            }, // Log the details of the deleted product
-          }
-        );
         navigate("/", { state: { clearFilters: true } });
       } catch (error) {
         console.error("Error deleting the product:", error);
