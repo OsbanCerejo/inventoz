@@ -166,11 +166,29 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
 
 router.delete("/delete/:id", auth, checkPermission('products', 'delete'), async (req, res) => {
   const id = req.params.id;
+
+  const currentProduct = await Products.findOne({ where: { sku: id } });
+
   const status = await Products.destroy({
     where: {
       sku: id,
     },
   });
+
+  await Logs.create({
+    type: "Product",
+    action: "delete",
+    entityType: "product",
+    entityId: currentProduct.sku,
+    userId: req.user.id.toString(),
+    changes: [],
+    previousState: currentProduct.toJSON(),
+    newState: [],
+    metaData: {
+      message: "Product has been deleted",
+    }
+  });
+
   res.json(status);
 });
 
