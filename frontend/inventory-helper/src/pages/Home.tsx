@@ -53,7 +53,7 @@ function Home() {
     },
     {
       title: "Packing Mode",
-      description: "Efficient order packing interface",
+      description: "Order packing interface",
       icon: <PackingIcon sx={{ fontSize: 40, color: '#d32f2f' }} />,
       path: "/orders/packingMode",
       menuKey: "packing",
@@ -69,7 +69,7 @@ function Home() {
     },
     {
       title: "Whatnot",
-      description: "Whatnot platform integration",
+      description: "Whatnot barcode scanner",
       icon: <WhatnotIcon sx={{ fontSize: 40, color: '#7b1fa2' }} />,
       path: "/whatnot",
       menuKey: "whatnot",
