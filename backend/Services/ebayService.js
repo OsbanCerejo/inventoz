@@ -1,3 +1,7 @@
+export async function getAccessToken() {
+  return await this.authService.getAccessToken();
+}
+
 const axios = require('axios');
 const AuthService = require('./AuthService');
 const { StockUpdateHistory, Products, EbayOrders } = require('../models');
