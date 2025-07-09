@@ -174,7 +174,6 @@ function EditProduct() {
     validationSchema: formikValidationSchema,
     onSubmit: (data) => {
       const productChanges = getChangedFields(data, formikInitialValues);
-      console.log("CHANGES : ", productChanges)
 
       const listingsObject: ListingsObject = {
         sku: data.sku,
@@ -191,8 +190,6 @@ function EditProduct() {
         ])
         .then(
           axios.spread((productsRes, productDetailsRes, listingsRes) => {
-            console.log("Product Updated to: ", productsRes);
-            console.log("Product Details Updated to: ", productDetailsRes);
             
             // Log product details changes
             if (Object.keys(productChanges).length > 0) {

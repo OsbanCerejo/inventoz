@@ -203,7 +203,7 @@ function AddProduct() {
             `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/productDetails/addProductDetails`,
             data
           );
-          console.log("Product Details Response : ", addProductDetailsresponse);
+          // Product Details Response received
 
           // Log product details creation
           await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
@@ -252,7 +252,7 @@ function AddProduct() {
               `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/inbound`,
               inboundObject
             );
-            console.log(inboundResponse);
+            // Inbound response received
 
             // Log inbound creation
             await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
@@ -282,12 +282,12 @@ function AddProduct() {
               ebayOneLifeLuxuries4: data.onelifeluxuries,
               walmartOneLifeLuxuries: data.walmart,
             };
-            console.log("LISTINGS OBJECT: ", listingsObject);
+            // Listings object created
             const listingsResponse = await axios.post(
               `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/listings`,
               listingsObject
             );
-            console.log(listingsResponse);
+            // Listings response received
           }
 
           // Fetch the brand object and update nextNumber
@@ -336,24 +336,23 @@ function AddProduct() {
       // Check if the brand exists in the brandMap
       if (brandMap.has(fieldValue)) {
         const brandForSku = brandMap.get(fieldValue);
-        console.log("Level 1: Brand found for SKU - ", brandForSku);
-        // Fetch the brand object from the server
+        // Level 1: Brand found for SKU
         const brandResponse = await axios.get(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`, {
           params: { brandName: fieldValue },
         });
         const brandObject = brandResponse.data[0];
-        console.log("Level 2: Brand object - ", brandObject);
+        // Level 2: Brand object
 
         // If the nextNumber is not set, fetch the product count and update it
         if (brandObject.nextNumber.length === 0) {
           const productResponse = await axios.get(
             `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products/findAndCount/${brandForSku}`
           );
-          console.log("Level 3: Product count - ", productResponse.data);
+          // Level 3: Product count
           // Update the brand object's nextNumber with the product count
           brandObject.nextNumber = productResponse.data.toString();
           await axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`, brandObject);
-          console.log("Level 4");
+          // Level 4
         }
         // Set the 10th position of the SKU with the formatted nextNumber
         skuArray[10] =
@@ -365,8 +364,7 @@ function AddProduct() {
         skuArray[1] = brandForSku ? brandForSku.charAt(1) : "@";
         skuArray[2] = brandForSku ? brandForSku.charAt(2) : "@";
       } else {
-        // If the brand is not found, set the first three characters of SKU to "*"
-        console.log("Brand not found for SKU");
+        // Brand not found for SKU
         skuArray.fill("*", 0, 3);
       }
       // Check if the factor is "2" to process category-related SKU generation
@@ -374,7 +372,7 @@ function AddProduct() {
       if (categoryMap.has(fieldValue.toLowerCase())) {
         const categoryForSku =
           categoryMap.get(fieldValue.toLowerCase()) || "NA";
-        console.log("Category for SKU:", categoryForSku);
+        // Category for SKU
         // Set the 4th and 5th position of the SKU based on the category initials
         skuArray[4] = categoryForSku.charAt(0);
         skuArray[5] = categoryForSku.charAt(1);
@@ -408,7 +406,7 @@ function AddProduct() {
       formik.values.category &&
       formik.values.condition
     ) {
-      console.log("Value in use effect", formik.values.brand);
+      // Value in use effect
       generateSku(formik.values.brand.toLowerCase(), "1");
       generateSku(formik.values.category.toLowerCase(), "2");
       generateSku(formik.values.condition.toLowerCase(), "4");

@@ -21,16 +21,11 @@ const Users: React.FC = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const { user: currentUser, token } = useAuth();
 
-  console.log('Users component rendered');
-  console.log('currentUser:', currentUser);
-  console.log('token:', token);
-
   // Use the same API URL pattern as Login page
   const API_BASE_URL = `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/api`;
 
   const fetchUsers = async () => {
     if (!token) {
-      console.log('No token available, skipping fetch');
       setLoading(false);
       return;
     }

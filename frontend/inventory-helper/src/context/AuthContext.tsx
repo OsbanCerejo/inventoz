@@ -49,7 +49,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Fetch user permissions from backend
   const fetchUserPermissions = async (authToken: string) => {
     try {
-      console.log('Fetching permissions from:', `${getServerUrl()}/auth/permissions`);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
       
@@ -59,7 +58,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
       
       clearTimeout(timeoutId);
-      console.log('Permissions fetched successfully:', response.data);
       setPermissions(response.data);
     } catch (error) {
       console.error('Failed to fetch user permissions:', error);

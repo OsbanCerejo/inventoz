@@ -53,7 +53,6 @@ function AllOrders() {
       ]);
       setProductsData(productsResponse.data);
       const productMap = createProductMap(productsResponse.data);
-      console.log(ordersResponse)
       const grouped = groupOrdersByProduct(
         ordersResponse.data.orders,
         productMap

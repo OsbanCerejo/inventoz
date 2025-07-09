@@ -30,7 +30,6 @@ router.get("/allOrders", auth, checkPermission('orders', 'view'), async (req, re
 
     if (response.status === 200) {
       const orders = response.data;
-      console.log(orders)
       res.json(orders);
     } else {
       console.error(
@@ -40,7 +39,6 @@ router.get("/allOrders", auth, checkPermission('orders', 'view'), async (req, re
       );
     }
   } catch (error) {
-    console.log(error);
     console.error(
       "Error:",
       error.response ? error.response.data : error.message

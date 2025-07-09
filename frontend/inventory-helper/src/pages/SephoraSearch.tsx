@@ -21,7 +21,7 @@ function SephoraSearch() {
   const [selectedColumn, setSelectedColumn] = useState("");
 
   useEffect(() => {
-    console.log("Product details in useeffect: ", productDetails);
+    // Product details updated
   }, [productDetails]);
 
   // Constants
@@ -51,11 +51,9 @@ function SephoraSearch() {
           const productId = response.data.productId;
           const skuId = response.data.skuId;
           setProductDetails(getProductDetails(productId, skuId));
-          console.log("Product Details : ", productDetails);
         } else {
           setReturnedProduct(null);
         }
-        console.log("Sephora Search Results: ", response.data);
       } else {
         setReturnedProduct(null);
       }
@@ -71,7 +69,6 @@ function SephoraSearch() {
         params: { productId, skuId },
       }
     );
-    console.log("Product Details in function : ", responseProductDetails.data);
     setProductDetails(responseProductDetails.data);
     return responseProductDetails.data;
   };

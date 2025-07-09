@@ -57,10 +57,10 @@ function Sales() {
           sku: productObject.sku,
         })
         .then(() => {
-          console.log("Quantity Updated in Inventory Table");
+          // Quantity updated in inventory table
         });
       axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/sales`, data).then((response) => {
-        console.log(response);
+        // Sales data saved
       });
       navigate("/", { state: { clearFilters: true } });
     },
