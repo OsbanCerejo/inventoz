@@ -54,7 +54,7 @@ const EbayAPI = () => {
         sku,
         price,
       });
-      // Price update response received
+      console.log("PRICE UPDATE RESPONSE : ", response);
 
       setMessage(`Price updated successfully for SKU: ${sku}`);
     } catch (error) {
@@ -81,7 +81,7 @@ const EbayAPI = () => {
         quantity,
       });
 
-      // Quantity update response received
+      console.log("Quantity UPDATE RESPONSE : ", response);
       setMessage(`Quantity updated successfully for SKU: ${sku}`);
       toast.success(`Quantity updated successfully to : ${quantity}`, { position: "top-right" });
     } catch (error) {

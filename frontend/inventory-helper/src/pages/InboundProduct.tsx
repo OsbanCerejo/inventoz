@@ -64,20 +64,20 @@ function InboundProduct() {
           sku: productObject.sku,
         })
         .then(() => {
-          // Quantity updated in inventory table
+          console.log("Quantity Updated in Inventory Table");
         });
       axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/inbound`, data).then((response) => {
         if (response.data === "Created New") {
           toast.success("Success Notification !", {
             position: "top-right",
           });
-          // Created New
+          console.log("Created New");
           navigate("/", { state: { clearFilters: true } });
         } else {
           toast.error("Inbound Entry Already Exists!", {
             position: "top-right",
           });
-          // Already Exists
+          console.log("Already Exists");
         }
       });
     },

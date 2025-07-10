@@ -69,7 +69,6 @@ router.post("/updateQuantity", async (req, res) => {
     // Use alternative SKU if available, otherwise use original SKU, and trim any spaces
     const ebaySku = product.alternativeSku ? product.alternativeSku.trim() : sku;
     const TOKEN = await service.getAccessToken();
-
     const EBAY_API_URL = "https://api.ebay.com/sell/inventory/v1/bulk_update_price_quantity";
 
     const payload = {
