@@ -129,29 +129,6 @@ function Product() {
     navigate("/inbound", { state: { productObject } });
   }, [navigate, productObject]);
 
-  const handleCopyBarcodeClick = useCallback(() => {
-    const barcodeCanvas =
-      document.querySelector<HTMLCanvasElement>(".barcode-canvas");
-
-    if (barcodeCanvas) {
-      barcodeCanvas.toBlob((blob) => {
-        if (blob) {
-          const item = new ClipboardItem({ "image/png": blob });
-          navigator.clipboard.write([item]);
-          toast.success("Barcode image copied to clipboard!", {
-            position: "top-right",
-          });
-        } else {
-          toast.error("Failed to copy the barcode image.", {
-            position: "top-right",
-          });
-        }
-      });
-    } else {
-      console.error("Barcode canvas not found.");
-    }
-  }, []);
-
   const handlePrintClick = useReactToPrint({
     content: () => labelRef.current,
     documentTitle: `Label-${productObject.sku}`,

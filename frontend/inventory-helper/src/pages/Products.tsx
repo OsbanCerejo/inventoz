@@ -25,9 +25,6 @@ function Products() {
   const [currentPage, setCurrentPage] = useState(1);
   const [productsPerPage] = useState(20);
 
-  // Constants
-  const heading = "Products";
-
   // Fetch initial product list on component mount
   useEffect(() => {
     // Clear filters if navigated with the clearFilters state

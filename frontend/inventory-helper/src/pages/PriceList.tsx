@@ -17,7 +17,7 @@ import {
   DialogContent,
   DialogActions,
   Alert,
-  LinearProgress,
+
   FormControl,
   InputLabel,
   Select,
@@ -57,11 +57,7 @@ interface PriceListFile {
   file: File;
 }
 
-interface HeaderMapping {
-  upc: string;
-  productName: string;
-  price: string;
-}
+
 
 interface HeaderResponse {
   headers: string[];
@@ -77,13 +73,11 @@ const PriceList: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<PriceListFile | null>(null);
   const [customName, setCustomName] = useState('');
   const [headers, setHeaders] = useState<string[]>([]);
-  const [headerRowIndex, setHeaderRowIndex] = useState<number>(0);
   const [headerMessage, setHeaderMessage] = useState<string>('');
   const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [importProgress, setImportProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [processing, setProcessing] = useState(false);
+
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -146,7 +140,6 @@ const PriceList: React.FC = () => {
       
       const headersData: HeaderResponse = headersResponse.data;
       setHeaders(headersData.headers);
-      setHeaderRowIndex(headersData.headerRowIndex);
       setHeaderMessage(headersData.message);
       setOpenMappingDialog(true);
     } catch (err: any) {
@@ -195,7 +188,7 @@ const PriceList: React.FC = () => {
 
   const handleDelete = async (fileId: string) => {
     try {
-      const response = await axios.delete(
+      await axios.delete(
         `${API_URL}/price-list/file/${fileId}`,
         {
           headers: {
@@ -229,7 +222,6 @@ const PriceList: React.FC = () => {
     if (!selectedFile) return;
 
     try {
-      setProcessing(true);
       const response = await axios.post(`${API_URL}/price-list/process-file`, {
         fileId: selectedFile.id,
         headerMapping: mapping
@@ -260,7 +252,6 @@ const PriceList: React.FC = () => {
       console.error('Error processing file:', error);
       setError('Error processing file: ' + (error.response?.data?.message || error.message));
     } finally {
-      setProcessing(false);
       setOpenMappingDialog(false);
     }
   };
@@ -422,15 +413,6 @@ const PriceList: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Import Progress */}
-      {importProgress > 0 && importProgress < 100 && (
-        <Box sx={{ mt: 2 }}>
-          <Typography variant="body2" gutterBottom>
-            Importing products... {importProgress}%
-          </Typography>
-          <LinearProgress variant="determinate" value={importProgress} />
-        </Box>
-      )}
     </Box>
   );
 };

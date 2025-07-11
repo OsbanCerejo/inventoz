@@ -35,12 +35,11 @@ import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import countriesData from "../../../data/countries.json";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 function AddProduct() {
   const location = useLocation();
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { productObject, productDetails } = location.state || {};
   const [generatedSku, setGeneratedSku] = useState("");

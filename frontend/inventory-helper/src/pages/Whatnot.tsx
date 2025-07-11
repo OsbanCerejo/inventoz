@@ -12,16 +12,13 @@ import {
   DialogActions,
   List,
   ListItem,
-  ListItemText,
   CircularProgress,
   Alert,
-  Snackbar,
   Grid,
   Card,
-  CardMedia,
-  CardContent
+  CardMedia
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
+
 
 interface ProductDetails {
   images?: string[];
@@ -53,13 +50,7 @@ interface SearchResult {
   message?: string;
 }
 
-const StyledPaper = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(3),
-  margin: theme.spacing(2),
-  backgroundColor: '#f5f5f5',
-  borderRadius: '8px',
-  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-}));
+
 
 const Whatnot: React.FC = () => {
   const [barcode, setBarcode] = useState('');
