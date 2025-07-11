@@ -157,6 +157,9 @@ function ProductList({
               <th scope="col" onClick={() => handleSort("quantity")}>
                 {getSortIcon("quantity")} Quantity
               </th>
+              <th scope="col">
+                Vendor
+              </th>
               <th scope="col" onClick={() => handleSort("listed")}>
                 {getSortIcon("listed")} Listed
               </th>
@@ -194,6 +197,9 @@ function ProductList({
                   }}
                 >
                   {combinedItem.quantity}
+                </td>
+                <td>
+                  {combinedItem.vendor}
                 </td>
                 <td
                   style={{
