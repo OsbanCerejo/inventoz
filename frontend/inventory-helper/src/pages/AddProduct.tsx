@@ -26,7 +26,7 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import dayjs from "dayjs";
-import skuData from "../../../data/skuData.json";
+import skuData from "../../data/skuData.json";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
@@ -34,7 +34,7 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import countriesData from "../../../data/countries.json";
+import countriesData from "../../data/countries.json";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -518,8 +518,8 @@ function AddProduct() {
                           input={<OutlinedInput label="Brand" />}
                         >
                           {Object.entries(skuData.BRANDS).map(
-                            ([value, key]) => (
-                              <MenuItem key={key} value={value}>
+                            ([value], index) => (
+                              <MenuItem key={index} value={value}>
                                 {value}
                               </MenuItem>
                             )
@@ -573,8 +573,8 @@ function AddProduct() {
                           input={<OutlinedInput label="Category" />}
                         >
                           {Object.entries(skuData.CATEGORY).map(
-                            ([value, key]) => (
-                              <MenuItem key={key} value={value}>
+                            ([value], index) => (
+                              <MenuItem key={index} value={value}>
                                 {value}
                               </MenuItem>
                             )
@@ -611,8 +611,8 @@ function AddProduct() {
                             input={<OutlinedInput label="strength" />}
                           >
                             {Object.entries(skuData.STRENGTH).map(
-                              ([value, key]) => (
-                                <MenuItem key={key} value={value}>
+                              ([value], index) => (
+                                <MenuItem key={index} value={value}>
                                   {value}
                                 </MenuItem>
                               )
@@ -963,8 +963,8 @@ function AddProduct() {
                                   input={<OutlinedInput label="sizeType" />}
                                 >
                                   {Object.entries(skuData.SIZE).map(
-                                    ([value, key]) => (
-                                      <MenuItem key={key} value={value}>
+                                    ([value], index) => (
+                                      <MenuItem key={index} value={value}>
                                         {value}
                                       </MenuItem>
                                     )
