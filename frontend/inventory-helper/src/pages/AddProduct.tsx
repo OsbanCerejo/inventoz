@@ -26,7 +26,7 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import dayjs from "dayjs";
-import skuData from "../../data/skuData.json";
+import skuData from "../data/skuData.json";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
@@ -34,7 +34,7 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import countriesData from "../../data/countries.json";
+import countriesData from "../data/countries.json";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 

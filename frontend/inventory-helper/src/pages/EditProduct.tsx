@@ -26,11 +26,11 @@ import axios from "axios";
 import * as Yup from "yup";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
-import skuData from "../../data/skuData.json";
+import skuData from "../data/skuData.json";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import countriesData from "../../data/countries.json";
+import countriesData from "../data/countries.json";
 import { isEqual } from "lodash";
 import { useAuth } from "../context/AuthContext";
 
