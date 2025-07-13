@@ -12,19 +12,31 @@ app.use(express.json());
 
 // CORS configuration for production domains
 const corsOptions = {
-  origin: [
-    'https://inventoz-frontend.lprpnx.easypanel.host',
-    'https://inventoz-backend.lprpnx.easypanel.host',
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'http://localhost:3001'
-  ],
+  origin: true, // Allow all origins temporarily for debugging
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
+
+// Additional CORS headers for preflight requests
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'https://inventoz-frontend.lprpnx.easypanel.host');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
+  
+  next();
+});
 
 // Database connection is handled in models/index.js
 const sequelize = db.sequelize;
@@ -84,6 +96,15 @@ app.use("/api/users", usersRouter);
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Test endpoint for CORS debugging
+app.get('/test-cors', (req, res) => {
+  res.json({ 
+    message: 'CORS test successful',
+    timestamp: new Date().toISOString(),
+    origin: req.headers.origin
+  });
+});
 
 sequelize
   .authenticate()
