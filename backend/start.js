@@ -4,16 +4,16 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
-console.log('🚀 Starting Inventoz Backend Server...');
+console.log('Starting Inventoz Backend Server...');
 console.log('Environment:', process.env.NODE_ENV || 'development');
 
 // Force port 80 for EasyPanel deployment
-console.log('🔧 EasyPanel detected - forcing port 80');
+console.log('EasyPanel detected - forcing port 80');
 process.env.PORT = 80;
-console.log('📝 Setting PORT to 80 (EasyPanel standard)');
+console.log('Setting PORT to 80 (EasyPanel standard)');
 
 // Log all environment variables for debugging
-console.log('📋 Environment Variables:');
+console.log('Environment Variables:');
 console.log('- PORT:', process.env.PORT);
 console.log('- NODE_ENV:', process.env.NODE_ENV);
 console.log('- DB_HOST:', process.env.DB_HOST || 'not set');
@@ -26,22 +26,22 @@ const child = spawn('node', ['index.js'], {
 });
 
 child.on('close', (code) => {
-  console.log(`📤 Child process exited with code ${code}`);
+  console.log(`Child process exited with code ${code}`);
   process.exit(code);
 });
 
 child.on('error', (err) => {
-  console.error('❌ Failed to start child process:', err);
+  console.error('Failed to start child process:', err);
   process.exit(1);
 });
 
 // Handle graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('🛑 Received SIGTERM, shutting down gracefully...');
+  console.log('Received SIGTERM, shutting down gracefully...');
   child.kill('SIGTERM');
 });
 
 process.on('SIGINT', () => {
-  console.log('🛑 Received SIGINT, shutting down gracefully...');
+  console.log('Received SIGINT, shutting down gracefully...');
   child.kill('SIGINT');
 }); 
