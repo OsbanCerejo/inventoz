@@ -97,6 +97,15 @@ app.use("/api/users", usersRouter);
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Health check endpoint (no database required)
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 // Test endpoint for CORS debugging
 app.get('/test-cors', (req, res) => {
   res.json({ 
@@ -106,6 +115,16 @@ app.get('/test-cors', (req, res) => {
   });
 });
 
+// Start server even if database connection fails
+const startServer = () => {
+  const port = process.env.PORT || 3000;
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`Server is running on port ${port}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+};
+
+// Try to connect to database, but start server regardless
 sequelize
   .authenticate()
   .then(() => {
@@ -113,15 +132,16 @@ sequelize
     return db.sequelize.sync();
   })
   .then(() => {
+    console.log("Database synchronized successfully.");
     // Initialize cron jobs
     console.log("Initializing cron jobs...");
     // stockUpdateCron;
     // orderProcessingCron;
     
-    app.listen(process.env.PORT, '0.0.0.0', () => {
-      console.log(`Server is running on port ${process.env.PORT}`);
-    });
+    startServer();
   })
   .catch((err) => {
     console.error("Unable to connect to the database:", err);
+    console.log("Starting server without database connection...");
+    startServer();
   });
