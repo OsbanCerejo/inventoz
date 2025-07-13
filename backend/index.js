@@ -9,7 +9,22 @@ const orderProcessingCron = require("./cron/orderProcessing");
 const path = require("path");
 
 app.use(express.json());
-app.use(cors());
+
+// CORS configuration for production domains
+const corsOptions = {
+  origin: [
+    'https://inventoz-frontend.lprpnx.easypanel.host',
+    'https://inventoz-backend.lprpnx.easypanel.host',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://localhost:3001'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
 
 // Database connection is handled in models/index.js
 const sequelize = db.sequelize;
