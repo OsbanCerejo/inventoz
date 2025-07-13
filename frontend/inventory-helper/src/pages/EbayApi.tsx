@@ -2,6 +2,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { Typography, Box } from "@mui/material";
+import { getApiUrl } from '../config/api';
 
 const EbayAPI = () => {
   const [sku, setSku] = useState("");
@@ -25,7 +26,7 @@ const EbayAPI = () => {
     }
 
     try {
-      const response = await axios.get(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/ebayAPI/getItem`, {
+      const response = await axios.get(getApiUrl('ebayAPI/getItem'), {
         params: { sku },
       });
 

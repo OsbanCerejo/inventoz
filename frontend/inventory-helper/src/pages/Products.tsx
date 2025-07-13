@@ -4,6 +4,7 @@ import ProductList from "../components/ProductList";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button, Box, Stack, Typography } from "@mui/material";
 import PermissionGuard from "../components/PermissionGuard";
+import { getApiUrl } from '../config/api';
 
 function Products() {
   // State Variables
@@ -91,7 +92,7 @@ function Products() {
 
   const fetchProducts = async () => {
     try {
-      const response = await axios.get(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`);
+      const response = await axios.get(getApiUrl('products'));
       setListOfProducts(response.data);
       try {
         localStorage.setItem("listOfProducts", JSON.stringify(response.data));

@@ -1,6 +1,7 @@
 import { Box, TextField, Select, MenuItem, Button } from "@mui/material";
 import axios from "axios";
 import { useState } from "react";
+import { getApiUrl } from '../config/api';
 
 interface SearchProps {
   columnMap: Map<string, string>;
@@ -18,7 +19,7 @@ function Search({ columnMap, onSearch }: SearchProps) {
           ? columnMap.get(selectedColumn)
           : "itemName";
         const response = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products/search`,
+          getApiUrl('products/search'),
           {
             params: { searchString, searchType },
           }

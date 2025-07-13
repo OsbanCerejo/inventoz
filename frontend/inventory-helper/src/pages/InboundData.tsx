@@ -2,6 +2,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import InboundList from "../components/InboundList";
 import { Typography, Box } from "@mui/material";
+import { getApiUrl } from '../config/api';
 
 function InboundData() {
   const [listOfInbound, setListOfInbound] = useState<any[]>([]);
@@ -27,7 +28,7 @@ function InboundData() {
   const fetchInbound = async () => {
     try {
       const [inboundResponse] = await Promise.all([
-        axios.get(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/inbound`),
+        axios.get(getApiUrl('inbound')),
       ]);
       setListOfInbound(inboundResponse.data);
     } catch (error) {

@@ -3,7 +3,6 @@ const app = express();
 const cors = require("cors");
 require("dotenv").config();
 const { Sequelize } = require("sequelize");
-const dbConfig = require("./config/databaseConfig");
 const db = require("./models");
 const stockUpdateCron = require("./cron/stockUpdate");
 const orderProcessingCron = require("./cron/orderProcessing");
@@ -12,17 +11,8 @@ const path = require("path");
 app.use(express.json());
 app.use(cors());
 
-// Database configuration
-const sequelize = new Sequelize(
-  dbConfig.database,
-  dbConfig.username,
-  dbConfig.password,
-  {
-    host: dbConfig.host,
-    dialect: dbConfig.dialect,
-    logging: false
-  }
-);
+// Database connection is handled in models/index.js
+const sequelize = db.sequelize;
 
 // Authentication routes
 const authRouter = require("./routes/auth");
@@ -93,7 +83,7 @@ sequelize
     // orderProcessingCron;
     
     app.listen(process.env.PORT, '0.0.0.0', () => {
-      console.log(`Server is running on http://${process.env.SERVER_IP}:${process.env.PORT}`);
+      console.log(`Server is running on port ${process.env.PORT}`);
     });
   })
   .catch((err) => {

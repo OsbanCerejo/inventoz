@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useAuth } from '../context/AuthContext';
+import { getApiUrl } from '../config/api';
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(4),
@@ -49,7 +50,7 @@ const Login = () => {
     setLoading(true);
     setError('');
     try {
-      const response = await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/auth/login`, {
+      const response = await axios.post(getApiUrl('auth/login'), {
         email,
         password
       });

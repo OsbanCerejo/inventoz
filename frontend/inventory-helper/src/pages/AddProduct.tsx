@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useFormik } from "formik";
 import * as Yup from "yup";
+import { getApiUrl } from '../config/api';
 import Button from "@mui/material/Button";
 import {
   Box,
@@ -172,13 +173,13 @@ function AddProduct() {
 
       try {
         const addProductresponse = await axios.post(
-          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`,
+          getApiUrl('products'),
           data
         );
 
         if (addProductresponse.data === "Created New") {
           // Log the product creation
-          await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
+          await axios.post(getApiUrl('logs/addLog'), {
             timestamp: new Date().toISOString(),
             type: "Product",
             action: "create",
@@ -199,13 +200,13 @@ function AddProduct() {
 
           // Handle Product Details Insertion
           const addProductDetailsresponse = await axios.post(
-            `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/productDetails/addProductDetails`,
+            getApiUrl('productDetails/addProductDetails'),
             data
           );
           console.log("Product Details Response : ", addProductDetailsresponse);
 
           // Log product details creation
-          await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
+                      await axios.post(getApiUrl('logs/addLog'), {
             timestamp: new Date().toISOString(),
             type: "Product",
             action: "create",
@@ -248,13 +249,13 @@ function AddProduct() {
 
             // Add the product to Inbound table along with the new composite Inbound key
             const inboundResponse = await axios.post(
-              `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/inbound`,
+              getApiUrl('inbound'),
               inboundObject
             );
             console.log(inboundResponse);
 
             // Log inbound creation
-            await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
+            await axios.post(getApiUrl('logs/addLog'), {
               timestamp: new Date().toISOString(),
               type: "Product",
               action: "create",

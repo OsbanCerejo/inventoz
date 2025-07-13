@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import axios from 'axios';
+import { getServerUrl } from '../config/api';
 
 interface User {
   id: number;
@@ -41,10 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Get the server base URL
-  const getServerUrl = () => {
-    return `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}`;
-  };
+
 
   // Fetch user permissions from backend
   const fetchUserPermissions = async (authToken: string) => {

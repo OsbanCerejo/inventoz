@@ -28,8 +28,9 @@ import { styled } from '@mui/material/styles';
 import ProductSearch from '../components/PriceList/ProductSearch';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { getApiUrl } from '../config/api';
 
-const API_URL = `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/api`;
+
 
 const VisuallyHiddenInput = styled('input')({
   clip: 'rect(0 0 0 0)',
@@ -113,7 +114,7 @@ const PriceList: React.FC = () => {
 
     try {
       const response = await axios.post(
-        `${API_URL}/price-list/upload-file`,
+        getApiUrl('api/price-list/upload-file'),
         formData,
         {
           headers: {
@@ -130,7 +131,7 @@ const PriceList: React.FC = () => {
       
       // Fetch headers for mapping
       const headersResponse = await axios.get(
-        `${API_URL}/price-list/file/${uploadedFile.id}/headers`,
+        getApiUrl(`api/price-list/file/${uploadedFile.id}/headers`),
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -160,7 +161,7 @@ const PriceList: React.FC = () => {
 
     try {
       const response = await axios.put(
-        `${API_URL}/price-list/file/${selectedFile.id}/mapping`,
+        getApiUrl(`api/price-list/file/${selectedFile.id}/mapping`),
         { mapping },
         {
           headers: {
@@ -189,7 +190,7 @@ const PriceList: React.FC = () => {
   const handleDelete = async (fileId: string) => {
     try {
       await axios.delete(
-        `${API_URL}/price-list/file/${fileId}`,
+        getApiUrl(`api/price-list/file/${fileId}`),
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -206,7 +207,7 @@ const PriceList: React.FC = () => {
 
   const fetchFiles = async () => {
     try {
-      const response = await axios.get(`${API_URL}/price-list/files`, {
+      const response = await axios.get(getApiUrl('api/price-list/files'), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -222,7 +223,7 @@ const PriceList: React.FC = () => {
     if (!selectedFile) return;
 
     try {
-      const response = await axios.post(`${API_URL}/price-list/process-file`, {
+      const response = await axios.post(getApiUrl('api/price-list/process-file'), {
         fileId: selectedFile.id,
         headerMapping: mapping
       }, {

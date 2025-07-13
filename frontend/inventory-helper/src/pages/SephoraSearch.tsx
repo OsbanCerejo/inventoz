@@ -12,6 +12,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import { useEffect, useState } from "react";
+import { getApiUrl } from '../config/api';
 
 function SephoraSearch() {
   // State Variables
@@ -41,7 +42,7 @@ function SephoraSearch() {
           ? columnMap.get(selectedColumn)
           : "itemName";
         const response = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/sephora/search`,
+          getApiUrl('sephora/search'),
           {
             params: { searchString, searchType },
           }
@@ -64,7 +65,7 @@ function SephoraSearch() {
 
   const getProductDetails = async (productId: any, skuId: any) => {
     const responseProductDetails = await axios.get(
-      `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/sephora/getMoreDetails`,
+      getApiUrl('sephora/getMoreDetails'),
       {
         params: { productId, skuId },
       }
