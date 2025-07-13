@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
+import { getApiUrl } from '../config/api';
 import {
   Box,
   TextField,
@@ -75,7 +76,7 @@ const Whatnot: React.FC = () => {
     setSearchResult(null);
     
     try {
-      const response = await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/whatnot/search-barcode`, { 
+      const response = await axios.post(getApiUrl('whatnot/search-barcode'), { 
         barcode
       });
       if (response.data.success) {
@@ -106,7 +107,7 @@ const Whatnot: React.FC = () => {
     
     try {
       const response = await axios.post(
-        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/whatnot/search-barcode`,
+        getApiUrl('whatnot/search-barcode'),
         { 
           barcode: product.sku,
           reduceQuantity: true,

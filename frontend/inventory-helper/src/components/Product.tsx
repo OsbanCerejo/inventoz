@@ -26,6 +26,7 @@ import Barcode from "./Barcode";
 import PrintableLabel from "./PrintableLabel";
 import { useReactToPrint } from "react-to-print";
 import { useAuth } from "../context/AuthContext";
+import { getApiUrl } from "../config/api";
 
 function Product() {
   let { id } = useParams();
@@ -49,25 +50,19 @@ function Product() {
         setProductListings({});
 
         const { data: product } = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${
-            import.meta.env.VITE_SERVER_PORT
-          }/products/byId/${id}?nocache=${Date.now()}`
+          getApiUrl(`products/byId/${id}?nocache=${Date.now()}`)
         );
         setProductObject(product);
         setBarcodeValue(product.sku);
         const { data: details } = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${
-            import.meta.env.VITE_SERVER_PORT
-          }/productDetails/bySku?nocache=${Date.now()}`,
+          getApiUrl(`productDetails/bySku?nocache=${Date.now()}`),
           {
             params: { sku: product.sku },
           }
         );
         setProductDetails(details);
         const { data: listings } = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${
-            import.meta.env.VITE_SERVER_PORT
-          }/listings/bySku?nocache=${Date.now()}`,
+          getApiUrl(`listings/bySku?nocache=${Date.now()}`),
           {
             params: { sku: product.sku },
           }
@@ -108,9 +103,7 @@ function Product() {
     if (passwordToDelete === "1080") {
       try {
         await axios.delete(
-          `http://${import.meta.env.VITE_SERVER_IP}:${
-            import.meta.env.VITE_SERVER_PORT
-          }/products/delete/${productObject.sku}`
+          getApiUrl(`products/delete/${productObject.sku}`)
         );
         toast.success("Deleted Successfully!", { position: "top-right" });
         navigate("/", { state: { clearFilters: true } });
@@ -155,7 +148,7 @@ function Product() {
   const handleOutOfStockClick = useCallback(async () => {
     try {
       const response = await axios.post(
-        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/ebayAPI/updateQuantity`,
+        getApiUrl(`ebayAPI/updateQuantity`),
         {
           sku: productObject.sku,
           quantity: 0,
@@ -174,7 +167,7 @@ function Product() {
   const handleRestockClick = useCallback(async () => {
     try {
       const response = await axios.post(
-        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/ebayAPI/updateQuantity`,
+        getApiUrl(`ebayAPI/updateQuantity`),
         {
           sku: productObject.sku,
           quantity: restockQuantity,

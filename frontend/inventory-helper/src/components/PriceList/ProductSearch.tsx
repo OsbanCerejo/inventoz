@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import axios from 'axios';
+import { getApiUrl } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
 
 interface Product {
@@ -45,7 +46,7 @@ const ProductSearch: React.FC = () => {
 
       try {
         const response = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/api/price-list/search-products`,
+          getApiUrl('api/price-list/search-products'),
           {
             params: { query: searchQuery },
             headers: {

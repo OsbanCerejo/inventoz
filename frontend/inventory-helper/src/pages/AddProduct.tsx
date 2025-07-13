@@ -284,7 +284,7 @@ function AddProduct() {
             };
             console.log("LISTINGS OBJECT: ", listingsObject);
             const listingsResponse = await axios.post(
-              `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/listings`,
+              getApiUrl('listings'),
               listingsObject
             );
             console.log(listingsResponse);
@@ -292,7 +292,7 @@ function AddProduct() {
 
           // Fetch the brand object and update nextNumber
           const brandResponse = await axios.get(
-            `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`,
+            getApiUrl('brands'),
             {
               params: { brandName: data.brand },
             }
@@ -302,7 +302,7 @@ function AddProduct() {
             parseInt(brandObjectOnSubmit.nextNumber) + 1;
 
           // Update the brand table with the next number for future
-          await axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`, brandObjectOnSubmit);
+          await axios.put(getApiUrl('brands'), brandObjectOnSubmit);
 
           toast.success("Product Added Successfully!", { position: "top-right" });
           resetForm();
@@ -338,7 +338,7 @@ function AddProduct() {
         const brandForSku = brandMap.get(fieldValue);
         console.log("Level 1: Brand found for SKU - ", brandForSku);
         // Fetch the brand object from the server
-        const brandResponse = await axios.get(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`, {
+        const brandResponse = await axios.get(getApiUrl('brands'), {
           params: { brandName: fieldValue },
         });
         const brandObject = brandResponse.data[0];
@@ -347,12 +347,12 @@ function AddProduct() {
         // If the nextNumber is not set, fetch the product count and update it
         if (brandObject.nextNumber.length === 0) {
           const productResponse = await axios.get(
-            `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products/findAndCount/${brandForSku}`
+            getApiUrl(`products/findAndCount/${brandForSku}`)
           );
           console.log("Level 3: Product count - ", productResponse.data);
           // Update the brand object's nextNumber with the product count
           brandObject.nextNumber = productResponse.data.toString();
-          await axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`, brandObject);
+          await axios.put(getApiUrl('brands'), brandObject);
           console.log("Level 4");
         }
         // Set the 10th position of the SKU with the formatted nextNumber

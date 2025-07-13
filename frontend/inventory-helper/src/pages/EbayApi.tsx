@@ -77,7 +77,7 @@ const EbayAPI = () => {
     }
 
     try {
-      const response = await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/ebayAPI/updateQuantity`, {
+      const response = await axios.post(getApiUrl('ebayAPI/updateQuantity'), {
         sku,
         quantity,
       });

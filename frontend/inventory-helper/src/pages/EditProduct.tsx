@@ -33,6 +33,7 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import countriesData from "../data/countries.json";
 import { isEqual } from "lodash";
 import { useAuth } from "../context/AuthContext";
+import { getApiUrl } from "../config/api";
 
 const formikValidationSchema = Yup.object().shape({
   sku: Yup.string().required("Please enter a valid SKU"),
@@ -185,9 +186,9 @@ function EditProduct() {
 
       axios
         .all([
-          axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`, data),
-          axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/productDetails`, data),
-          axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/listings`, listingsObject),
+          axios.put(getApiUrl('products'), data),
+          axios.put(getApiUrl('productDetails'), data),
+          axios.put(getApiUrl('listings'), listingsObject),
         ])
         .then(
           axios.spread((productsRes, productDetailsRes, listingsRes) => {
@@ -202,7 +203,7 @@ function EditProduct() {
                 newValue: value
               }));
 
-              axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
+              axios.post(getApiUrl('logs/addLog'), {
                 timestamp: new Date().toISOString(),
                 type: "Product",
                 action: "update",
@@ -235,7 +236,7 @@ function EditProduct() {
             });
 
             if (listingsChangesArray.length > 0) {
-              axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
+              axios.post(getApiUrl('logs/addLog'), {
                 timestamp: new Date().toISOString(),
                 type: "Product",
                 action: "update",

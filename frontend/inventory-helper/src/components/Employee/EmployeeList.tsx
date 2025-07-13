@@ -244,7 +244,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ refreshTrigger }) => {
                   </Typography>
                   <Button
                     startIcon={<DownloadIcon />}
-                    href={`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/uploads/${selectedEmployee.photoIdPath.split('/').pop()}`}
+                    href={`${getApiUrl('uploads')}/${selectedEmployee.photoIdPath.split('/').pop()}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >

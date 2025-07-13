@@ -260,7 +260,7 @@ function AllOrders() {
 
       // Send a POST request to update the listings table
       await axios.post(
-        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/listings/updateQuantities`,
+        getApiUrl('listings/updateQuantities'),
         listingsUpdate
       );
     } catch (error) {
@@ -277,7 +277,7 @@ function AllOrders() {
   // const testEbay = async () => {
   //   try {
   //     const ebayResponse = await axios.get(
-  //       "http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/orders/testebay"
+  
   //     );
   //     console.log(ebayResponse);
   //   } catch (error) {
