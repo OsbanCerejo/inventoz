@@ -118,9 +118,33 @@ app.get('/test-cors', (req, res) => {
 // Start server even if database connection fails
 const startServer = () => {
   const port = process.env.PORT || 3000;
-  app.listen(port, '0.0.0.0', () => {
+  console.log(`Environment variables:`);
+  console.log(`- PORT: ${process.env.PORT || 'not set (using default 3000)'}`);
+  console.log(`- NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
+  console.log(`- DB_HOST: ${process.env.DB_HOST || 'not set'}`);
+  console.log(`Attempting to start server on port ${port}...`);
+  
+  const server = app.listen(port, '0.0.0.0', () => {
     console.log(`Server is running on port ${port}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Server URL: http://0.0.0.0:${port}`);
+  });
+  
+  // Handle graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully...');
+    server.close(() => {
+      console.log('Server closed');
+      process.exit(0);
+    });
+  });
+  
+  process.on('SIGINT', () => {
+    console.log('SIGINT received, shutting down gracefully...');
+    server.close(() => {
+      console.log('Server closed');
+      process.exit(0);
+    });
   });
 };
 
