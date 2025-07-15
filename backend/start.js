@@ -4,13 +4,6 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
-console.log('Starting Inventoz Backend Server...');
-console.log('Environment:', process.env.NODE_ENV || 'development');
-
-// Force port 80 for EasyPanel deployment
-console.log('EasyPanel detected - forcing port 80');
-process.env.PORT = 80;
-console.log('Setting PORT to 80 (EasyPanel standard)');
 
 // Log all environment variables for debugging
 console.log('Environment Variables:');

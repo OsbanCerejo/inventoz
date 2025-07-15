@@ -40,6 +40,8 @@ function Product() {
   const labelRef = useRef<HTMLDivElement>(null);
   const [restockDialogOpen, setRestockDialogOpen] = useState(false);
   const [restockQuantity, setRestockQuantity] = useState<number>(0);
+  const [priceDialogOpen, setPriceDialogOpen] = useState(false);
+  const [updatePrice, setUpdatePrice] = useState<number>(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -182,6 +184,25 @@ function Product() {
       toast.error("Failed to update product quantity on eBay", { position: "top-right" });
     }
   }, [productObject.sku, restockQuantity]);
+
+  const handlePriceUpdateClick = useCallback(async () => {
+    try {
+      const response = await axios.post(
+        getApiUrl(`ebayAPI/updateQuantity`),
+        {
+          sku: productObject.sku,
+          price: updatePrice,
+        }
+      );
+
+      if (response.data) {
+        toast.success("Product price updated on eBay!", { position: "top-right" });
+      }
+    } catch (error) {
+      console.error("Error updating product price on eBay:", error);
+      toast.error("Failed to update product price on eBay", { position: "top-right" });
+    }
+  }, [productObject.sku, updatePrice]);
 
   return (
     <div className="product-container">
@@ -461,6 +482,14 @@ function Product() {
           >
             Restock
           </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<EditIcon />}
+            onClick={() => setPriceDialogOpen(true)}
+          >
+            Update Price
+          </Button>
         </Box>
       </Paper>
       <Dialog
@@ -488,6 +517,33 @@ function Product() {
             handleRestockClick();
             setRestockDialogOpen(false);
           }}>Restock</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={priceDialogOpen}
+        onClose={() => setPriceDialogOpen(false)}
+        aria-labelledby="price-dialog-title"
+        aria-describedby="price-dialog-description"
+      >
+        <DialogTitle id="price-dialog-title">{"Update Product Price"}</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            id="price"
+            label="Price"
+            type="number"
+            fullWidth
+            value={updatePrice}
+            onChange={(e) => setUpdatePrice(Number(e.target.value))}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPriceDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => {
+            handlePriceUpdateClick();
+            setPriceDialogOpen(false);
+          }}>Update</Button>
         </DialogActions>
       </Dialog>
     </div>
