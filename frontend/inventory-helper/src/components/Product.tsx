@@ -188,7 +188,7 @@ function Product() {
   const handlePriceUpdateClick = useCallback(async () => {
     try {
       const response = await axios.post(
-        getApiUrl(`ebayAPI/updateQuantity`),
+        getApiUrl(`ebayAPI/updatePrice`),
         {
           sku: productObject.sku,
           price: updatePrice,
