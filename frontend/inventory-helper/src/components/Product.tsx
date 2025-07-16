@@ -49,15 +49,13 @@ function Product() {
         setProductListings({});
 
         const { data: product } = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${
-            import.meta.env.VITE_SERVER_PORT
+          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT
           }/products/byId/${id}?nocache=${Date.now()}`
         );
         setProductObject(product);
         setBarcodeValue(product.sku);
         const { data: details } = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${
-            import.meta.env.VITE_SERVER_PORT
+          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT
           }/productDetails/bySku?nocache=${Date.now()}`,
           {
             params: { sku: product.sku },
@@ -65,8 +63,7 @@ function Product() {
         );
         setProductDetails(details);
         const { data: listings } = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${
-            import.meta.env.VITE_SERVER_PORT
+          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT
           }/listings/bySku?nocache=${Date.now()}`,
           {
             params: { sku: product.sku },
@@ -108,8 +105,7 @@ function Product() {
     if (passwordToDelete === "1080") {
       try {
         await axios.delete(
-          `http://${import.meta.env.VITE_SERVER_IP}:${
-            import.meta.env.VITE_SERVER_PORT
+          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT
           }/products/delete/${productObject.sku}`
         );
         toast.success("Deleted Successfully!", { position: "top-right" });
@@ -388,10 +384,6 @@ function Product() {
                         <br />
                       </Box>
                       <br />
-                      <strong>Warehouse Location</strong>
-                      <Box display="flex" justifyContent="space-between" py={1}>
-                        {productObject.warehouseLocations}
-                      </Box>
                     </>
                   )}
                   {!productObject.listed && (
@@ -399,6 +391,10 @@ function Product() {
                       NOT LISTED
                     </strong>
                   )}
+                  <strong>Warehouse Location</strong>
+                  <Box display="flex" justifyContent="space-between" py={1}>
+                    {productObject.warehouseLocations}
+                  </Box>
                 </CardContent>
               </Card>
             </Box>
