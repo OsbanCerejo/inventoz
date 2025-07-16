@@ -379,10 +379,6 @@ function Product() {
                         <br />
                       </Box>
                       <br />
-                      <strong>Warehouse Location</strong>
-                      <Box display="flex" justifyContent="space-between" py={1}>
-                        {productObject.warehouseLocations}
-                      </Box>
                     </>
                   )}
                   {!productObject.listed && (
@@ -390,6 +386,10 @@ function Product() {
                       NOT LISTED
                     </strong>
                   )}
+                  <strong>Warehouse Location</strong>
+                  <Box display="flex" justifyContent="space-between" py={1}>
+                    {productObject.warehouseLocations}
+                  </Box>
                 </CardContent>
               </Card>
             </Box>
