@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { Grid, Typography, Box } from "@mui/material";
+import { getApiUrl } from '../config/api';
 
 type Item = {
   sku: string;
@@ -43,7 +44,7 @@ const OrderDetails = () => {
     const fetchProducts = async () => {
       try {
         const productsResponse = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`
+          getApiUrl('products')
         );
         setProductsData(productsResponse.data);
       } catch (error) {
@@ -67,7 +68,7 @@ const OrderDetails = () => {
   const handleFetchOrderDetails = async () => {
     try {
       const response = await axios.get(
-        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/orders/order/${orderId}`
+        getApiUrl(`orders/order/${orderId}`)
       );
       // console.log(response.data);
       setOrderDetails(response.data);

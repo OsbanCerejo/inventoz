@@ -12,6 +12,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import { useEffect, useState } from "react";
+import { getApiUrl } from '../config/api';
 
 function SephoraSearch() {
   // State Variables
@@ -21,7 +22,7 @@ function SephoraSearch() {
   const [selectedColumn, setSelectedColumn] = useState("");
 
   useEffect(() => {
-    console.log("Product details in useeffect: ", productDetails);
+    // Product details updated
   }, [productDetails]);
 
   // Constants
@@ -41,7 +42,7 @@ function SephoraSearch() {
           ? columnMap.get(selectedColumn)
           : "itemName";
         const response = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/sephora/search`,
+          getApiUrl('sephora/search'),
           {
             params: { searchString, searchType },
           }
@@ -51,11 +52,9 @@ function SephoraSearch() {
           const productId = response.data.productId;
           const skuId = response.data.skuId;
           setProductDetails(getProductDetails(productId, skuId));
-          console.log("Product Details : ", productDetails);
         } else {
           setReturnedProduct(null);
         }
-        console.log("Sephora Search Results: ", response.data);
       } else {
         setReturnedProduct(null);
       }
@@ -66,12 +65,11 @@ function SephoraSearch() {
 
   const getProductDetails = async (productId: any, skuId: any) => {
     const responseProductDetails = await axios.get(
-      `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/sephora/getMoreDetails`,
+      getApiUrl('sephora/getMoreDetails'),
       {
         params: { productId, skuId },
       }
     );
-    console.log("Product Details in function : ", responseProductDetails.data);
     setProductDetails(responseProductDetails.data);
     return responseProductDetails.data;
   };

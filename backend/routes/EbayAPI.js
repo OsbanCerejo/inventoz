@@ -111,6 +111,83 @@ router.post("/updateQuantity", async (req, res) => {
   }
 });
 
+router.post("/updatePrice", async (req, res) => {
+  const { sku, price } = req.body;
+  if (!sku || price === undefined) {
+    return res.status(400).json({ message: "SKU and price are required." });
+  }
+
+  try {
+    // Get the product to check for alternative SKU
+    const product = await Products.findOne({ where: { sku } });
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    // Use alternative SKU if available, otherwise use original SKU, and trim any spaces
+    const ebaySku = product.alternativeSku ? product.alternativeSku.trim() : sku;
+    const TOKEN = await service.getAccessToken();
+    const EBAY_API_URL = "https://api.ebay.com/sell/inventory/v1/bulk_update_price_quantity";
+
+    // Fetch offers for this SKU from eBay
+    const offersResp = await axios.get(
+      `https://api.ebay.com/sell/inventory/v1/offer?sku=${ebaySku}`,
+      {
+        headers: {
+          Authorization: `Bearer ${TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    if (!offersResp.data || !offersResp.data.offers || offersResp.data.offers.length === 0) {
+      return res.status(404).json({ message: "No offers found for SKU" });
+    }
+    // Only update the first offer for now
+    const offerId = offersResp.data.offers[0].offerId;
+
+    const payload = {
+      requests: [
+        {
+          sku: ebaySku,
+          offers: [
+            {
+              offerId: offerId,
+              price: { currency: "USD", value: price },
+            },
+          ],
+        },
+      ],
+    };
+
+    const response = await axios.post(EBAY_API_URL, payload, {
+      headers: {
+        Authorization: `Bearer ${TOKEN}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (response.status === 200 && response.data) {
+      return res.json(response.data);
+    } else {
+      console.error("Unexpected response from eBay API:", response.statusText);
+      return res.status(response.status).json({
+        message: "Unexpected response from eBay API",
+        details: response.statusText,
+      });
+    }
+  } catch (error) {
+    console.error(
+      "Error updating price on eBay:",
+      error.response ? error.response.data : error.message
+    );
+
+    return res.status(500).json({
+      message: "Failed to update price on eBay",
+      error: error.response ? error.response.data : error.message,
+    });
+  }
+});
+
 router.get("/testebay", async (req, res) => {
   const TOKEN = await service.getAccessToken();
 

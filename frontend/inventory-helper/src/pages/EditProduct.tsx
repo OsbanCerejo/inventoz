@@ -26,13 +26,14 @@ import axios from "axios";
 import * as Yup from "yup";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
-import skuData from "../../../data/skuData.json";
+import skuData from "../data/skuData.json";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import countriesData from "../../../data/countries.json";
+import countriesData from "../data/countries.json";
 import { isEqual } from "lodash";
 import { useAuth } from "../context/AuthContext";
+import { getApiUrl } from "../config/api";
 
 const formikValidationSchema = Yup.object().shape({
   sku: Yup.string().required("Please enter a valid SKU"),
@@ -185,9 +186,9 @@ function EditProduct() {
 
       axios
         .all([
-          axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`, data),
-          axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/productDetails`, data),
-          axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/listings`, listingsObject),
+          axios.put(getApiUrl('products'), data),
+          axios.put(getApiUrl('productDetails'), data),
+          axios.put(getApiUrl('listings'), listingsObject),
         ])
         .then(
           axios.spread((productsRes, productDetailsRes, listingsRes) => {
@@ -202,7 +203,7 @@ function EditProduct() {
                 newValue: value
               }));
 
-              axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
+              axios.post(getApiUrl('logs/addLog'), {
                 timestamp: new Date().toISOString(),
                 type: "Product",
                 action: "update",
@@ -235,7 +236,7 @@ function EditProduct() {
             });
 
             if (listingsChangesArray.length > 0) {
-              axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
+              axios.post(getApiUrl('logs/addLog'), {
                 timestamp: new Date().toISOString(),
                 type: "Product",
                 action: "update",
@@ -397,8 +398,8 @@ function EditProduct() {
                           input={<OutlinedInput label="Brand" />}
                         >
                           {Object.entries(skuData.BRANDS).map(
-                            ([value, key]) => (
-                              <MenuItem key={key} value={value}>
+                            ([value], index) => (
+                              <MenuItem key={index} value={value}>
                                 {value}
                               </MenuItem>
                             )
@@ -457,8 +458,8 @@ function EditProduct() {
                           input={<OutlinedInput label="Category" />}
                         >
                           {Object.entries(skuData.CATEGORY).map(
-                            ([value, key]) => (
-                              <MenuItem key={key} value={value}>
+                            ([value], index) => (
+                              <MenuItem key={index} value={value}>
                                 {value}
                               </MenuItem>
                             )
@@ -498,8 +499,8 @@ function EditProduct() {
                             input={<OutlinedInput label="strength" />}
                           >
                             {Object.entries(skuData.STRENGTH).map(
-                              ([value, key]) => (
-                                <MenuItem key={key} value={value}>
+                              ([value], index) => (
+                                <MenuItem key={index} value={value}>
                                   {value}
                                 </MenuItem>
                               )
@@ -904,8 +905,8 @@ function EditProduct() {
                                   input={<OutlinedInput label="sizeType" />}
                                 >
                                   {Object.entries(skuData.SIZE).map(
-                                    ([value, key]) => (
-                                      <MenuItem key={key} value={value}>
+                                    ([value], index) => (
+                                      <MenuItem key={index} value={value}>
                                         {value}
                                       </MenuItem>
                                     )

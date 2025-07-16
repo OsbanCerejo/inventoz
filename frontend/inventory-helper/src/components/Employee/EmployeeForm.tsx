@@ -18,6 +18,7 @@ import {
 import { Close as CloseIcon } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
+import { getApiUrl } from '../../config/api';
 
 interface FormData {
   firstName: string;
@@ -35,7 +36,7 @@ interface EmployeeFormProps {
   onEmployeeAdded: () => void;
 }
 
-const API_BASE_URL = `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/api`;
+
 
 const EmployeeForm: React.FC<EmployeeFormProps> = ({ open, onClose, onEmployeeAdded }) => {
   const [formData, setFormData] = useState<FormData>({
@@ -82,7 +83,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ open, onClose, onEmployeeAd
         }
       });
 
-      const response = await fetch(`${API_BASE_URL}/employee-info/submit`, {
+      const response = await fetch(getApiUrl('api/employee-info/submit'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`

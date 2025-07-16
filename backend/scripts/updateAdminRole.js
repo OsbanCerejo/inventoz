@@ -1,6 +1,19 @@
 const { User } = require('../models');
 const { Sequelize } = require('sequelize');
-const dbConfig = require('../config/databaseConfig');
+
+// Database configuration from environment variables
+const dbConfig = {
+  database: process.env.DB_NAME || "inventoz",
+  username: process.env.DB_USERNAME || "root",
+  password: process.env.DB_PASSWORD || "09shakil1998",
+  host: process.env.DB_HOST || "127.0.0.1",
+  dialect: process.env.DB_DIALECT || "mysql",
+  timezone: process.env.DB_TIMEZONE || "-04:00",
+  define: {
+    charset: process.env.DB_CHARSET || "utf8mb4",
+    collate: process.env.DB_COLLATE || "utf8mb4_unicode_ci"
+  }
+};
 
 const sequelize = new Sequelize(
   dbConfig.database,

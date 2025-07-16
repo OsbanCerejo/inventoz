@@ -6,12 +6,25 @@ const Sequelize = require("sequelize");
 const process = require("process");
 const basename = path.basename(__filename);
 const env = process.env.NODE_ENV || "development";
-const config = require(__dirname + "/../config/config.json")[env];
 const db = {};
 
+// Database configuration from environment variables
+const config = {
+  database: process.env.DB_NAME || "inventoz",
+  username: process.env.DB_USERNAME || "root",
+  password: process.env.DB_PASSWORD || "09shakil1998",
+  host: process.env.DB_HOST || "127.0.0.1",
+  dialect: process.env.DB_DIALECT || "mysql",
+  timezone: process.env.DB_TIMEZONE || "-04:00",
+  define: {
+    charset: process.env.DB_CHARSET || "utf8mb4",
+    collate: process.env.DB_COLLATE || "utf8mb4_unicode_ci"
+  }
+};
+
 let sequelize;
-if (config.use_env_variable) {
-  sequelize = new Sequelize(process.env[config.use_env_variable], config);
+if (process.env.DATABASE_URL) {
+  sequelize = new Sequelize(process.env.DATABASE_URL, config);
 } else {
   sequelize = new Sequelize(
     config.database,

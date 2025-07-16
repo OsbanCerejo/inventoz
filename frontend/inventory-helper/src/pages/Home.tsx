@@ -10,7 +10,6 @@ import {
   People as EmployeeIcon,
   Add as AddProductIcon
 } from '@mui/icons-material';
-import PermissionGuard from "../components/PermissionGuard";
 import { useAuth } from "../context/AuthContext";
 
 function Home() {

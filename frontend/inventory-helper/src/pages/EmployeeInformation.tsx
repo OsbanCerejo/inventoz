@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Box, Button, Paper, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import EmployeeList from '../components/Employee/EmployeeList';
 import EmployeeForm from '../components/Employee/EmployeeForm';

@@ -18,8 +18,9 @@ import {
 import axios from "axios";
 import { toast } from "react-toastify";
 import { useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { getApiUrl } from '../config/api';
 
 function AllOrders() {
   const [groupedOrders, setGroupedOrders] = useState<any>({});
@@ -29,7 +30,6 @@ function AllOrders() {
   });
   const [approveOrders, setApproveOrders] = useState(false);
   const [productsData, setProductsData] = useState<any[]>([]);
-  const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -48,8 +48,8 @@ function AllOrders() {
   const fetchOrders = async () => {
     try {
       const [ordersResponse, productsResponse] = await Promise.all([
-        axios.get(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/orders/allOrders`),
-        axios.get(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`),
+        axios.get(getApiUrl('orders/allOrders')),
+        axios.get(getApiUrl('products')),
       ]);
       setProductsData(productsResponse.data);
       const productMap = createProductMap(productsResponse.data);
@@ -146,7 +146,7 @@ function AllOrders() {
     try {
       // Update product quantities in the products table
       const response = await axios.post(
-        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products/updateQuantities`,
+        getApiUrl('products/updateQuantities'),
         skusToUpdate.map(({ sku, totalQuantitySold }) => ({
           sku,
           quantitySold: totalQuantitySold,
@@ -178,7 +178,7 @@ function AllOrders() {
     };
 
     try {
-      await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, logData);
+      await axios.post(getApiUrl('logs/addLog'), logData);
     } catch (error) {
       console.error("Error logging update quantities:", error);
     }
@@ -260,7 +260,7 @@ function AllOrders() {
 
       // Send a POST request to update the listings table
       await axios.post(
-        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/listings/updateQuantities`,
+        getApiUrl('listings/updateQuantities'),
         listingsUpdate
       );
     } catch (error) {
@@ -277,7 +277,7 @@ function AllOrders() {
   // const testEbay = async () => {
   //   try {
   //     const ebayResponse = await axios.get(
-  //       "http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/orders/testebay"
+  
   //     );
   //     console.log(ebayResponse);
   //   } catch (error) {

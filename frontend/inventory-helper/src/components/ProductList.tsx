@@ -28,7 +28,6 @@ interface Props {
 
 function ProductList({
   products,
-  heading,
   handleSort,
   sortConfig,
   filterConfig,

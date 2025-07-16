@@ -3,26 +3,43 @@ const app = express();
 const cors = require("cors");
 require("dotenv").config();
 const { Sequelize } = require("sequelize");
-const dbConfig = require("./config/databaseConfig");
 const db = require("./models");
 const stockUpdateCron = require("./cron/stockUpdate");
 const orderProcessingCron = require("./cron/orderProcessing");
 const path = require("path");
 
 app.use(express.json());
-app.use(cors());
 
-// Database configuration
-const sequelize = new Sequelize(
-  dbConfig.database,
-  dbConfig.username,
-  dbConfig.password,
-  {
-    host: dbConfig.host,
-    dialect: dbConfig.dialect,
-    logging: false
+// CORS configuration for production domains
+const corsOptions = {
+  origin: true, // Allow all origins temporarily for debugging
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
+
+// Additional CORS headers for preflight requests
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
   }
-);
+  
+  next();
+});
+
+// Database connection is handled in models/index.js
+const sequelize = db.sequelize;
 
 // Authentication routes
 const authRouter = require("./routes/auth");
@@ -80,6 +97,88 @@ app.use("/api/users", usersRouter);
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Health check endpoint (no database required)
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Test endpoint for CORS debugging
+app.get('/test-cors', (req, res) => {
+  res.json({ 
+    message: 'CORS test successful',
+    timestamp: new Date().toISOString(),
+    origin: req.headers.origin
+  });
+});
+
+// Start server even if database connection fails
+const startServer = () => {
+  // Try multiple common ports for EasyPanel
+  const possiblePorts = [
+    process.env.PORT,
+    process.env.EASYPANEL_PORT,
+    80,  // EasyPanel typically uses port 80
+    3000,
+    8080
+  ].filter(Boolean); // Remove undefined values
+  
+  const port = possiblePorts[0] || 80;
+  
+  console.log(`Environment variables:`);
+  console.log(`- PORT: ${process.env.PORT || 'not set'}`);
+  console.log(`- EASYPANEL_PORT: ${process.env.EASYPANEL_PORT || 'not set'}`);
+  console.log(`- NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
+  console.log(`- DB_HOST: ${process.env.DB_HOST || 'not set'}`);
+  console.log(`Attempting to start server on port ${port}...`);
+  
+  const server = app.listen(port, '0.0.0.0', () => {
+    console.log(`✅ Server is running on port ${port}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Server URL: http://0.0.0.0:${port}`);
+  }).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`❌ Port ${port} is already in use. Trying alternative ports...`);
+      // Try alternative ports
+      const altPorts = [3001, 3002, 8081, 8082];
+      for (const altPort of altPorts) {
+        try {
+          app.listen(altPort, '0.0.0.0', () => {
+            console.log(`✅ Server is running on port ${altPort}`);
+            console.log(`Server URL: http://0.0.0.0:${altPort}`);
+          });
+          break;
+        } catch (altErr) {
+          console.error(`Port ${altPort} also in use`);
+        }
+      }
+    } else {
+      console.error('Server error:', err);
+    }
+  });
+  
+  // Handle graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully...');
+    server.close(() => {
+      console.log('Server closed');
+      process.exit(0);
+    });
+  });
+  
+  process.on('SIGINT', () => {
+    console.log('SIGINT received, shutting down gracefully...');
+    server.close(() => {
+      console.log('Server closed');
+      process.exit(0);
+    });
+  });
+};
+
+// Try to connect to database, but start server regardless
 sequelize
   .authenticate()
   .then(() => {
@@ -87,15 +186,16 @@ sequelize
     return db.sequelize.sync();
   })
   .then(() => {
+    console.log("Database synchronized successfully.");
     // Initialize cron jobs
     console.log("Initializing cron jobs...");
     // stockUpdateCron;
     // orderProcessingCron;
     
-    app.listen(process.env.PORT, '0.0.0.0', () => {
-      console.log(`Server is running on http://${process.env.SERVER_IP}:${process.env.PORT}`);
-    });
+    startServer();
   })
   .catch((err) => {
     console.error("Unable to connect to the database:", err);
+    console.log("Starting server without database connection...");
+    startServer();
   });

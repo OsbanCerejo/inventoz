@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
+import { getApiUrl } from '../config/api';
 import {
   Box,
   TextField,
@@ -12,16 +13,13 @@ import {
   DialogActions,
   List,
   ListItem,
-  ListItemText,
   CircularProgress,
   Alert,
-  Snackbar,
   Grid,
   Card,
-  CardMedia,
-  CardContent
+  CardMedia
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
+
 
 interface ProductDetails {
   images?: string[];
@@ -53,13 +51,7 @@ interface SearchResult {
   message?: string;
 }
 
-const StyledPaper = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(3),
-  margin: theme.spacing(2),
-  backgroundColor: '#f5f5f5',
-  borderRadius: '8px',
-  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-}));
+
 
 const Whatnot: React.FC = () => {
   const [barcode, setBarcode] = useState('');
@@ -84,7 +76,7 @@ const Whatnot: React.FC = () => {
     setSearchResult(null);
     
     try {
-      const response = await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/whatnot/search-barcode`, { 
+      const response = await axios.post(getApiUrl('whatnot/search-barcode'), { 
         barcode
       });
       if (response.data.success) {
@@ -115,7 +107,7 @@ const Whatnot: React.FC = () => {
     
     try {
       const response = await axios.post(
-        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/whatnot/search-barcode`,
+        getApiUrl('whatnot/search-barcode'),
         { 
           barcode: product.sku,
           reduceQuantity: true,

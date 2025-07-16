@@ -6,7 +6,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Button,
   Chip,
   IconButton,
@@ -21,6 +20,7 @@ import {
 import { Close as CloseIcon, Download as DownloadIcon } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
+import { getApiUrl } from '../../config/api';
 
 interface Employee {
   id: number;
@@ -40,7 +40,7 @@ interface EmployeeListProps {
   refreshTrigger: number;
 }
 
-const API_BASE_URL = `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/api`;
+
 
 const EmployeeList: React.FC<EmployeeListProps> = ({ refreshTrigger }) => {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -51,7 +51,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ refreshTrigger }) => {
 
   const fetchEmployees = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/employee-info/all`, {
+      const response = await fetch(getApiUrl('api/employee-info/all'), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -77,7 +77,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ refreshTrigger }) => {
 
   const handleStatusChange = async (id: number, newStatus: 'approved' | 'rejected') => {
     try {
-      const response = await fetch(`${API_BASE_URL}/employee-info/${id}/status`, {
+      const response = await fetch(getApiUrl(`api/employee-info/${id}/status`), {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -244,7 +244,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ refreshTrigger }) => {
                   </Typography>
                   <Button
                     startIcon={<DownloadIcon />}
-                    href={`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/uploads/${selectedEmployee.photoIdPath.split('/').pop()}`}
+                    href={`${getApiUrl('uploads')}/${selectedEmployee.photoIdPath.split('/').pop()}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >

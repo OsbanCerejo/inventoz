@@ -11,6 +11,7 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
 import axios from "axios";
 import dayjs from "dayjs";
+import { getApiUrl } from '../config/api';
 import { useFormik } from "formik";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -52,15 +53,15 @@ function Sales() {
         data.date.year();
       data.compositeSalesSku = compositeSalesKey;
       axios
-        .put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/sales`, {
+        .put(getApiUrl('sales'), {
           quantity: parseInt(productObject.quantity) - parseInt(data.quantity),
           sku: productObject.sku,
         })
         .then(() => {
           // console.log("Quantity Updated in Inventory Table");
         });
-      axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/sales`, data).then((response) => {
-        // console.log(response);
+      axios.post(getApiUrl('sales'), data).then((response) => {
+        console.log(response);
       });
       navigate("/", { state: { clearFilters: true } });
     },

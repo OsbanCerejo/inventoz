@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
 import UserForm from '../components/Users/UserForm';
 import UserList from '../components/Users/UserList';
+import { getApiUrl } from '../config/api';
 import { User } from '../types/User';
 import { Add as AddIcon } from '@mui/icons-material';
 import {
@@ -21,23 +22,15 @@ const Users: React.FC = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const { user: currentUser, token } = useAuth();
 
-  // console.log('Users component rendered');
-  // console.log('currentUser:', currentUser);
-  // console.log('token:', token);
-
-  // Use the same API URL pattern as Login page
-  const API_BASE_URL = `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/api`;
-
   const fetchUsers = async () => {
     if (!token) {
-      // console.log('No token available, skipping fetch');
       setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/users`, {
+      const response = await axios.get(getApiUrl('api/users'), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -59,7 +52,7 @@ const Users: React.FC = () => {
 
   const handleAddUser = async (userData: Partial<User>) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/users`, userData, {
+      const response = await axios.post(getApiUrl('api/users'), userData, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -75,7 +68,7 @@ const Users: React.FC = () => {
 
   const handleUpdateUser = async (userId: number, userData: Partial<User>) => {
     try {
-      const response = await axios.put(`${API_BASE_URL}/users/${userId}`, userData, {
+      const response = await axios.put(getApiUrl(`api/users/${userId}`), userData, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -95,7 +88,7 @@ const Users: React.FC = () => {
     }
 
     try {
-      await axios.delete(`${API_BASE_URL}/users/${userId}`, {
+      await axios.delete(getApiUrl(`api/users/${userId}`), {
         headers: {
           'Authorization': `Bearer ${token}`
         }

@@ -17,7 +17,7 @@ import {
   DialogContent,
   DialogActions,
   Alert,
-  LinearProgress,
+
   FormControl,
   InputLabel,
   Select,
@@ -28,8 +28,9 @@ import { styled } from '@mui/material/styles';
 import ProductSearch from '../components/PriceList/ProductSearch';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { getApiUrl } from '../config/api';
 
-const API_URL = `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/api`;
+
 
 const VisuallyHiddenInput = styled('input')({
   clip: 'rect(0 0 0 0)',
@@ -57,11 +58,7 @@ interface PriceListFile {
   file: File;
 }
 
-interface HeaderMapping {
-  upc: string;
-  productName: string;
-  price: string;
-}
+
 
 interface HeaderResponse {
   headers: string[];
@@ -77,13 +74,11 @@ const PriceList: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<PriceListFile | null>(null);
   const [customName, setCustomName] = useState('');
   const [headers, setHeaders] = useState<string[]>([]);
-  const [headerRowIndex, setHeaderRowIndex] = useState<number>(0);
   const [headerMessage, setHeaderMessage] = useState<string>('');
   const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [importProgress, setImportProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [processing, setProcessing] = useState(false);
+
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -119,7 +114,7 @@ const PriceList: React.FC = () => {
 
     try {
       const response = await axios.post(
-        `${API_URL}/price-list/upload-file`,
+        getApiUrl('api/price-list/upload-file'),
         formData,
         {
           headers: {
@@ -136,7 +131,7 @@ const PriceList: React.FC = () => {
       
       // Fetch headers for mapping
       const headersResponse = await axios.get(
-        `${API_URL}/price-list/file/${uploadedFile.id}/headers`,
+        getApiUrl(`api/price-list/file/${uploadedFile.id}/headers`),
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -146,7 +141,6 @@ const PriceList: React.FC = () => {
       
       const headersData: HeaderResponse = headersResponse.data;
       setHeaders(headersData.headers);
-      setHeaderRowIndex(headersData.headerRowIndex);
       setHeaderMessage(headersData.message);
       setOpenMappingDialog(true);
     } catch (err: any) {
@@ -167,7 +161,7 @@ const PriceList: React.FC = () => {
 
     try {
       const response = await axios.put(
-        `${API_URL}/price-list/file/${selectedFile.id}/mapping`,
+        getApiUrl(`api/price-list/file/${selectedFile.id}/mapping`),
         { mapping },
         {
           headers: {
@@ -195,8 +189,8 @@ const PriceList: React.FC = () => {
 
   const handleDelete = async (fileId: string) => {
     try {
-      const response = await axios.delete(
-        `${API_URL}/price-list/file/${fileId}`,
+      await axios.delete(
+        getApiUrl(`api/price-list/file/${fileId}`),
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -213,7 +207,7 @@ const PriceList: React.FC = () => {
 
   const fetchFiles = async () => {
     try {
-      const response = await axios.get(`${API_URL}/price-list/files`, {
+      const response = await axios.get(getApiUrl('api/price-list/files'), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -229,8 +223,7 @@ const PriceList: React.FC = () => {
     if (!selectedFile) return;
 
     try {
-      setProcessing(true);
-      const response = await axios.post(`${API_URL}/price-list/process-file`, {
+      const response = await axios.post(getApiUrl('api/price-list/process-file'), {
         fileId: selectedFile.id,
         headerMapping: mapping
       }, {
@@ -260,7 +253,6 @@ const PriceList: React.FC = () => {
       console.error('Error processing file:', error);
       setError('Error processing file: ' + (error.response?.data?.message || error.message));
     } finally {
-      setProcessing(false);
       setOpenMappingDialog(false);
     }
   };
@@ -422,15 +414,6 @@ const PriceList: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Import Progress */}
-      {importProgress > 0 && importProgress < 100 && (
-        <Box sx={{ mt: 2 }}>
-          <Typography variant="body2" gutterBottom>
-            Importing products... {importProgress}%
-          </Typography>
-          <LinearProgress variant="determinate" value={importProgress} />
-        </Box>
-      )}
     </Box>
   );
 };

@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useFormik } from "formik";
 import * as Yup from "yup";
+import { getApiUrl } from '../config/api';
 import Button from "@mui/material/Button";
 import {
   Box,
@@ -26,7 +27,7 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import dayjs from "dayjs";
-import skuData from "../../../data/skuData.json";
+import skuData from "../data/skuData.json";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
@@ -34,13 +35,12 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import countriesData from "../../../data/countries.json";
-import { useNavigate, useLocation } from "react-router-dom";
+import countriesData from "../data/countries.json";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 function AddProduct() {
   const location = useLocation();
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { productObject, productDetails } = location.state || {};
   const [generatedSku, setGeneratedSku] = useState("");
@@ -173,13 +173,13 @@ function AddProduct() {
 
       try {
         const addProductresponse = await axios.post(
-          `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products`,
+          getApiUrl('products'),
           data
         );
 
         if (addProductresponse.data === "Created New") {
           // Log the product creation
-          await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
+          await axios.post(getApiUrl('logs/addLog'), {
             timestamp: new Date().toISOString(),
             type: "Product",
             action: "create",
@@ -200,13 +200,13 @@ function AddProduct() {
 
           // Handle Product Details Insertion
           const addProductDetailsresponse = await axios.post(
-            `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/productDetails/addProductDetails`,
+            getApiUrl('productDetails/addProductDetails'),
             data
           );
           // console.log("Product Details Response : ", addProductDetailsresponse);
 
           // Log product details creation
-          await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
+                      await axios.post(getApiUrl('logs/addLog'), {
             timestamp: new Date().toISOString(),
             type: "Product",
             action: "create",
@@ -249,13 +249,13 @@ function AddProduct() {
 
             // Add the product to Inbound table along with the new composite Inbound key
             const inboundResponse = await axios.post(
-              `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/inbound`,
+              getApiUrl('inbound'),
               inboundObject
             );
             // console.log(inboundResponse);
 
             // Log inbound creation
-            await axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/logs/addLog`, {
+            await axios.post(getApiUrl('logs/addLog'), {
               timestamp: new Date().toISOString(),
               type: "Product",
               action: "create",
@@ -284,7 +284,7 @@ function AddProduct() {
             };
             // console.log("LISTINGS OBJECT: ", listingsObject);
             const listingsResponse = await axios.post(
-              `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/listings`,
+              getApiUrl('listings'),
               listingsObject
             );
             // console.log(listingsResponse);
@@ -292,7 +292,7 @@ function AddProduct() {
 
           // Fetch the brand object and update nextNumber
           const brandResponse = await axios.get(
-            `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`,
+            getApiUrl('brands'),
             {
               params: { brandName: data.brand },
             }
@@ -302,7 +302,7 @@ function AddProduct() {
             parseInt(brandObjectOnSubmit.nextNumber) + 1;
 
           // Update the brand table with the next number for future
-          await axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`, brandObjectOnSubmit);
+          await axios.put(getApiUrl('brands'), brandObjectOnSubmit);
 
           toast.success("Product Added Successfully!", { position: "top-right" });
           resetForm();
@@ -339,7 +339,7 @@ function AddProduct() {
         const brandForSku = brandMap.get(fieldValue);
         // console.log("Level 1: Brand found for SKU - ", brandForSku);
         // Fetch the brand object from the server
-        const brandResponse = await axios.get(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`, {
+        const brandResponse = await axios.get(getApiUrl('brands'), {
           params: { brandName: fieldValue },
         });
         const brandObject = brandResponse.data[0];
@@ -348,13 +348,13 @@ function AddProduct() {
         // If the nextNumber is not set, fetch the product count and update it
         if (brandObject.nextNumber.length === 0) {
           const productResponse = await axios.get(
-            `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/products/findAndCount/${brandForSku}`
+            getApiUrl(`products/findAndCount/${brandForSku}`)
           );
           // console.log("Level 3: Product count - ", productResponse.data);
           // Update the brand object's nextNumber with the product count
           brandObject.nextNumber = productResponse.data.toString();
-          await axios.put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/brands`, brandObject);
-          // console.log("Level 4");
+          await axios.put(getApiUrl('brands'), brandObject);
+          console.log("Level 4");
         }
         // Set the 10th position of the SKU with the formatted nextNumber
         skuArray[10] =
@@ -520,8 +520,8 @@ function AddProduct() {
                           input={<OutlinedInput label="Brand" />}
                         >
                           {Object.entries(skuData.BRANDS).map(
-                            ([value, key]) => (
-                              <MenuItem key={key} value={value}>
+                            ([value], index) => (
+                              <MenuItem key={index} value={value}>
                                 {value}
                               </MenuItem>
                             )
@@ -575,8 +575,8 @@ function AddProduct() {
                           input={<OutlinedInput label="Category" />}
                         >
                           {Object.entries(skuData.CATEGORY).map(
-                            ([value, key]) => (
-                              <MenuItem key={key} value={value}>
+                            ([value], index) => (
+                              <MenuItem key={index} value={value}>
                                 {value}
                               </MenuItem>
                             )
@@ -613,8 +613,8 @@ function AddProduct() {
                             input={<OutlinedInput label="strength" />}
                           >
                             {Object.entries(skuData.STRENGTH).map(
-                              ([value, key]) => (
-                                <MenuItem key={key} value={value}>
+                              ([value], index) => (
+                                <MenuItem key={index} value={value}>
                                   {value}
                                 </MenuItem>
                               )
@@ -965,8 +965,8 @@ function AddProduct() {
                                   input={<OutlinedInput label="sizeType" />}
                                 >
                                   {Object.entries(skuData.SIZE).map(
-                                    ([value, key]) => (
-                                      <MenuItem key={key} value={value}>
+                                    ([value], index) => (
+                                      <MenuItem key={index} value={value}>
                                         {value}
                                       </MenuItem>
                                     )

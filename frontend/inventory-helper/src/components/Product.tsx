@@ -26,6 +26,7 @@ import Barcode from "./Barcode";
 import PrintableLabel from "./PrintableLabel";
 import { useReactToPrint } from "react-to-print";
 import { useAuth } from "../context/AuthContext";
+import { getApiUrl } from "../config/api";
 
 function Product() {
   let { id } = useParams();
@@ -39,6 +40,8 @@ function Product() {
   const labelRef = useRef<HTMLDivElement>(null);
   const [restockDialogOpen, setRestockDialogOpen] = useState(false);
   const [restockQuantity, setRestockQuantity] = useState<number>(0);
+  const [priceDialogOpen, setPriceDialogOpen] = useState(false);
+  const [updatePrice, setUpdatePrice] = useState<number>(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -49,25 +52,19 @@ function Product() {
         setProductListings({});
 
         const { data: product } = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${
-            import.meta.env.VITE_SERVER_PORT
-          }/products/byId/${id}?nocache=${Date.now()}`
+          getApiUrl(`products/byId/${id}?nocache=${Date.now()}`)
         );
         setProductObject(product);
         setBarcodeValue(product.sku);
         const { data: details } = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${
-            import.meta.env.VITE_SERVER_PORT
-          }/productDetails/bySku?nocache=${Date.now()}`,
+          getApiUrl(`productDetails/bySku?nocache=${Date.now()}`),
           {
             params: { sku: product.sku },
           }
         );
         setProductDetails(details);
         const { data: listings } = await axios.get(
-          `http://${import.meta.env.VITE_SERVER_IP}:${
-            import.meta.env.VITE_SERVER_PORT
-          }/listings/bySku?nocache=${Date.now()}`,
+          getApiUrl(`listings/bySku?nocache=${Date.now()}`),
           {
             params: { sku: product.sku },
           }
@@ -108,9 +105,7 @@ function Product() {
     if (passwordToDelete === "1080") {
       try {
         await axios.delete(
-          `http://${import.meta.env.VITE_SERVER_IP}:${
-            import.meta.env.VITE_SERVER_PORT
-          }/products/delete/${productObject.sku}`
+          getApiUrl(`products/delete/${productObject.sku}`)
         );
         toast.success("Deleted Successfully!", { position: "top-right" });
         navigate("/", { state: { clearFilters: true } });
@@ -128,29 +123,6 @@ function Product() {
   const handleInboundClick = useCallback(() => {
     navigate("/inbound", { state: { productObject } });
   }, [navigate, productObject]);
-
-  const handleCopyBarcodeClick = useCallback(() => {
-    const barcodeCanvas =
-      document.querySelector<HTMLCanvasElement>(".barcode-canvas");
-
-    if (barcodeCanvas) {
-      barcodeCanvas.toBlob((blob) => {
-        if (blob) {
-          const item = new ClipboardItem({ "image/png": blob });
-          navigator.clipboard.write([item]);
-          toast.success("Barcode image copied to clipboard!", {
-            position: "top-right",
-          });
-        } else {
-          toast.error("Failed to copy the barcode image.", {
-            position: "top-right",
-          });
-        }
-      });
-    } else {
-      console.error("Barcode canvas not found.");
-    }
-  }, []);
 
   const handlePrintClick = useReactToPrint({
     content: () => labelRef.current,
@@ -178,7 +150,7 @@ function Product() {
   const handleOutOfStockClick = useCallback(async () => {
     try {
       const response = await axios.post(
-        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/ebayAPI/updateQuantity`,
+        getApiUrl(`ebayAPI/updateQuantity`),
         {
           sku: productObject.sku,
           quantity: 0,
@@ -197,7 +169,7 @@ function Product() {
   const handleRestockClick = useCallback(async () => {
     try {
       const response = await axios.post(
-        `http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/ebayAPI/updateQuantity`,
+        getApiUrl(`ebayAPI/updateQuantity`),
         {
           sku: productObject.sku,
           quantity: restockQuantity,
@@ -212,6 +184,25 @@ function Product() {
       toast.error("Failed to update product quantity on eBay", { position: "top-right" });
     }
   }, [productObject.sku, restockQuantity]);
+
+  const handlePriceUpdateClick = useCallback(async () => {
+    try {
+      const response = await axios.post(
+        getApiUrl(`ebayAPI/updatePrice`),
+        {
+          sku: productObject.sku,
+          price: updatePrice,
+        }
+      );
+
+      if (response.data) {
+        toast.success("Product price updated on eBay!", { position: "top-right" });
+      }
+    } catch (error) {
+      console.error("Error updating product price on eBay:", error);
+      toast.error("Failed to update product price on eBay", { position: "top-right" });
+    }
+  }, [productObject.sku, updatePrice]);
 
   return (
     <div className="product-container">
@@ -491,6 +482,14 @@ function Product() {
           >
             Restock
           </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<EditIcon />}
+            onClick={() => setPriceDialogOpen(true)}
+          >
+            Update Price
+          </Button>
         </Box>
       </Paper>
       <Dialog
@@ -518,6 +517,33 @@ function Product() {
             handleRestockClick();
             setRestockDialogOpen(false);
           }}>Restock</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={priceDialogOpen}
+        onClose={() => setPriceDialogOpen(false)}
+        aria-labelledby="price-dialog-title"
+        aria-describedby="price-dialog-description"
+      >
+        <DialogTitle id="price-dialog-title">{"Update Product Price"}</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            id="price"
+            label="Price"
+            type="number"
+            fullWidth
+            value={updatePrice}
+            onChange={(e) => setUpdatePrice(Number(e.target.value))}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPriceDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => {
+            handlePriceUpdateClick();
+            setPriceDialogOpen(false);
+          }}>Update</Button>
         </DialogActions>
       </Dialog>
     </div>

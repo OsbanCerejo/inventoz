@@ -7,6 +7,7 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
+import { getApiUrl } from '../config/api';
 import { useFormik } from "formik";
 import { useLocation, useNavigate } from "react-router-dom";
 import * as Yup from "yup";
@@ -59,14 +60,14 @@ function InboundProduct() {
         data.batch;
       data.compositeSku = compositeInboundKey; //Change compositeSKU in data to compositeInboundSku
       axios
-        .put(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/inbound`, {
+        .put(getApiUrl('inbound'), {
           quantity: parseInt(productObject.quantity) + parseInt(data.quantity),
           sku: productObject.sku,
         })
         .then(() => {
           // console.log("Quantity Updated in Inventory Table");
         });
-      axios.post(`http://${import.meta.env.VITE_SERVER_IP}:${import.meta.env.VITE_SERVER_PORT}/inbound`, data).then((response) => {
+      axios.post(getApiUrl('inbound'), data).then((response) => {
         if (response.data === "Created New") {
           toast.success("Success Notification !", {
             position: "top-right",
