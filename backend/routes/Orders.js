@@ -11,34 +11,48 @@ router.get("/allOrders", auth, checkPermission('orders', 'view'), async (req, re
 
   const SHIPSTATION_URL = "https://ssapi.shipstation.com/orders";
 
+  // Accept storeid as a query param (can be comma-separated for multiple stores)
+  let { storeid } = req.query;
+  let storeIds = [];
+  if (storeid) {
+    if (Array.isArray(storeid)) {
+      storeIds = storeid;
+    } else if (typeof storeid === 'string') {
+      storeIds = storeid.split(',').map(id => id.trim()).filter(Boolean);
+    }
+  }
+
   try {
+    // Build params dynamically
+    let params = {
+      limit: 200,
+      offset: 0,
+      orderStatus: "awaiting_shipment",
+      pageSize: 500,
+      // modifyDateStart: "2025-02-25",
+    };
+    if (storeIds.length > 1) {
+      return res.status(400).json({ error: 'Only one store can be selected at a time.' });
+    }
+    if (storeIds.length === 1) {
+      params.storeid = storeIds[0];
+    }
     const response = await axios.get(SHIPSTATION_URL, {
       headers: {
         Authorization: `Basic ${TOKEN}`,
       },
-      params: {
-        limit: 200,
-        offset: 0,
-        orderStatus: "awaiting_shipment",
-        pageSize: 500,
-        // modifyDateStart: "2025-02-25",
-        // storeid: 1040538,
-        // storeid: 983189,
-        // storeid: 1034120
-      },
+      params,
     });
-
-    if (response.status === 200) {
-      const orders = response.data;
-      // console.log(orders)
-      res.json(orders);
+    let ordersData = response.data;
+    let result;
+    if (Array.isArray(ordersData)) {
+      result = { orders: ordersData };
+    } else if (ordersData && Array.isArray(ordersData.orders)) {
+      result = { orders: ordersData.orders };
     } else {
-      console.error(
-        "Error fetching orders:",
-        response.status,
-        response.statusText
-      );
+      result = { orders: [] };
     }
+    res.json(result);
   } catch (error) {
     // console.log(error);
     console.error(
@@ -108,8 +122,9 @@ router.get("/order/:orderNumber", auth, checkPermission('orders', 'view'), async
 //   // const EBAY_API_URL =
 //   //   "https://api.ebay.com/sell/inventory/v1/bulk_migrate_listing";
 
-//     const EBAY_API_URL =
-//     "https://api.ebay.com/sell/inventory/v1/inventory_item/PHI-CO-US-00001";
+
+//   // const EBAY_API_URL =
+//   //   "https://api.ebay.com/sell/inventory/v1/inventory_item/PHI-CO-US-00001";
 
 
 //   // const payload = {

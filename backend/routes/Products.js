@@ -212,10 +212,12 @@ router.post("/updateQuantities", auth, checkPermission('products', 'edit'), asyn
   const skusToUpdate = req.body;
 
   try {
+    const skipped = [];
     const updates = await Promise.all(skusToUpdate.map(async (skuUpdate) => {
       const product = await Products.findOne({ where: { sku: skuUpdate.sku } });
       if (!product) {
-        throw new Error(`Product not found for SKU: ${skuUpdate.sku}`);
+        skipped.push(skuUpdate.sku);
+        return null; // skip this one
       }
       return {
         sku: skuUpdate.sku,
@@ -223,12 +225,15 @@ router.post("/updateQuantities", auth, checkPermission('products', 'edit'), asyn
       };
     }));
 
-    const result = await StockUpdateService.updateMultipleProductQuantities(updates);
+    // Filter out nulls (skipped)
+    const validUpdates = updates.filter(Boolean);
+    const result = await StockUpdateService.updateMultipleProductQuantities(validUpdates);
 
     res.json({
       success: true,
       message: "Quantities updated successfully",
-      result
+      result,
+      skipped,
     });
   } catch (error) {
     console.error("Error updating quantities:", error);

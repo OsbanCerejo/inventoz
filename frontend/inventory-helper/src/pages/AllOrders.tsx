@@ -14,6 +14,13 @@ import {
   TableHead,
   TableRow,
   Typography,
+  Select,
+  MenuItem,
+  InputLabel,
+  OutlinedInput,
+  Checkbox,
+  ListItemText,
+  FormControl,
 } from "@mui/material";
 import axios from "axios";
 import { toast } from "react-toastify";
@@ -21,6 +28,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getApiUrl } from '../config/api';
+import CircularProgress from '@mui/material/CircularProgress';
+import './AllOrdersPrint.css';
 
 function AllOrders() {
   const [groupedOrders, setGroupedOrders] = useState<any>({});
@@ -30,12 +39,22 @@ function AllOrders() {
   });
   const [approveOrders, setApproveOrders] = useState(false);
   const [productsData, setProductsData] = useState<any[]>([]);
+  const [selectedStores, setSelectedStores] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  // Hardcoded store list (should match backend logic)
+  const storeOptions = [
+    { id: "1040538", name: "Walmart OneLifeLuxuries" },
+    { id: "983189", name: "eBay Buy4LessToday" },
+    { id: "1034120", name: "eBay OneLifeLuxuries4" },
+  ];
+
   useEffect(() => {
-    fetchOrders();
-  }, []);
+    fetchOrders(selectedStores);
+    // eslint-disable-next-line
+  }, [selectedStores]);
 
   function createProductMap(productsData: any) {
     const productMap = new Map();
@@ -45,10 +64,15 @@ function AllOrders() {
     return productMap;
   }
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (storeIds?: string[]) => {
     try {
+      setLoading(true);
+      let params = {};
+      if (storeIds && storeIds.length > 0) {
+        params = { storeid: storeIds.join(",") };
+      }
       const [ordersResponse, productsResponse] = await Promise.all([
-        axios.get(getApiUrl('orders/allOrders')),
+        axios.get(getApiUrl('orders/allOrders'), { params }),
         axios.get(getApiUrl('products')),
       ]);
       setProductsData(productsResponse.data);
@@ -66,6 +90,8 @@ function AllOrders() {
       });
     } catch (error) {
       console.error("Fetch orders error:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -274,6 +300,43 @@ function AllOrders() {
   const skuTotals = getSkuTotals();
   // console.log(groupedOrders);
 
+  // Helper to flatten groupedOrders into a single array for table rendering
+  const getOrderItemsForTable = () => {
+    const items: any[] = [];
+    Object.keys(groupedOrders).forEach((sku) => {
+      groupedOrders[sku].forEach((item: any) => {
+        items.push(item);
+      });
+    });
+    return items;
+  };
+  const orderItems = getOrderItemsForTable();
+
+  // Helper to get store cell color by storeId (text color only)
+  const getStoreTextColor = (storeId: string) => {
+    const colorMap: { [key: string]: string } = {
+      "983189": '#fff', // Deep Pink for eBay 1
+      "1040538": '#fff', // Deep Orange for Walmart
+      "1034120": '#fff', // Deep Purple for eBay 2
+    };
+    const bgColorMap: { [key: string]: string } = {
+      "983189": '#ad1457',
+      "1040538": '#e65100',
+      "1034120": '#6a1b9a',
+    };
+    // If you want to use the original color, you can set a different color here
+    // For now, let's use the background color as the text color for visibility
+    // Or you can set a unique color for each store
+    // Example: return { color: bgColorMap[storeId] || undefined };
+    // For now, let's use a unique color for each store:
+    const textColorMap: { [key: string]: string } = {
+      "983189": '#ad1457', // Deep Pink for eBay 1
+      "1040538": '#e65100', // Deep Orange for Walmart
+      "1034120": '#6a1b9a', // Deep Purple for eBay 2
+    };
+    return { color: textColorMap[storeId] || undefined };
+  };
+
   // const testEbay = async () => {
   //   try {
   //     const ebayResponse = await axios.get(
@@ -285,59 +348,140 @@ function AllOrders() {
   //   }
   // };
 
+  // Print handler
+  const handlePrintPickList = () => {
+    window.print();
+  };
+
   return (
     <div>
-      <Box sx={{ mt: 4, mb: 3, px: 2 }}>
+      <Box sx={{ mt: 4, mb: 5, px: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="h4" component="h1" sx={{ mb: 0 }}>
           Orders
         </Typography>
       </Box>
-      
-      {/* <Button onClick={testEbay}>Test eBay</Button> */}
+      {/* Approve button and Shop selection dropdown in the same row */}
+      <Box sx={{ mb: 0, px: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box>
+          {!approveOrders && (
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<AssignmentTurnedIn />}
+              onClick={handleOrdersApprove}
+              sx={{ mx: 1 }}
+            >
+              Approve
+            </Button>
+          )}
+          {approveOrders && (
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<Cancel />}
+              onClick={handleOrdersApproveCancel}
+              sx={{ mx: 1 }}
+            >
+              Cancel
+            </Button>
+          )}
+        </Box>
+        <FormControl sx={{ minWidth: 300 }}>
+          <InputLabel id="store-select-label">Select Shop</InputLabel>
+          <Select
+            labelId="store-select-label"
+            value={selectedStores.length > 0 ? selectedStores[0] : ''}
+            onChange={(e) => {
+              setSelectedStores(e.target.value ? [e.target.value] : []);
+            }}
+            input={<OutlinedInput label="Select Shop" />}
+            renderValue={(selected) =>
+              storeOptions.find((s) => s.id === selected)?.name || selected
+            }
+          >
+            {storeOptions.map((store) => (
+              <MenuItem key={store.id} value={store.id}>
+                <Checkbox checked={selectedStores[0] === store.id} />
+                <ListItemText primary={store.name} />
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Box>
+      {/* Simple Total Items/Orders summary directly under the store selection dropdown */}
+      <Box sx={{ px: 2, mb: 0, display: 'flex', justifyContent: 'flex-end' }}>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+          Total Items: {orderMetrics.totalItems} | Total Orders: {orderMetrics.totalOrders}
+        </Typography>
+      </Box>
+      {/* Print Pick List Button */}
+      <Box sx={{ px: 2, mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+        <Button variant="outlined" color="primary" onClick={handlePrintPickList}>
+          Print Pick List
+        </Button>
+      </Box>
+      {/* Pick List Print Table (print-only) */}
+      {!loading && (
+        <div className="pick-list-table" style={{ display: 'none' }}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell><strong>Image</strong></TableCell>
+                <TableCell><strong>SKU</strong></TableCell>
+                <TableCell><strong>Quantity</strong></TableCell>
+                <TableCell><strong>Product Name</strong></TableCell>
+                <TableCell><strong>Store</strong></TableCell>
+                <TableCell><strong>Location</strong></TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {orderItems.map((item, idx) => (
+                <TableRow key={item.orderId + '-' + item.sku + '-' + idx}>
+                  <TableCell>
+                    {item.image && (
+                      <img src={item.image} alt={item.name} style={{ width: 60, height: 60, objectFit: 'contain' }} />
+                    )}
+                  </TableCell>
+                  <TableCell>{item.sku}</TableCell>
+                  <TableCell>{item.quantity}</TableCell>
+                  <TableCell>
+                    {item.name}
+                    {(item.variant || "") && (
+                      <div style={{
+                        display: 'inline-block',
+                        marginTop: 4,
+                        marginLeft: 6,
+                        padding: '2px 8px',
+                        background: '#ffe082',
+                        color: '#6a1b9a',
+                        borderRadius: 8,
+                        fontSize: 12,
+                        fontWeight: 500,
+                      }}>
+                        {item.variant}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell style={getStoreTextColor(String(item.store))}>
+                    {storeOptions.find(s => s.id === String(item.store)) ? (
+                      <span style={{ ...getStoreTextColor(String(item.store)), fontWeight: 'bold' }}>
+                        {storeOptions.find(s => s.id === String(item.store))?.name}
+                      </span>
+                    ) : (
+                      <span style={{ fontWeight: 'bold' }}>{item.store}</span>
+                    )}
+                  </TableCell>
+                  <TableCell>{item.warehouseLocation}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+      {/* Modern Table View */}
       <Grid container spacing={2} mb={10}>
         <Grid item xs={12}>
           <Grid container spacing={0} p={4}>
-            {!approveOrders && (
-              <Grid item xs={6}>
-                <Button
-                  variant="contained"
-                  color="success"
-                  startIcon={<AssignmentTurnedIn />}
-                  onClick={handleOrdersApprove}
-                  sx={{ mx: 1 }}
-                >
-                  Approve
-                </Button>
-              </Grid>
-            )}
-            {approveOrders && (
-              <Grid item xs={6}>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<Cancel />}
-                  onClick={handleOrdersApproveCancel}
-                  sx={{ mx: 1 }}
-                >
-                  Cancel
-                </Button>
-              </Grid>
-            )}
-
-            <Grid item xs={6}>
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-end",
-                }}
-              >
-                <Typography>Total Items: {orderMetrics.totalItems}</Typography>
-                <Typography>
-                  Total Orders: {orderMetrics.totalOrders}
-                </Typography>
-              </Box>
-            </Grid>
             {approveOrders && (
               <Grid item xs={12}>
                 <Button
@@ -353,182 +497,70 @@ function AllOrders() {
             )}
           </Grid>
         </Grid>
-        {!approveOrders && (
-          <Grid item xs={12}>
-            {Object.keys(groupedOrders)
-              .sort((skuA, skuB) => {
-                const locationA = groupedOrders[skuA][0].warehouseLocation;
-                const locationB = groupedOrders[skuB][0].warehouseLocation;
-
-                if (locationA === "____" && locationB === "____") {
-                  return skuA.localeCompare(skuB);
-                } else if (locationA === "____") {
-                  return skuA.localeCompare(locationB);
-                } else if (locationB === "____") {
-                  return locationA.localeCompare(skuB);
-                } else {
-                  return locationA.localeCompare(locationB);
-                }
-              })
-              .map((sku) => (
-                <Box key={sku} sx={{ marginBottom: 1 }}>
-                  <Grid container spacing={0.5}>
-                    {groupedOrders[sku].map((item: any) => (
-                      <Grid item xs={12} key={item.orderItemId}>
-                        <Card sx={{ display: "flex", padding: "5px" }}>
-                          <CardMedia
-                            component="img"
-                            sx={{ width: 100, objectFit: "contain" }}
-                            image={item.image}
-                            alt={item.image}
-                          />
-                          {item.imageUrl1}
-                          <CardContent
-                            sx={{
-                              display: "flex",
-                              flexDirection: "column",
-                              width: "100%",
-                              padding: "5px",
-                            }}
-                          >
-                            <Box sx={{ flexGrow: 1 }}>
-                              <Typography
-                                component="div"
-                                variant="h6"
-                                sx={{ fontSize: "1rem" }}
-                              >
-                                {item.name}
-                              </Typography>
-                            </Box>
-                            {item.options.length > 0 && (
-                              <Box sx={{ flexGrow: 1 }}>
-                                <Typography sx={{ fontSize: "0.875rem" }}>
-                                  <b>{item.options[0].name} :</b>{" "}
-                                  {item.options[0].value}
-                                </Typography>
-                              </Box>
-                            )}
-                            <Box
-                              sx={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "flex-end",
-                                flexGrow: 1,
-                              }}
-                            >
-                              <Typography sx={{ fontSize: "0.875rem" }}>
-                                Quantity: {item.quantity}
-                              </Typography>
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  alignItems: "flex-end",
-                                }}
-                              >
-                                <Typography sx={{ fontSize: "0.875rem" }}>
-                                  Location:{" "}
-                                  <strong>{item.warehouseLocation}</strong>
-                                </Typography>
-                                <Typography sx={{ fontSize: "0.875rem" }}>
-                                  SKU: {item.sku}
-                                </Typography>
-                                <Typography
-                                  sx={{
-                                    fontSize: "0.875rem",
-                                    backgroundColor: "yellow",
-                                  }}
-                                >
-                                  <strong>{item.variant}</strong>
-                                </Typography>
-                              </Box>
-                            </Box>
-                          </CardContent>
-                          <Box
-                            border={1}
-                            sx={{
-                              display: "flex",
-                              flexDirection: "column",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              padding: "10px",
-                              backgroundColor: item.isverified
-                                ? "#B2FF59"
-                                : "#FF5252",
-                            }}
-                          >
-                            <Typography sx={{ fontSize: "0.875rem" }}>
-                              R
-                            </Typography>
-                            <Typography sx={{ fontSize: "0.875rem" }}>
-                              Q
-                            </Typography>
-                            <Typography sx={{ fontSize: "0.875rem" }}>
-                              I
-                            </Typography>
-                          </Box>
-                          <Box
-                            border={1}
-                            sx={{
-                              display: "flex",
-                              flexDirection: "column",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              padding: "10px",
-                              backgroundColor:
-                                item.store == "1040538"
-                                  ? "#0071ce"
-                                  : item.store == "983189"
-                                  ? "#EE66A6"
-                                  : "#FFEB55",
-                            }}
-                          >
-                            <Typography sx={{ fontSize: "0.875rem" }}>
-                              <b>{item.qty}</b>
-                            </Typography>
-                          </Box>
-                        </Card>
-                      </Grid>
-                    ))}
-                  </Grid>
-                </Box>
-              ))}
-          </Grid>
-        )}
-        {approveOrders && (
-          <Grid item xs={12}>
+        {/* Modern Table View */}
+        <Grid item xs={12}>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+              <CircularProgress />
+            </Box>
+          ) : (
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>
-                      <strong>SKU</strong>
-                    </TableCell>
-                    <TableCell>
-                      <strong>Product Name</strong>
-                    </TableCell>
-                    <TableCell>
-                      <strong>Total Ordered Quantity</strong>
-                    </TableCell>
-                    <TableCell>
-                      <strong>Original Quantity</strong>
-                    </TableCell>
+                    <TableCell><strong>Image</strong></TableCell>
+                    <TableCell><strong>SKU</strong></TableCell>
+                    <TableCell><strong>Quantity</strong></TableCell>
+                    <TableCell><strong>Product Name</strong></TableCell>
+                    <TableCell><strong>Store</strong></TableCell>
+                    <TableCell><strong>Location</strong></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {Object.keys(skuTotals).map((sku) => (
-                    <TableRow key={sku}>
-                      <TableCell>{sku}</TableCell>
-                      <TableCell>{skuTotals[sku].product.itemName}</TableCell>
-                      <TableCell>{skuTotals[sku].quantity}</TableCell>
-                      <TableCell>{skuTotals[sku].product.quantity}</TableCell>
+                  {orderItems.map((item, idx) => (
+                    <TableRow key={item.orderId + '-' + item.sku + '-' + idx}>
+                      <TableCell>
+                        {item.image && (
+                          <img src={item.image} alt={item.name} style={{ width: 60, height: 60, objectFit: 'contain' }} />
+                        )}
+                      </TableCell>
+                      <TableCell>{item.sku}</TableCell>
+                      <TableCell>{item.quantity}</TableCell>
+                      <TableCell>
+                        {item.name}
+                        {(item.variant || "") && (
+                          <div style={{
+                            display: 'inline-block',
+                            marginTop: 4,
+                            marginLeft: 6,
+                            padding: '2px 8px',
+                            background: '#ffe082',
+                            color: '#6a1b9a',
+                            borderRadius: 8,
+                            fontSize: 12,
+                            fontWeight: 500,
+                          }}>
+                            {item.variant}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell style={getStoreTextColor(String(item.store))}>
+                        {storeOptions.find(s => s.id === String(item.store)) ? (
+                          <span style={{ ...getStoreTextColor(String(item.store)), fontWeight: 'bold' }}>
+                            {storeOptions.find(s => s.id === String(item.store))?.name}
+                          </span>
+                        ) : (
+                          <span style={{ fontWeight: 'bold' }}>{item.store}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>{item.warehouseLocation}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </TableContainer>
-          </Grid>
-        )}
+          )}
+        </Grid>
       </Grid>
     </div>
   );
