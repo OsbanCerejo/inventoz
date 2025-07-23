@@ -1,10 +1,5 @@
 @media print {
-  body * {
-    visibility: hidden !important;
-  }
-  .pick-list-table, .pick-list-table * {
-    visibility: visible !important;
-  }
+  /* Hide all siblings of .pick-list-table when printing */
   .pick-list-table {
     display: block !important;
     position: absolute;
@@ -15,6 +10,13 @@
     padding: 0;
     margin: 0;
     z-index: 9999;
+  }
+  .pick-list-table, .pick-list-table * {
+    visibility: visible !important;
+  }
+  .pick-list-table ~ * {
+    display: none !important;
+    visibility: hidden !important;
   }
   .pick-list-table table {
     width: 100%;
