@@ -387,21 +387,25 @@ function AllOrders() {
           )}
         </Box>
         <FormControl sx={{ minWidth: 300 }}>
-          <InputLabel id="store-select-label">Select Shop</InputLabel>
+          <InputLabel id="store-select-label">Select Shop(s)</InputLabel>
           <Select
             labelId="store-select-label"
-            value={selectedStores.length > 0 ? selectedStores[0] : ''}
+            multiple
+            value={selectedStores}
             onChange={(e) => {
-              setSelectedStores(e.target.value ? [e.target.value] : []);
+              const value = e.target.value;
+              setSelectedStores(typeof value === 'string' ? value.split(',') : value);
             }}
-            input={<OutlinedInput label="Select Shop" />}
+            input={<OutlinedInput label="Select Shop(s)" />}
             renderValue={(selected) =>
-              storeOptions.find((s) => s.id === selected)?.name || selected
+              (selected as string[])
+                .map((id) => storeOptions.find((s) => s.id === id)?.name || id)
+                .join(", ")
             }
           >
             {storeOptions.map((store) => (
               <MenuItem key={store.id} value={store.id}>
-                <Checkbox checked={selectedStores[0] === store.id} />
+                <Checkbox checked={selectedStores.indexOf(store.id) > -1} />
                 <ListItemText primary={store.name} />
               </MenuItem>
             ))}

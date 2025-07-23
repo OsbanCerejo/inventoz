@@ -31,8 +31,37 @@ router.get("/allOrders", auth, checkPermission('orders', 'view'), async (req, re
       pageSize: 500,
       // modifyDateStart: "2025-02-25",
     };
+    let allOrders = [];
     if (storeIds.length > 1) {
-      return res.status(400).json({ error: 'Only one store can be selected at a time.' });
+      // Multiple stores: fetch each separately and merge, removing duplicates by orderId+storeId
+      const orderKeySet = new Set();
+      for (const storeId of storeIds) {
+        const storeParams = { ...params, storeid: storeId };
+        const response = await axios.get(SHIPSTATION_URL, {
+          headers: {
+            Authorization: `Basic ${TOKEN}`,
+          },
+          params: storeParams,
+        });
+        let ordersData = response.data;
+        let ordersArr = [];
+        if (Array.isArray(ordersData)) {
+          ordersArr = ordersData;
+        } else if (ordersData && Array.isArray(ordersData.orders)) {
+          ordersArr = ordersData.orders;
+        }
+        for (const order of ordersArr) {
+          // Use orderId + storeId as the unique key
+          const storeIdKey = order.advancedOptions && order.advancedOptions.storeId ? order.advancedOptions.storeId : '';
+          const uniqueKey = `${order.orderId}_${storeIdKey}`;
+          if (!orderKeySet.has(uniqueKey)) {
+            allOrders.push(order);
+            orderKeySet.add(uniqueKey);
+          }
+        }
+      }
+      res.json({ orders: allOrders });
+      return;
     }
     if (storeIds.length === 1) {
       params.storeid = storeIds[0];
