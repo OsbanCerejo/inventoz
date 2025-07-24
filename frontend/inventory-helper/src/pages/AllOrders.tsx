@@ -41,20 +41,42 @@ function AllOrders() {
   const [productsData, setProductsData] = useState<any[]>([]);
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [listingsData, setListingsData] = useState<any>({}); // NEW: per-store stock
   const navigate = useNavigate();
   const { user } = useAuth();
 
   // Hardcoded store list (should match backend logic)
   const storeOptions = [
-    { id: "1040538", name: "Walmart OneLifeLuxuries" },
-    { id: "983189", name: "eBay Buy4LessToday" },
-    { id: "1034120", name: "eBay OneLifeLuxuries4" },
+    { id: "1040538", name: "Walmart OneLifeLuxuries", color: "#0071ce" },
+    { id: "983189", name: "eBay Buy4LessToday", color: "#EE66A6" },
+    { id: "1034120", name: "eBay OneLifeLuxuries4", color: "#FFEB55", text: '#222' },
   ];
 
+  // Fetch orders and products, then fetch listings for all SKUs
   useEffect(() => {
     fetchOrders(selectedStores);
     // eslint-disable-next-line
   }, [selectedStores]);
+
+  // Fetch listings for all SKUs in the orders
+  useEffect(() => {
+    const fetchListingsForSkus = async (skus: string[]) => {
+      const listingsObj: any = {};
+      await Promise.all(
+        skus.map(async (sku) => {
+          try {
+            const { data } = await axios.get(getApiUrl('listings/bySku'), { params: { sku } });
+            listingsObj[sku] = data;
+          } catch (e) {
+            listingsObj[sku] = null;
+          }
+        })
+      );
+      setListingsData(listingsObj);
+    };
+    const allSkus = Object.keys(groupedOrders);
+    if (allSkus.length > 0) fetchListingsForSkus(allSkus);
+  }, [groupedOrders]);
 
   function createProductMap(productsData: any) {
     const productMap = new Map();
@@ -77,12 +99,10 @@ function AllOrders() {
       ]);
       setProductsData(productsResponse.data);
       const productMap = createProductMap(productsResponse.data);
-      // console.log(ordersResponse)
       const grouped = groupOrdersByProduct(
         ordersResponse.data.orders,
         productMap
       );
-
       setGroupedOrders(grouped.groupedOrders);
       setOrderMetrics({
         totalOrders: grouped.totalOrders,
@@ -101,7 +121,6 @@ function AllOrders() {
       totalItems: 0,
       totalOrders: 0,
     };
-
     result.groupedOrders = orders.reduce((acc: any, order: any) => {
       result.totalOrders += 1;
       order.items.forEach((item: any) => {
@@ -110,10 +129,8 @@ function AllOrders() {
         if (!acc[actualSku]) {
           acc[actualSku] = [];
         }
-
-        // Find the product in productsData to get the location
+        // Find the product in productsData to get the location, shade, condition
         const product = productMap.get(actualSku);
-
         acc[actualSku].push({
           ...item,
           orderId: order.orderId,
@@ -125,10 +142,11 @@ function AllOrders() {
           isverified: product ? product.verified : false,
           lotSize: parseInt(lotSize, 10) || 1,
           variant: product ? product.shade : "",
+          condition: product ? product.condition : "",
           store: order.advancedOptions.storeId,
           image:
             product && product.image && product.image !== "null"
-              ? product.image // Use product image if available
+              ? product.image
               : item.imageUrl || "",
           qty: product ? product.quantity : "N/A",
         });
@@ -300,7 +318,7 @@ function AllOrders() {
   const skuTotals = getSkuTotals();
   // console.log(groupedOrders);
 
-  // Helper to flatten groupedOrders into a single array for table rendering
+  // Helper to flatten groupedOrders into a single array for table rendering, sorted by location
   const getOrderItemsForTable = () => {
     const items: any[] = [];
     Object.keys(groupedOrders).forEach((sku) => {
@@ -308,9 +326,26 @@ function AllOrders() {
         items.push(item);
       });
     });
+    // Sort by warehouseLocation (ascending, blanks last)
+    items.sort((a, b) => {
+      if (!a.warehouseLocation && !b.warehouseLocation) return 0;
+      if (!a.warehouseLocation) return 1;
+      if (!b.warehouseLocation) return -1;
+      return a.warehouseLocation.localeCompare(b.warehouseLocation);
+    });
     return items;
   };
   const orderItems = getOrderItemsForTable();
+
+  // Helper: get per-store stock for a SKU and storeId
+  const getStoreStock = (sku: string, storeId: string) => {
+    const listing = listingsData[sku];
+    if (!listing) return null;
+    if (storeId === "983189") return listing.ebayBuy4LessToday;
+    if (storeId === "1034120") return listing.ebayOneLifeLuxuries4;
+    if (storeId === "1040538") return listing.walmartOneLifeLuxuries;
+    return null;
+  };
 
   // Helper to get store cell color by storeId (text color only)
   const getStoreTextColor = (storeId: string) => {
@@ -351,6 +386,25 @@ function AllOrders() {
   // Print handler
   const handlePrintPickList = () => {
     window.print();
+  };
+
+  // Store color indicator (badge/border at row start)
+  const StoreColorBadge = ({ storeId }: { storeId: string }) => {
+    const store = storeOptions.find(s => s.id === storeId);
+    return (
+      <span
+        style={{
+          display: 'inline-block',
+          width: 8,
+          height: 60,
+          borderRadius: 6,
+          background: store?.color,
+          marginRight: 8,
+          verticalAlign: 'middle',
+        }}
+        title={store?.name}
+      />
+    );
   };
 
   return (
@@ -430,11 +484,12 @@ function AllOrders() {
           <Table>
             <TableHead>
               <TableRow>
+                <TableCell></TableCell> {/* Badge */}
                 <TableCell><strong>Image</strong></TableCell>
                 <TableCell><strong>SKU</strong></TableCell>
-                <TableCell><strong>Quantity</strong></TableCell>
                 <TableCell><strong>Product Name</strong></TableCell>
-                <TableCell><strong>Store</strong></TableCell>
+                <TableCell><strong>Quantity</strong></TableCell>
+                <TableCell><strong>Remaining</strong></TableCell>
                 <TableCell><strong>Location</strong></TableCell>
               </TableRow>
             </TableHead>
@@ -442,38 +497,39 @@ function AllOrders() {
               {orderItems.map((item, idx) => (
                 <TableRow key={item.orderId + '-' + item.sku + '-' + idx}>
                   <TableCell>
+                    <StoreColorBadge storeId={String(item.store)} />
+                  </TableCell>
+                  <TableCell>
                     {item.image && (
-                      <img src={item.image} alt={item.name} style={{ width: 60, height: 60, objectFit: 'contain' }} />
+                      <img src={item.image} alt={item.name} style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8 }} />
                     )}
                   </TableCell>
                   <TableCell>{item.sku}</TableCell>
-                  <TableCell>{item.quantity}</TableCell>
                   <TableCell>
-                    {item.name}
-                    {(item.variant || "") && (
+                    <div style={{ fontWeight: 600 }}>{item.name}</div>
+                    {item.variant && (
                       <div style={{
                         display: 'inline-block',
                         marginTop: 4,
-                        marginLeft: 6,
-                        padding: '2px 8px',
+                        marginBottom: 2,
+                        padding: '2px 10px',
                         background: '#ffe082',
                         color: '#6a1b9a',
                         borderRadius: 8,
-                        fontSize: 12,
-                        fontWeight: 500,
-                      }}>
-                        {item.variant}
-                      </div>
+                        fontSize: 13,
+                        fontWeight: 600,
+                        letterSpacing: 0.5,
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                        marginRight: 6,
+                      }}>{item.variant}</div>
+                    )}
+                    {item.condition && (
+                      <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{item.condition}</div>
                     )}
                   </TableCell>
-                  <TableCell style={getStoreTextColor(String(item.store))}>
-                    {storeOptions.find(s => s.id === String(item.store)) ? (
-                      <span style={{ ...getStoreTextColor(String(item.store)), fontWeight: 'bold' }}>
-                        {storeOptions.find(s => s.id === String(item.store))?.name}
-                      </span>
-                    ) : (
-                      <span style={{ fontWeight: 'bold' }}>{item.store}</span>
-                    )}
+                  <TableCell>{item.quantity}</TableCell>
+                  <TableCell>
+                    {getStoreStock(item.sku, String(item.store)) ?? '-'}
                   </TableCell>
                   <TableCell>{item.warehouseLocation}</TableCell>
                 </TableRow>
@@ -512,11 +568,12 @@ function AllOrders() {
               <Table>
                 <TableHead>
                   <TableRow>
+                    <TableCell></TableCell> {/* Badge */}
                     <TableCell><strong>Image</strong></TableCell>
                     <TableCell><strong>SKU</strong></TableCell>
-                    <TableCell><strong>Quantity</strong></TableCell>
                     <TableCell><strong>Product Name</strong></TableCell>
-                    <TableCell><strong>Store</strong></TableCell>
+                    <TableCell><strong>Quantity</strong></TableCell>
+                    <TableCell><strong>Remaining</strong></TableCell>
                     <TableCell><strong>Location</strong></TableCell>
                   </TableRow>
                 </TableHead>
@@ -524,38 +581,39 @@ function AllOrders() {
                   {orderItems.map((item, idx) => (
                     <TableRow key={item.orderId + '-' + item.sku + '-' + idx}>
                       <TableCell>
+                        <StoreColorBadge storeId={String(item.store)} />
+                      </TableCell>
+                      <TableCell>
                         {item.image && (
-                          <img src={item.image} alt={item.name} style={{ width: 60, height: 60, objectFit: 'contain' }} />
+                          <img src={item.image} alt={item.name} style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8 }} />
                         )}
                       </TableCell>
                       <TableCell>{item.sku}</TableCell>
-                      <TableCell>{item.quantity}</TableCell>
                       <TableCell>
-                        {item.name}
-                        {(item.variant || "") && (
+                        <div style={{ fontWeight: 600 }}>{item.name}</div>
+                        {item.variant && (
                           <div style={{
                             display: 'inline-block',
                             marginTop: 4,
-                            marginLeft: 6,
-                            padding: '2px 8px',
+                            marginBottom: 2,
+                            padding: '2px 10px',
                             background: '#ffe082',
                             color: '#6a1b9a',
                             borderRadius: 8,
-                            fontSize: 12,
-                            fontWeight: 500,
-                          }}>
-                            {item.variant}
-                          </div>
+                            fontSize: 13,
+                            fontWeight: 600,
+                            letterSpacing: 0.5,
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                            marginRight: 6,
+                          }}>{item.variant}</div>
+                        )}
+                        {item.condition && (
+                          <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{item.condition}</div>
                         )}
                       </TableCell>
-                      <TableCell style={getStoreTextColor(String(item.store))}>
-                        {storeOptions.find(s => s.id === String(item.store)) ? (
-                          <span style={{ ...getStoreTextColor(String(item.store)), fontWeight: 'bold' }}>
-                            {storeOptions.find(s => s.id === String(item.store))?.name}
-                          </span>
-                        ) : (
-                          <span style={{ fontWeight: 'bold' }}>{item.store}</span>
-                        )}
+                      <TableCell>{item.quantity}</TableCell>
+                      <TableCell>
+                        {getStoreStock(item.sku, String(item.store)) ?? '-'}
                       </TableCell>
                       <TableCell>{item.warehouseLocation}</TableCell>
                     </TableRow>
