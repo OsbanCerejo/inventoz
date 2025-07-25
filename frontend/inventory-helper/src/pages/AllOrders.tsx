@@ -41,7 +41,6 @@ function AllOrders() {
   const [productsData, setProductsData] = useState<any[]>([]);
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [listingsData, setListingsData] = useState<any>({}); // NEW: per-store stock
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -57,26 +56,6 @@ function AllOrders() {
     fetchOrders(selectedStores);
     // eslint-disable-next-line
   }, [selectedStores]);
-
-  // Fetch listings for all SKUs in the orders
-  useEffect(() => {
-    const fetchListingsForSkus = async (skus: string[]) => {
-      const listingsObj: any = {};
-      await Promise.all(
-        skus.map(async (sku) => {
-          try {
-            const { data } = await axios.get(getApiUrl('listings/bySku'), { params: { sku } });
-            listingsObj[sku] = data;
-          } catch (e) {
-            listingsObj[sku] = null;
-          }
-        })
-      );
-      setListingsData(listingsObj);
-    };
-    const allSkus = Object.keys(groupedOrders);
-    if (allSkus.length > 0) fetchListingsForSkus(allSkus);
-  }, [groupedOrders]);
 
   function createProductMap(productsData: any) {
     const productMap = new Map();
@@ -103,6 +82,7 @@ function AllOrders() {
         ordersResponse.data.orders,
         productMap
       );
+
       setGroupedOrders(grouped.groupedOrders);
       setOrderMetrics({
         totalOrders: grouped.totalOrders,
@@ -131,6 +111,7 @@ function AllOrders() {
         }
         // Find the product in productsData to get the location, shade, condition
         const product = productMap.get(actualSku);
+        console.log(product);
         acc[actualSku].push({
           ...item,
           orderId: order.orderId,
@@ -362,16 +343,6 @@ function AllOrders() {
   };
   const orderItems = getOrderItemsForTable();
 
-  // Helper: get per-store stock for a SKU and storeId
-  const getStoreStock = (sku: string, storeId: string) => {
-    const listing = listingsData[sku];
-    if (!listing) return null;
-    if (storeId === "983189") return listing.ebayBuy4LessToday;
-    if (storeId === "1034120") return listing.ebayOneLifeLuxuries4;
-    if (storeId === "1040538") return listing.walmartOneLifeLuxuries;
-    return null;
-  };
-
   // Helper to get store cell color by storeId (text color only)
   const getStoreTextColor = (storeId: string) => {
     const colorMap: { [key: string]: string } = {
@@ -554,10 +525,7 @@ function AllOrders() {
                   </TableCell>
                   <TableCell>{item.quantity}</TableCell>
                   <TableCell>
-                    {(() => {
-                      const val = getStoreStock(item.sku, String(item.store));
-                      return (val !== null && val !== undefined) ? val : 0;
-                    })()}
+                    {item.qty !== null && item.qty !== undefined ? item.qty : 'N/A'}
                   </TableCell>
                   <TableCell>{item.warehouseLocation}</TableCell>
                 </TableRow>
@@ -641,10 +609,7 @@ function AllOrders() {
                       </TableCell>
                       <TableCell>{item.quantity}</TableCell>
                       <TableCell>
-                        {(() => {
-                          const val = getStoreStock(item.sku, String(item.store));
-                          return (val !== null && val !== undefined) ? val : 0;
-                        })()}
+                        {item.qty !== null && item.qty !== undefined ? item.qty : 'N/A'}
                       </TableCell>
                       <TableCell>{item.warehouseLocation}</TableCell>
                     </TableRow>
