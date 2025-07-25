@@ -158,9 +158,13 @@ function AllOrders() {
   }
 
   function parseSku(sku: string) {
-    if (sku && sku.includes("_lot_of_")) {
-      const skuParts = sku.split("_lot_of_");
-      return [skuParts[0], skuParts[1]];
+    // Handles both _lot_of_ and _lot_of (with or without the second underscore)
+    if (sku) {
+      const lotOfRegex = /(.+)_lot_of_?(\d+)/i;
+      const match = sku.match(lotOfRegex);
+      if (match) {
+        return [match[1], match[2]];
+      }
     }
     return [sku, "1"];
   }
@@ -326,12 +330,33 @@ function AllOrders() {
         items.push(item);
       });
     });
-    // Sort by warehouseLocation (ascending, blanks last)
+    // Sort by warehouseLocation (ascending, blanks last), using natural sort for locations like B-36, B-122
     items.sort((a, b) => {
-      if (!a.warehouseLocation && !b.warehouseLocation) return 0;
-      if (!a.warehouseLocation) return 1;
-      if (!b.warehouseLocation) return -1;
-      return a.warehouseLocation.localeCompare(b.warehouseLocation);
+      const parseLoc = (loc: string) => {
+        if (!loc) return ["", 0];
+        const match = loc.match(/^([A-Za-z]+)-(\d+)$/);
+        if (match) {
+          return [match[1], parseInt(match[2], 10)];
+        }
+        return [loc, 0];
+      };
+      const [aLetter, aNum] = parseLoc(a.warehouseLocation);
+      const [bLetter, bNum] = parseLoc(b.warehouseLocation);
+      if (aLetter === bLetter) {
+        // Only subtract if both are numbers
+        if (typeof aNum === 'number' && typeof bNum === 'number') {
+          return aNum - bNum;
+        }
+        return 0;
+      }
+      if (!aLetter && !bLetter) return 0;
+      if (!aLetter) return 1;
+      if (!bLetter) return -1;
+      // Ensure both are strings before localeCompare
+      if (typeof aLetter === 'string' && typeof bLetter === 'string') {
+        return aLetter.localeCompare(bLetter);
+      }
+      return 0;
     });
     return items;
   };
@@ -501,10 +526,10 @@ function AllOrders() {
                   </TableCell>
                   <TableCell>
                     {item.image && (
-                      <img src={item.image} alt={item.name} style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8 }} />
+                      <img src={item.image} alt={item.name} style={{ width: 120, height: 120, objectFit: 'contain', borderRadius: 8 }} />
                     )}
                   </TableCell>
-                  <TableCell>{item.sku}</TableCell>
+                  <TableCell>{(() => { const [baseSku] = parseSku(item.sku); return baseSku; })()}</TableCell>
                   <TableCell>
                     <div style={{ fontWeight: 600 }}>{item.name}</div>
                     {item.variant && (
@@ -529,7 +554,10 @@ function AllOrders() {
                   </TableCell>
                   <TableCell>{item.quantity}</TableCell>
                   <TableCell>
-                    {getStoreStock(item.sku, String(item.store)) ?? '-'}
+                    {(() => {
+                      const val = getStoreStock(item.sku, String(item.store));
+                      return (val !== null && val !== undefined) ? val : 0;
+                    })()}
                   </TableCell>
                   <TableCell>{item.warehouseLocation}</TableCell>
                 </TableRow>
@@ -585,10 +613,10 @@ function AllOrders() {
                       </TableCell>
                       <TableCell>
                         {item.image && (
-                          <img src={item.image} alt={item.name} style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8 }} />
+                          <img src={item.image} alt={item.name} style={{ width: 120, height: 120, objectFit: 'contain', borderRadius: 8 }} />
                         )}
                       </TableCell>
-                      <TableCell>{item.sku}</TableCell>
+                      <TableCell>{(() => { const [baseSku] = parseSku(item.sku); return baseSku; })()}</TableCell>
                       <TableCell>
                         <div style={{ fontWeight: 600 }}>{item.name}</div>
                         {item.variant && (
@@ -613,7 +641,10 @@ function AllOrders() {
                       </TableCell>
                       <TableCell>{item.quantity}</TableCell>
                       <TableCell>
-                        {getStoreStock(item.sku, String(item.store)) ?? '-'}
+                        {(() => {
+                          const val = getStoreStock(item.sku, String(item.store));
+                          return (val !== null && val !== undefined) ? val : 0;
+                        })()}
                       </TableCell>
                       <TableCell>{item.warehouseLocation}</TableCell>
                     </TableRow>
