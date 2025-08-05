@@ -199,17 +199,29 @@ function AllOrders() {
   };
 
   const logUpdateQuantities = async (skusToUpdate: any) => {
-    const logData = {
-      timestamp: new Date().toISOString(),
-      type: "Sales Update",
-      userId: user?.id?.toString(),
-      metaData: skusToUpdate,
-    };
+    // Create a log entry for each SKU being updated
+    for (const skuData of skusToUpdate) {
+      const logData = {
+        timestamp: new Date().toISOString(),
+        type: "Sales Update",
+        action: "update",
+        entityType: "product",
+        entityId: skuData.sku, // Use the actual SKU
+        userId: user?.id?.toString(),
+        metaData: {
+          sku: skuData.sku,
+          totalQuantitySold: skuData.totalQuantitySold,
+          stores: skuData.stores
+        },
+      };
 
-    try {
-      await axios.post(getApiUrl('logs/addLog'), logData);
-    } catch (error) {
-      console.error("Error logging update quantities:", error);
+      console.log("Attempting to log update quantities for SKU:", skuData.sku, logData);
+      try {
+        const response = await axios.post(getApiUrl('logs/addLog'), logData);
+        console.log("Log response for SKU", skuData.sku, ":", response.data);
+      } catch (error) {
+        console.error("Error logging update quantities for SKU", skuData.sku, ":", error);
+      }
     }
   };
 
