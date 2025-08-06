@@ -109,13 +109,16 @@ function AllOrders() {
         }
         const { sku } = item;
         const [actualSku, lotSize] = parseSku(sku);
-        if (!acc[actualSku]) {
-          acc[actualSku] = [];
-        }
-        // Find the product in productsData to get the location, shade, condition
+
         const product = productMap.get(actualSku);
 
-        acc[actualSku].push({
+        const finalSku = product && product.alternativeSku ? product.alternativeSku : actualSku;
+
+        if (!acc[finalSku]) {
+          acc[finalSku] = [];
+        }
+
+        acc[finalSku].push({
           ...item,
           orderId: order.orderId,
           orderNumber: order.orderNumber,
@@ -133,6 +136,9 @@ function AllOrders() {
               ? product.image
               : item.imageUrl || "",
           qty: product ? product.quantity : "N/A",
+          // Store the original SKU and the final SKU being used
+          originalSku: actualSku,
+          finalSku: finalSku,
         });
         result.totalItems += item.quantity * (parseInt(lotSize, 10) || 1);
       });
@@ -515,7 +521,14 @@ function AllOrders() {
                       <img src={item.image} alt={item.name} style={{ width: 120, height: 120, objectFit: 'contain', borderRadius: 8 }} />
                     )}
                   </TableCell>
-                  <TableCell>{(() => { const [baseSku] = parseSku(item.sku); return baseSku; })()}</TableCell>
+                  <TableCell>
+                    {item.finalSku}
+                    {item.finalSku !== item.originalSku && (
+                      <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                        (was: {item.originalSku})
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <div style={{ fontWeight: 600 }}>{item.name}</div>
                     {item.variant && (
@@ -535,18 +548,35 @@ function AllOrders() {
                       }}>{item.variant}</div>
                     )}
                     {item.options && item.options.length > 0 && (
-                      <Box sx={{ flexGrow: 1 }}>
-                        <Typography sx={{ fontSize: "0.875rem" }}>
-                          <b>{item.options[0].name} :</b>{" "}
-                          {item.options[0].value}
-                        </Typography>
-                      </Box>
+                      <div style={{
+                        display: 'inline-block',
+                        marginTop: 4,
+                        marginBottom: 2,
+                        padding: '2px 10px',
+                        background: '#e3f2fd',
+                        color: '#1565c0',
+                        borderRadius: 8,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        letterSpacing: 0.5,
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                        marginRight: 6,
+                      }}>
+                        <b>{item.options[0].name}:</b> {item.options[0].value}
+                      </div>
                     )}
                     {item.condition && (
                       <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{item.condition}</div>
                     )}
                   </TableCell>
-                  <TableCell>{item.quantity}</TableCell>
+                                        <TableCell>
+                        {item.quantity}
+                        {item.lotSize > 1 && (
+                          <div style={{ fontSize: 12, color: '#e65100', marginTop: 2 }}>
+                            × {item.lotSize} (lot)
+                          </div>
+                        )}
+                      </TableCell>
                   <TableCell>
                     {item.qty !== null && item.qty !== undefined ? item.qty : 'N/A'}
                   </TableCell>
@@ -607,7 +637,14 @@ function AllOrders() {
                           <img src={item.image} alt={item.name} style={{ width: 120, height: 120, objectFit: 'contain', borderRadius: 8 }} />
                         )}
                       </TableCell>
-                      <TableCell>{(() => { const [baseSku] = parseSku(item.sku); return baseSku; })()}</TableCell>
+                      <TableCell>
+                        {item.finalSku}
+                        {item.finalSku !== item.originalSku && (
+                          <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                            (was: {item.originalSku})
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div style={{ fontWeight: 600 }}>{item.name}</div>
                         {item.variant && (
@@ -627,18 +664,35 @@ function AllOrders() {
                           }}>{item.variant}</div>
                         )}
                         {item.options && item.options.length > 0 && (
-                          <Box sx={{ flexGrow: 1 }}>
-                            <Typography sx={{ fontSize: "0.875rem" }}>
-                              <b>{item.options[0].name} :</b>{" "}
-                              {item.options[0].value}
-                            </Typography>
-                          </Box>
+                          <div style={{
+                            display: 'inline-block',
+                            marginTop: 4,
+                            marginBottom: 2,
+                            padding: '2px 10px',
+                            background: '#e3f2fd',
+                            color: '#1565c0',
+                            borderRadius: 8,
+                            fontSize: 13,
+                            fontWeight: 600,
+                            letterSpacing: 0.5,
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                            marginRight: 6,
+                          }}>
+                            <b>{item.options[0].name}:</b> {item.options[0].value}
+                          </div>
                         )}
                         {item.condition && (
                           <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{item.condition}</div>
                         )}
                       </TableCell>
-                      <TableCell>{item.quantity}</TableCell>
+                      <TableCell>
+                    {item.quantity}
+                    {item.lotSize > 1 && (
+                      <div style={{ fontSize: 12, color: '#e65100', marginTop: 2 }}>
+                        × {item.lotSize} (lot)
+                      </div>
+                    )}
+                  </TableCell>
                       <TableCell>
                         {item.qty !== null && item.qty !== undefined ? item.qty : 'N/A'}
                       </TableCell>

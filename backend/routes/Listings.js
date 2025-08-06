@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { Listings } = require("../models");
+const { Listings, Products } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 
@@ -59,12 +59,18 @@ router.put("/", async (req, res) => {
 
 router.post("/updateQuantities", async (req, res) => {
   const listingsUpdates = req.body; // An array of updates with sku, quantitySold, and storeId
-  // console.log("UPdate quantities by store in router: ", listingsUpdates)
   try {
     const updatePromises = listingsUpdates.map(
       async ({ sku, quantitySold, storeId }) => {
-        // Find the existing listing for the SKU
-        const listing = await Listings.findByPk(sku);
+        let listing = await Listings.findByPk(sku);
+
+        if (!listing) {
+          const product = await Products.findOne({ where: { alternativeSku: sku } });
+          if (product) {
+            listing = await Listings.findByPk(product.sku);
+          }
+        }
+        
         // console.log("LISTINGS :", listing)
         if (!listing) {
           // console.log("LISTINGS ENTRY NOT FOUND")
@@ -97,7 +103,7 @@ router.post("/updateQuantities", async (req, res) => {
         listing[columnToUpdate] = newQuantity;
         await listing.save();
 
-        return `Updated SKU: ${sku} for store: ${storeId} with new quantity: ${newQuantity}`;
+        return `Updated SKU: ${listing.sku} for store: ${storeId} with new quantity: ${newQuantity}`;
       }
     );
 

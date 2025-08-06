@@ -214,11 +214,24 @@ router.post("/updateQuantities", auth, checkPermission('products', 'edit'), asyn
   try {
     const skipped = [];
     const updates = await Promise.all(skusToUpdate.map(async (skuUpdate) => {
-      const product = await Products.findOne({ where: { sku: skuUpdate.sku } });
+      let product = await Products.findOne({ where: { sku: skuUpdate.sku } });
+
+      if (!product) {
+        product = await Products.findOne({ where: { alternativeSku: skuUpdate.sku } });
+        if (product) {
+          return {
+            sku: product.sku,
+            newQuantity: product.quantity - skuUpdate.quantitySold,
+            originalRequestedSku: skuUpdate.sku
+          };
+        }
+      }
+      
       if (!product) {
         skipped.push(skuUpdate.sku);
         return null; // skip this one
       }
+      
       return {
         sku: skuUpdate.sku,
         newQuantity: product.quantity - skuUpdate.quantitySold
