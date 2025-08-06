@@ -104,6 +104,9 @@ function AllOrders() {
     result.groupedOrders = orders.reduce((acc: any, order: any) => {
       result.totalOrders += 1;
       order.items.forEach((item: any) => {
+        if(item.options.length > 0){
+          console.log(JSON.stringify(order));
+        }
         const { sku } = item;
         const [actualSku, lotSize] = parseSku(sku);
         if (!acc[actualSku]) {
@@ -111,7 +114,7 @@ function AllOrders() {
         }
         // Find the product in productsData to get the location, shade, condition
         const product = productMap.get(actualSku);
-        console.log(product);
+
         acc[actualSku].push({
           ...item,
           orderId: order.orderId,
@@ -531,6 +534,14 @@ function AllOrders() {
                         marginRight: 6,
                       }}>{item.variant}</div>
                     )}
+                    {item.options && item.options.length > 0 && (
+                      <Box sx={{ flexGrow: 1 }}>
+                        <Typography sx={{ fontSize: "0.875rem" }}>
+                          <b>{item.options[0].name} :</b>{" "}
+                          {item.options[0].value}
+                        </Typography>
+                      </Box>
+                    )}
                     {item.condition && (
                       <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{item.condition}</div>
                     )}
@@ -614,6 +625,14 @@ function AllOrders() {
                             boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                             marginRight: 6,
                           }}>{item.variant}</div>
+                        )}
+                        {item.options && item.options.length > 0 && (
+                          <Box sx={{ flexGrow: 1 }}>
+                            <Typography sx={{ fontSize: "0.875rem" }}>
+                              <b>{item.options[0].name} :</b>{" "}
+                              {item.options[0].value}
+                            </Typography>
+                          </Box>
                         )}
                         {item.condition && (
                           <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{item.condition}</div>
