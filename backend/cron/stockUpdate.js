@@ -5,11 +5,11 @@ const ebayService = require('../Services/ebayService');
 cron.schedule('*/30 * * * * *', async () => {
   try {
     // console.log('Starting stock update cron job...');
-    const result = await ebayService.processPendingUpdates();
-    
-    if (!result.success) {
-      console.error('Stock update failed:', result.message);
-    }
+    // const result = await ebayService.processPendingUpdates();
+    //
+    // if (!result.success) {
+    //   console.error('Stock update failed:', result.message);
+    // }
   } catch (error) {
     console.error('Stock update cron job error:', error.message);
   }
