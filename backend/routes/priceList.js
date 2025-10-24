@@ -144,10 +144,24 @@ router.get('/search-products', auth, checkPermission('pricelist', 'view'), async
     const where = {};
     
     if (query) {
-      where[Op.or] = [
-        { productName: { [Op.like]: `%${query}%` } },
-        { upc: { [Op.like]: `%${query}%` } }
-      ];
+      // Split query into individual words and create search conditions for each word
+      const words = query.trim().split(/\s+/).filter(word => word.length > 0);
+      
+      if (words.length > 0) {
+        // Create conditions for each word - all words must be found
+        const wordConditions = words.map(word => ({
+          [Op.and]: [
+            {
+              [Op.or]: [
+                { productName: { [Op.like]: `%${word}%` } },
+                { upc: { [Op.like]: `%${word}%` } }
+              ]
+            }
+          ]
+        }));
+        
+        where[Op.and] = wordConditions;
+      }
     }
 
     const products = await PriceListProduct.findAll({
