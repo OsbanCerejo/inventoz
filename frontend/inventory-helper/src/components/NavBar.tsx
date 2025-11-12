@@ -64,8 +64,8 @@ function NavBar() {
           <div style={{
             position: "absolute",
             top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
+            right: "120px",
+            transform: "translateY(-50%)",
             fontSize: "16px",
             color: "#fd7e14",
             fontWeight: "700",
