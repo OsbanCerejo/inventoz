@@ -36,6 +36,7 @@ function NavBar() {
     { key: 'packing', label: 'Packing', path: '/orders/packingMode' },
     { key: 'pricelist', label: 'PriceList', path: '/price-list' },
     { key: 'whatnot', label: 'Whatnot', path: '/whatnot' },
+    { key: 'barcodeScan', label: 'Barcode Scan', path: '/barcode-scan' },
     { key: 'employeeInfo', label: 'Employees', path: '/employee-info' }
   ];
 

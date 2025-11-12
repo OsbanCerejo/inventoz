@@ -1,0 +1,248 @@
+import React, { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
+import { getApiUrl } from '../config/api';
+import {
+  Box,
+  TextField,
+  Button,
+  Typography,
+  Paper,
+  CircularProgress,
+  Alert,
+  Grid,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Divider
+} from '@mui/material';
+
+interface BarcodeScan {
+  id: number;
+  barcode: string;
+  scannedAt: string;
+}
+
+interface SearchResult {
+  success: boolean;
+  barcode: string;
+  count: number;
+  scans: BarcodeScan[];
+}
+
+const BarcodeScan: React.FC = () => {
+  const [barcode, setBarcode] = useState('');
+  const [searchBarcode, setSearchBarcode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (barcodeInputRef.current) {
+      barcodeInputRef.current.focus();
+    }
+  }, []);
+
+  const formatLocalTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    // Format as local time
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+  };
+
+  const handleBarcodeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    
+    try {
+      const response = await axios.post(getApiUrl('api/barcode-scan'), { 
+        barcode: barcode.trim()
+      });
+      
+      if (response.data.success) {
+        setSuccess(`Barcode ${barcode.trim()} scanned successfully at ${formatLocalTime(response.data.scan.scannedAt)}`);
+        setBarcode('');
+        // Auto-focus for next scan
+        setTimeout(() => {
+          if (barcodeInputRef.current) {
+            barcodeInputRef.current.focus();
+          }
+        }, 100);
+      }
+    } catch (error: any) {
+      setError(error.response?.data?.error || 'Error scanning barcode');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSearchLoading(true);
+    setSearchResult(null);
+    
+    try {
+      const response = await axios.get(getApiUrl(`api/barcode-scan/search/${encodeURIComponent(searchBarcode.trim())}`));
+      
+      if (response.data.success) {
+        setSearchResult(response.data);
+        if (response.data.count === 0) {
+          setError(`No scans found for barcode: ${searchBarcode.trim()}`);
+        }
+      }
+    } catch (error: any) {
+      setError(error.response?.data?.error || 'Error searching barcode scans');
+      setSearchResult(null);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  return (
+    <Box sx={{ mt: 4, px: 3, pb: 4 }}>
+      <Typography variant="h4" component="h1" sx={{ mb: 3 }}>
+        Barcode Scanner
+      </Typography>
+      
+      {/* Scanning Section */}
+      <Paper elevation={3} sx={{ p: 4, mb: 4 }}>
+        <Typography variant="h5" gutterBottom>
+          Scan Barcode
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Scan or enter a barcode to record it with a timestamp
+        </Typography>
+        <form onSubmit={handleBarcodeSubmit}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs>
+              <TextField
+                fullWidth
+                inputRef={barcodeInputRef}
+                label="Enter or Scan Barcode"
+                value={barcode}
+                onChange={(e) => setBarcode(e.target.value)}
+                required
+                autoFocus
+                disabled={loading}
+                placeholder="Scan barcode here..."
+              />
+            </Grid>
+            <Grid item>
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                disabled={loading || !barcode.trim()}
+                sx={{ height: 56, minWidth: 120 }}
+              >
+                {loading ? <CircularProgress size={24} /> : 'Scan'}
+              </Button>
+            </Grid>
+          </Grid>
+        </form>
+        {error && (
+          <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+        {success && (
+          <Alert severity="success" sx={{ mt: 2 }} onClose={() => setSuccess(null)}>
+            {success}
+          </Alert>
+        )}
+      </Paper>
+
+      <Divider sx={{ my: 4 }} />
+
+      {/* Search Section */}
+      <Paper elevation={3} sx={{ p: 4 }}>
+        <Typography variant="h5" gutterBottom>
+          Search Barcode Scans
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Enter a barcode number to view all timestamps when it was scanned
+        </Typography>
+        <form onSubmit={handleSearchSubmit}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs>
+              <TextField
+                fullWidth
+                inputRef={searchInputRef}
+                label="Enter Barcode Number"
+                value={searchBarcode}
+                onChange={(e) => setSearchBarcode(e.target.value)}
+                required
+                disabled={searchLoading}
+                placeholder="Enter barcode to search..."
+              />
+            </Grid>
+            <Grid item>
+              <Button
+                type="submit"
+                variant="contained"
+                color="secondary"
+                disabled={searchLoading || !searchBarcode.trim()}
+                sx={{ height: 56, minWidth: 120 }}
+              >
+                {searchLoading ? <CircularProgress size={24} /> : 'Search'}
+              </Button>
+            </Grid>
+          </Grid>
+        </form>
+
+        {searchResult && searchResult.count > 0 && (
+          <Box sx={{ mt: 4 }}>
+            <Typography variant="h6" gutterBottom>
+              Found {searchResult.count} scan{searchResult.count !== 1 ? 's' : ''} for barcode: {searchResult.barcode}
+            </Typography>
+            <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell><strong>#</strong></TableCell>
+                    <TableCell><strong>Barcode</strong></TableCell>
+                    <TableCell><strong>Scanned At (Local Time)</strong></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {searchResult.scans.map((scan, index) => (
+                    <TableRow key={scan.id} hover>
+                      <TableCell>{index + 1}</TableCell>
+                      <TableCell>{scan.barcode}</TableCell>
+                      <TableCell>{formatLocalTime(scan.scannedAt)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        )}
+
+        {searchResult && searchResult.count === 0 && (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            No scans found for barcode: {searchBarcode.trim()}
+          </Alert>
+        )}
+      </Paper>
+    </Box>
+  );
+};
+
+export default BarcodeScan;
+

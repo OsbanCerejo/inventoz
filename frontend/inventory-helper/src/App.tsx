@@ -18,6 +18,7 @@ import Whatnot from "./pages/Whatnot";
 import PriceList from "./pages/PriceList";
 import EmployeeInformation from "./pages/EmployeeInformation";
 import Users from "./pages/Users";
+import BarcodeScan from "./pages/BarcodeScan";
 import Login from "./pages/Login";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -176,6 +177,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="users" action="view" menuItem="users">
                   <Users />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/barcode-scan"
+              element={
+                <ProtectedRoute resource="barcodeScan" action="view" menuItem="barcodeScan">
+                  <BarcodeScan />
                 </ProtectedRoute>
               }
             />

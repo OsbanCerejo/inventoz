@@ -3,7 +3,7 @@ module.exports = (sequelize, DataTypes) => {
     "ProductDetails",
     {
       sku: {
-        type: DataTypes.TEXT,
+        type: DataTypes.STRING,
         allowNull: false,
         primaryKey: true,
       },

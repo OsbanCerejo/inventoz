@@ -10,7 +10,8 @@
     "employeeInfo": ["view", "create", "edit", "delete"],
     "users": ["view", "create", "edit", "delete"],
     "sales": ["view", "create", "edit", "delete"],
-    "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "employeeInfo", "users", "addProduct" ]
+    "barcodeScan": ["view", "create", "edit", "delete"],
+    "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "employeeInfo", "users", "addProduct", "barcodeScan" ]
   },
   "listing": {
     "addProduct": ["view", "create", "edit"],
@@ -23,7 +24,8 @@
     "packing": ["view"],
     "products": ["view"],
     "orders": ["view"],
-    "menu": ["packing"]
+    "barcodeScan": ["view", "create"],
+    "menu": ["packing", "barcodeScan"]
   },
   "warehouse_l1": {
     "products": ["view", "create", "edit"],

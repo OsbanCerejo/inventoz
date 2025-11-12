@@ -94,6 +94,9 @@ app.use("/api/employee-info", employeeInfoRouter);
 const usersRouter = require("./routes/Users");
 app.use("/api/users", usersRouter);
 
+const barcodeScanRouter = require("./routes/BarcodeScan");
+app.use("/api/barcode-scan", barcodeScanRouter);
+
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
