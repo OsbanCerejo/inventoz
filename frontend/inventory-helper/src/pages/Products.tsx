@@ -1,14 +1,20 @@
 import axios from "axios";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import ProductList from "../components/ProductList";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button, Box, Stack, Typography } from "@mui/material";
 import PermissionGuard from "../components/PermissionGuard";
 import { getApiUrl } from '../config/api';
 
+const PRODUCTS_CACHE_KEY = "listOfProducts";
+const PRODUCTS_CACHE_TIMESTAMP_KEY = "listOfProductsTimestamp";
+const PRODUCTS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 function Products() {
   // State Variables
   const [listOfProducts, setListOfProducts] = useState<any[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -26,11 +32,48 @@ function Products() {
   const [currentPage, setCurrentPage] = useState(1);
   const [productsPerPage] = useState(20);
 
+  const fetchProducts = useCallback(
+    async (options?: { signal?: AbortSignal; silent?: boolean }) => {
+      if (!options?.silent) {
+        setIsLoadingProducts(true);
+      }
+      setFetchError(null);
+      try {
+        const response = await axios.get(getApiUrl("products"), {
+          signal: options?.signal,
+        });
+        setListOfProducts(response.data);
+        try {
+          localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(response.data));
+          localStorage.setItem(
+            PRODUCTS_CACHE_TIMESTAMP_KEY,
+            Date.now().toString()
+          );
+        } catch (storageError) {
+          console.warn("Failed to save products to localStorage:", storageError);
+        }
+      } catch (error: any) {
+        if (axios.isCancel && axios.isCancel(error)) {
+          return;
+        }
+        console.error("Error fetching products:", error);
+        setFetchError("Unable to load products. Please try again.");
+      } finally {
+        if (!options?.silent) {
+          setIsLoadingProducts(false);
+        }
+      }
+    },
+    []
+  );
+
   // Fetch initial product list on component mount
   useEffect(() => {
+    const controller = new AbortController();
+
     // Clear filters if navigated with the clearFilters state
     if (location.state?.clearFilters) {
-      fetchProducts();
+      fetchProducts({ signal: controller.signal });
       setSortConfig({ key: "sku", direction: "asc" });
       setFilterConfig([]);
       setCurrentPage(1);
@@ -45,30 +88,35 @@ function Products() {
       navigate(location.pathname, { replace: true, state: {} });
     }
 
-    let savedProducts, savedSortConfig, savedFilterConfig, savedCurrentPage;
-    
+    let savedProducts: string | null = null;
+    let savedSortConfig: string | null = null;
+    let savedFilterConfig: string | null = null;
+    let savedCurrentPage: string | null = null;
+
     try {
-      savedProducts = localStorage.getItem("listOfProducts");
+      savedProducts = localStorage.getItem(PRODUCTS_CACHE_KEY);
       savedSortConfig = localStorage.getItem("sortConfig");
       savedFilterConfig = localStorage.getItem("filterConfig");
       savedCurrentPage = localStorage.getItem("currentPage");
     } catch (error) {
       console.warn("localStorage error:", error);
-      fetchProducts();
-      return;
     }
 
     if (savedProducts) {
-      const parsedProducts = JSON.parse(savedProducts);
-      const hasNewStructure = parsedProducts.length > 0 && parsedProducts[0].ProductDetail !== undefined;
-      
-      if (hasNewStructure) {
-        setListOfProducts(parsedProducts);
-      } else {
-        fetchProducts();
+      try {
+        const parsedProducts = JSON.parse(savedProducts);
+        const hasNewStructure =
+          parsedProducts.length > 0 &&
+          parsedProducts[0].ProductDetail !== undefined;
+
+        if (hasNewStructure) {
+          setListOfProducts(parsedProducts);
+        }
+      } catch (error) {
+        console.warn("Failed to parse cached products:", error);
+        localStorage.removeItem(PRODUCTS_CACHE_KEY);
+        localStorage.removeItem(PRODUCTS_CACHE_TIMESTAMP_KEY);
       }
-    } else {
-      fetchProducts();
     }
 
     if (savedSortConfig) {
@@ -88,22 +136,21 @@ function Products() {
     if (savedCurrentPage) {
       setCurrentPage(parseInt(savedCurrentPage, 10));
     }
-  }, [location.state]);
 
-  const fetchProducts = async () => {
-    try {
-      const response = await axios.get(getApiUrl('products'));
-      setListOfProducts(response.data);
-      try {
-        localStorage.setItem("listOfProducts", JSON.stringify(response.data));
-      } catch (error) {
-        console.warn("Failed to save products to localStorage:", error);
-        // Continue without caching if localStorage is full
-      }
-    } catch (error) {
-      console.error("Error fetching products:", error);
+    const cacheTimestamp = localStorage.getItem(PRODUCTS_CACHE_TIMESTAMP_KEY);
+    const isCacheFresh =
+      cacheTimestamp &&
+      Date.now() - parseInt(cacheTimestamp, 10) < PRODUCTS_CACHE_TTL;
+
+    if (!isCacheFresh) {
+      fetchProducts({ signal: controller.signal });
+    } else {
+      // Refresh in background without blocking UI
+      fetchProducts({ signal: controller.signal, silent: true });
     }
-  };
+
+    return () => controller.abort();
+  }, [location.state, fetchProducts, navigate, location.pathname]);
 
   // Function to handle sorting
   const handleSort = (columnKey: string) => {
@@ -235,6 +282,11 @@ function Products() {
           </Button>
         </Stack>
       </Box>
+      {fetchError && (
+        <Typography color="error" sx={{ mb: 2 }}>
+          {fetchError}
+        </Typography>
+      )}
       <ProductList
         products={sortedAndFilteredProducts}
         heading={""}
@@ -247,6 +299,11 @@ function Products() {
         paginate={paginate}
         totalProducts={listOfProducts.length}
       ></ProductList>
+      {isLoadingProducts && (
+        <Typography variant="body2" sx={{ mt: 2 }}>
+          Refreshing inventory…
+        </Typography>
+      )}
     </div>
   );
 }
