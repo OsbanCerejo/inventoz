@@ -11,14 +11,14 @@
     "users": ["view", "create", "edit", "delete"],
     "sales": ["view", "create", "edit", "delete"],
     "barcodeScan": ["view", "create", "edit", "delete"],
-    "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "employeeInfo", "users", "addProduct", "barcodeScan" ]
+    "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "employeeInfo", "users", "addProduct", "barcodeScan", "sales" ]
   },
   "listing": {
     "addProduct": ["view", "create", "edit"],
     "products": ["view", "create", "edit"],
     "inbound": ["view", "create", "edit"],
     "sales": ["view", "create", "edit"],
-    "menu": ["products", "inbound", "addProduct"]
+    "menu": ["products", "inbound", "addProduct", "sales"]
   },
   "packing": {
     "packing": ["view"],
@@ -33,7 +33,7 @@
     "inbound": ["view", "create", "edit"],
     "sales": ["view", "create", "edit"],
     "whatnot": ["view"],
-    "menu": ["products", "inbound", "whatnot","addProduct"]
+    "menu": ["products", "inbound", "whatnot","addProduct", "sales"]
   },
   "warehouse_l2": {
     "pricelist": ["view"],

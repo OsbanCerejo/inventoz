@@ -119,7 +119,7 @@ function AppContent() {
             <Route
               path="/sales"
               element={
-                <ProtectedRoute resource="sales" action="view" menuItem="orders">
+                <ProtectedRoute resource="sales" action="view" menuItem="sales">
                   <Sales />
                 </ProtectedRoute>
               }
