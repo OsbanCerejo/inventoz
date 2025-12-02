@@ -47,7 +47,7 @@ function InboundProduct() {
   const formik = useFormik({
     initialValues: formikInitialValues,
     validationSchema: formikValidationSchema,
-    onSubmit: (data) => {
+    onSubmit: async (data) => {
       const compositeInboundKey =
         data.sku +
         "-" +
@@ -59,16 +59,18 @@ function InboundProduct() {
         "-" +
         data.batch;
       data.compositeSku = compositeInboundKey; //Change compositeSKU in data to compositeInboundSku
-      axios
-        .put(getApiUrl('inbound'), {
-          quantity: parseInt(productObject.quantity) + parseInt(data.quantity),
-          sku: productObject.sku,
-        })
-        .then(() => {
-          // console.log("Quantity Updated in Inventory Table");
-        });
-      axios.post(getApiUrl('inbound'), data).then((response) => {
-        if (response.data === "Created New") {
+      
+      try {
+        // First, try to create the inbound record
+        const inboundResponse = await axios.post(getApiUrl('inbound'), data);
+        
+        if (inboundResponse.data === "Created New") {
+          // Only update quantity if the inbound record was successfully created
+          await axios.put(getApiUrl('inbound'), {
+            quantity: parseInt(productObject.quantity) + parseInt(data.quantity),
+            sku: productObject.sku,
+          });
+          
           toast.success("Success Notification !", {
             position: "top-right",
           });
@@ -80,7 +82,12 @@ function InboundProduct() {
           });
           // console.log("Already Exists");
         }
-      });
+      } catch (error) {
+        console.error("Error processing inbound:", error);
+        toast.error("An error occurred while processing inbound", {
+          position: "top-right",
+        });
+      }
     },
   });
 
