@@ -15,18 +15,28 @@ router.post("/", auth, checkPermission('barcodeScan', 'create'), async (req, res
       return res.status(400).json({ error: 'Barcode is required' });
     }
 
-    // Create scan record with current timestamp (will be stored in local time)
+    // Use database NOW() function to get server's actual local time
+    // This bypasses Sequelize timezone conversion issues
     const scan = await BarcodeScan.create({
       barcode: barcode.trim(),
-      scannedAt: new Date() // Sequelize will handle timezone conversion based on DB config
+      scannedAt: Sequelize.literal('NOW()')
     });
+
+    // Fetch the scan again to get the actual stored timestamp
+    const savedScan = await BarcodeScan.findByPk(scan.id);
+    
+    // Format timestamp to ISO string (UTC) - frontend will convert to local time
+    const scannedAtDate = savedScan.scannedAt instanceof Date 
+      ? savedScan.scannedAt 
+      : new Date(savedScan.scannedAt);
+    const formattedTime = scannedAtDate.toISOString();
 
     res.json({ 
       success: true, 
       scan: {
-        id: scan.id,
-        barcode: scan.barcode,
-        scannedAt: scan.scannedAt
+        id: savedScan.id,
+        barcode: savedScan.barcode,
+        scannedAt: formattedTime
       }
     });
   } catch (error) {
@@ -49,18 +59,25 @@ router.get("/search/:barcode", auth, checkPermission('barcodeScan', 'view'), asy
       where: {
         barcode: barcode.trim()
       },
-      order: [['scannedAt', 'DESC']]
+      order: [['scannedAt', 'DESC']],
+      raw: false // Ensure we get Sequelize model instances
     });
 
     res.json({ 
       success: true, 
       barcode: barcode.trim(),
       count: scans.length,
-      scans: scans.map(scan => ({
-        id: scan.id,
-        barcode: scan.barcode,
-        scannedAt: scan.scannedAt
-      }))
+      scans: scans.map(scan => {
+        // Format timestamp to ISO string for consistent timezone handling
+        const scannedAt = scan.scannedAt instanceof Date 
+          ? scan.scannedAt.toISOString() 
+          : new Date(scan.scannedAt).toISOString();
+        return {
+          id: scan.id,
+          barcode: scan.barcode,
+          scannedAt: scannedAt
+        };
+      })
     });
   } catch (error) {
     console.error("Error searching barcode scans:", error);
@@ -76,17 +93,24 @@ router.get("/", auth, checkPermission('barcodeScan', 'view'), async (req, res) =
     const scans = await BarcodeScan.findAll({
       order: [['scannedAt', 'DESC']],
       limit: parseInt(limit),
-      offset: parseInt(offset)
+      offset: parseInt(offset),
+      raw: false // Ensure we get Sequelize model instances
     });
 
     res.json({ 
       success: true, 
       count: scans.length,
-      scans: scans.map(scan => ({
-        id: scan.id,
-        barcode: scan.barcode,
-        scannedAt: scan.scannedAt
-      }))
+      scans: scans.map(scan => {
+        // Format timestamp to ISO string for consistent timezone handling
+        const scannedAt = scan.scannedAt instanceof Date 
+          ? scan.scannedAt.toISOString() 
+          : new Date(scan.scannedAt).toISOString();
+        return {
+          id: scan.id,
+          barcode: scan.barcode,
+          scannedAt: scannedAt
+        };
+      })
     });
   } catch (error) {
     console.error("Error fetching barcode scans:", error);
@@ -95,4 +119,5 @@ router.get("/", auth, checkPermission('barcodeScan', 'view'), async (req, res) =
 });
 
 module.exports = router;
+
 
