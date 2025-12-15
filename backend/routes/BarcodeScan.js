@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { BarcodeScan } = require("../models");
+const { BarcodeScan, User } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 const { auth } = require('../middleware/auth');
@@ -17,13 +17,21 @@ router.post("/", auth, checkPermission('barcodeScan', 'create'), async (req, res
 
     // Use database NOW() function to get server's actual local time
     // This bypasses Sequelize timezone conversion issues
+    // Capture userId from authenticated user
     const scan = await BarcodeScan.create({
       barcode: barcode.trim(),
-      scannedAt: Sequelize.literal('NOW()')
+      scannedAt: Sequelize.literal('NOW()'),
+      userId: req.user.id
     });
 
-    // Fetch the scan again to get the actual stored timestamp
-    const savedScan = await BarcodeScan.findByPk(scan.id);
+    // Fetch the scan again with user information to get the actual stored timestamp
+    const savedScan = await BarcodeScan.findByPk(scan.id, {
+      include: [{
+        model: User,
+        as: 'user',
+        attributes: ['id', 'name', 'username', 'email']
+      }]
+    });
     
     // Format timestamp to ISO string (UTC) - frontend will convert to local time
     const scannedAtDate = savedScan.scannedAt instanceof Date 
@@ -36,7 +44,13 @@ router.post("/", auth, checkPermission('barcodeScan', 'create'), async (req, res
       scan: {
         id: savedScan.id,
         barcode: savedScan.barcode,
-        scannedAt: formattedTime
+        scannedAt: formattedTime,
+        userId: savedScan.userId,
+        user: savedScan.user ? {
+          id: savedScan.user.id,
+          name: savedScan.user.name,
+          username: savedScan.user.username
+        } : null
       }
     });
   } catch (error) {
@@ -59,6 +73,11 @@ router.get("/search/:barcode", auth, checkPermission('barcodeScan', 'view'), asy
       where: {
         barcode: barcode.trim()
       },
+      include: [{
+        model: User,
+        as: 'user',
+        attributes: ['id', 'name', 'username', 'email']
+      }],
       order: [['scannedAt', 'DESC']],
       raw: false // Ensure we get Sequelize model instances
     });
@@ -75,7 +94,13 @@ router.get("/search/:barcode", auth, checkPermission('barcodeScan', 'view'), asy
         return {
           id: scan.id,
           barcode: scan.barcode,
-          scannedAt: scannedAt
+          scannedAt: scannedAt,
+          userId: scan.userId,
+          user: scan.user ? {
+            id: scan.user.id,
+            name: scan.user.name,
+            username: scan.user.username
+          } : null
         };
       })
     });
@@ -91,6 +116,11 @@ router.get("/", auth, checkPermission('barcodeScan', 'view'), async (req, res) =
     const { limit = 100, offset = 0 } = req.query;
     
     const scans = await BarcodeScan.findAll({
+      include: [{
+        model: User,
+        as: 'user',
+        attributes: ['id', 'name', 'username', 'email']
+      }],
       order: [['scannedAt', 'DESC']],
       limit: parseInt(limit),
       offset: parseInt(offset),
@@ -108,7 +138,13 @@ router.get("/", auth, checkPermission('barcodeScan', 'view'), async (req, res) =
         return {
           id: scan.id,
           barcode: scan.barcode,
-          scannedAt: scannedAt
+          scannedAt: scannedAt,
+          userId: scan.userId,
+          user: scan.user ? {
+            id: scan.user.id,
+            name: scan.user.name,
+            username: scan.user.username
+          } : null
         };
       })
     });
