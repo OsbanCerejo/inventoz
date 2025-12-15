@@ -23,6 +23,12 @@ interface BarcodeScan {
   id: number;
   barcode: string;
   scannedAt: string;
+  userId?: number;
+  user?: {
+    id: number;
+    name: string | null;
+    username: string;
+  } | null;
 }
 
 interface SearchResult {
@@ -75,7 +81,10 @@ const BarcodeScan: React.FC = () => {
       });
       
       if (response.data.success) {
-        setSuccess(`Barcode ${barcode.trim()} scanned successfully at ${formatLocalTime(response.data.scan.scannedAt)}`);
+        const userInfo = response.data.scan.user 
+          ? ` by ${response.data.scan.user.name || response.data.scan.user.username}`
+          : '';
+        setSuccess(`Barcode ${barcode.trim()} scanned successfully at ${formatLocalTime(response.data.scan.scannedAt)}${userInfo}`);
         setBarcode('');
         // Auto-focus for next scan
         setTimeout(() => {
@@ -217,6 +226,7 @@ const BarcodeScan: React.FC = () => {
                   <TableRow>
                     <TableCell><strong>#</strong></TableCell>
                     <TableCell><strong>Barcode</strong></TableCell>
+                    <TableCell><strong>Scanned By</strong></TableCell>
                     <TableCell><strong>Scanned At (Local Time)</strong></TableCell>
                   </TableRow>
                 </TableHead>
@@ -225,6 +235,11 @@ const BarcodeScan: React.FC = () => {
                     <TableRow key={scan.id} hover>
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>{scan.barcode}</TableCell>
+                      <TableCell>
+                        {scan.user 
+                          ? (scan.user.name || scan.user.username)
+                          : 'Unknown'}
+                      </TableCell>
                       <TableCell>{formatLocalTime(scan.scannedAt)}</TableCell>
                     </TableRow>
                   ))}

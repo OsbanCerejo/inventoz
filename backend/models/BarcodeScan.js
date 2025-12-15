@@ -17,6 +17,15 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: DataTypes.NOW,
         comment: 'Timestamp when the barcode was scanned (stored in local time)'
       },
+      userId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+          model: 'Users',
+          key: 'id'
+        },
+        comment: 'ID of the user who scanned the barcode'
+      },
     },
     {
       timestamps: false,
@@ -26,10 +35,20 @@ module.exports = (sequelize, DataTypes) => {
         },
         {
           fields: ['scannedAt']
+        },
+        {
+          fields: ['userId']
         }
       ]
     }
   );
+
+  BarcodeScan.associate = function(models) {
+    BarcodeScan.belongsTo(models.User, {
+      foreignKey: 'userId',
+      as: 'user'
+    });
+  };
 
   return BarcodeScan;
 };
