@@ -162,7 +162,16 @@ function ProductList({
                   onClick={(e) => e.stopPropagation()}
                 />
               </th>
-              <th scope="col">Strength</th>
+              <th scope="col">
+                Strength{" "}
+                <input
+                  type="text"
+                  style={{ width: "100%" }}
+                  value={getFilterValue("strength")}
+                  onChange={(e) => handleFilterChange(e, "strength")}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </th>
               <th scope="col" onClick={() => handleSort("shade")}>
                 {getSortIcon("shade")} Variant
                 <br></br>
