@@ -75,7 +75,7 @@ function InboundProduct() {
             position: "top-right",
           });
           // console.log("Created New");
-          navigate("/", { state: { clearFilters: true } });
+          navigate("/", { replace: true, state: { clearFilters: true } });
         } else {
           toast.error("Inbound Entry Already Exists!", {
             position: "top-right",

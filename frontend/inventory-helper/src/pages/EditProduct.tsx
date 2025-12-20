@@ -257,6 +257,7 @@ function EditProduct() {
             }
 
             navigate(`/products/${data.sku}`, {
+              replace: true,
               state: {
                 updatedProduct: productsRes.data, 
                 updatedDetails: productDetailsRes.data,
