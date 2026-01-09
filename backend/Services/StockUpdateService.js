@@ -1,6 +1,7 @@
 const { Products, StockUpdateHistory } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
+const LowStockAlertService = require("./LowStockAlertService");
 
 class StockUpdateService {
   static async updateProductQuantity(sku, newQuantity) {
@@ -45,6 +46,15 @@ class StockUpdateService {
         }
       }
 
+      // Check for low stock and send alert if needed
+      const lowStockCheck = await LowStockAlertService.checkAndHandleLowStock(sku, newQuantity);
+      if (lowStockCheck.shouldAlert) {
+        // Send email alert asynchronously (don't wait for it)
+        LowStockAlertService.sendEmailAlert(lowStockCheck.product).catch(err => {
+          console.error('Failed to send low stock alert email:', err);
+        });
+      }
+
       return {
         success: true,
         message: "Product quantity updated successfully",
@@ -53,7 +63,8 @@ class StockUpdateService {
           oldQuantity: currentProduct.quantity,
           newQuantity,
           verified: currentProduct.verified
-        }
+        },
+        lowStockAlert: lowStockCheck.shouldAlert
       };
     } catch (error) {
       console.error("Error updating product quantity:", error);

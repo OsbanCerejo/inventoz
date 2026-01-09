@@ -40,6 +40,11 @@ function NavBar() {
     { key: 'employeeInfo', label: 'Employees', path: '/employee-info' }
   ];
 
+  // Admin-only menu items
+  const adminMenuItems = [
+    { key: 'lowStock', label: 'Low Stock', path: '/low-stock' }
+  ];
+
   // If still loading permissions, show minimal navbar
   if (isLoading) {
     return (
@@ -116,6 +121,14 @@ function NavBar() {
                 </li>
               );
             })}
+            {/* Admin-only menu items */}
+            {user?.role === 'admin' && adminMenuItems.map((item) => (
+              <li key={item.key} className="nav-item">
+                <Link className="nav-link" to={item.path}>
+                  {item.label}
+                </Link>
+              </li>
+            ))}
           </ul>
           {user && (
             <div className="navbar-nav ml-auto" style={{ position: "relative", zIndex: 9999 }}>

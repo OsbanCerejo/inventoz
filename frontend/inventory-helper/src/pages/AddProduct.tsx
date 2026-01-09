@@ -114,6 +114,9 @@ function AddProduct() {
     walmart: "",
     //Warehouse Locations
     warehouseLocations: "",
+    // Low Stock Tracking (Admin only)
+    trackQuantity: false,
+    minimumQuantity: "",
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -162,6 +165,9 @@ function AddProduct() {
     walmart: Yup.string(),
     //Warehouse Locations
     warehouseLocations: Yup.string(),
+    // Low Stock Tracking
+    trackQuantity: Yup.boolean(),
+    minimumQuantity: Yup.number().nullable(),
   });
 
   const formik = useFormik({
@@ -1260,6 +1266,45 @@ function AddProduct() {
                       inputProps={{ "aria-label": "controlled" }}
                     />
                   </Grid>
+                  {user?.role === 'admin' && (
+                    <>
+                      <Grid item xs={6}>
+                        Track Quantity
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Switch
+                          id="trackQuantity"
+                          name="trackQuantity"
+                          checked={formik.values.trackQuantity}
+                          onChange={formik.handleChange}
+                          inputProps={{ "aria-label": "controlled" }}
+                        />
+                      </Grid>
+                      {formik.values.trackQuantity && (
+                        <Grid item xs={12}>
+                          <Box m={2}>
+                            <TextField
+                              fullWidth
+                              id="minimumQuantity"
+                              name="minimumQuantity"
+                              label="Minimum Quantity"
+                              type="number"
+                              value={formik.values.minimumQuantity}
+                              onChange={formik.handleChange}
+                              onBlur={formik.handleBlur}
+                              error={
+                                formik.touched.minimumQuantity &&
+                                Boolean(formik.errors.minimumQuantity)
+                              }
+                              helperText={
+                                formik.touched.minimumQuantity && formik.errors.minimumQuantity
+                              }
+                            />
+                          </Box>
+                        </Grid>
+                      )}
+                    </>
+                  )}
                 </Grid>
               </Paper>
             </Container>

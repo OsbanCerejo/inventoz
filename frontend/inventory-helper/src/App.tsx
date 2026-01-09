@@ -20,6 +20,7 @@ import EmployeeInformation from "./pages/EmployeeInformation";
 import Users from "./pages/Users";
 import BarcodeScan from "./pages/BarcodeScan";
 import Login from "./pages/Login";
+import LowStock from "./pages/LowStock";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleBasedHome from "./components/RoleBasedHome";
@@ -185,6 +186,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="barcodeScan" action="view" menuItem="barcodeScan">
                   <BarcodeScan />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/low-stock"
+              element={
+                <ProtectedRoute requireAdmin={true}>
+                  <LowStock />
                 </ProtectedRoute>
               }
             />

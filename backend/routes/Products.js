@@ -41,9 +41,17 @@ router.get("/search", auth, checkPermission('products', 'view'), async (req, res
 router.post("/", auth, checkPermission('products', 'create'), async (req, res) => {
   const product = req.body;
   try {
+    // Ensure trackQuantity and minimumQuantity are set properly
+    const productData = {
+      ...product,
+      trackQuantity: product.trackQuantity || false,
+      minimumQuantity: product.minimumQuantity || null,
+      lowStockAlertSent: false
+    };
+    
     const [found, created] = await Products.findOrCreate({
       where: { sku: product.sku },
-      defaults: product,
+      defaults: productData,
     });
 
     if (created) {
@@ -110,16 +118,30 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
         final: product.final,
         image: product.image,
         alternativeSku: product.alternativeSku,
+        trackQuantity: product.trackQuantity !== undefined ? product.trackQuantity : currentProduct.trackQuantity,
+        minimumQuantity: product.minimumQuantity !== undefined ? product.minimumQuantity : currentProduct.minimumQuantity,
       },
       { where: { sku: product.sku } }
     );
+
+    // Get the updated quantity (use new quantity if provided, otherwise keep current)
+    const updatedQuantity = product.quantity !== undefined ? product.quantity : currentProduct.quantity;
 
     // If a quantity is being updated, use the StockUpdateService
     if (currentProduct.quantity !== product.quantity || product.verified !== currentProduct.verified) {
       await StockUpdateService.updateProductQuantity(
           product.sku,
-          product.quantity
+          updatedQuantity
       );
+    }
+
+    // If trackQuantity or minimumQuantity changed, check low stock status
+    // (StockUpdateService already checks when quantity changes, so only check if tracking settings changed)
+    if ((currentProduct.trackQuantity !== product.trackQuantity || 
+        currentProduct.minimumQuantity !== product.minimumQuantity) &&
+        currentProduct.quantity === product.quantity) {
+      const LowStockAlertService = require("../Services/LowStockAlertService");
+      await LowStockAlertService.checkAndHandleLowStock(product.sku, updatedQuantity);
     }
 
     // Get the updated product data
@@ -254,6 +276,23 @@ router.post("/updateQuantities", auth, checkPermission('products', 'edit'), asyn
       success: false,
       error: error.message
     });
+  }
+});
+
+// Get low stock products (admin only)
+router.get("/low-stock", auth, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    }
+
+    const LowStockAlertService = require("../Services/LowStockAlertService");
+    const lowStockProducts = await LowStockAlertService.getLowStockProducts();
+    res.json(lowStockProducts);
+  } catch (error) {
+    console.error("Error getting low stock products:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
