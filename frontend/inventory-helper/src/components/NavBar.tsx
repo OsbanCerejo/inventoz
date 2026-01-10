@@ -7,7 +7,7 @@ function NavBar() {
   const [isOpen, setIsOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const navigate = useNavigate();
-  const { user, logout, hasMenuAccess, isLoading } = useAuth();
+  const { user, logout, hasMenuAccess, isLoading, isAuthenticated } = useAuth();
 
   const toggleNavbar = () => {
     setIsOpen(!isOpen);
@@ -122,7 +122,7 @@ function NavBar() {
               );
             })}
             {/* Admin-only menu items */}
-            {user?.role === 'admin' && adminMenuItems.map((item) => (
+            {isAuthenticated && user && user.role === 'admin' && adminMenuItems.map((item) => (
               <li key={item.key} className="nav-item">
                 <Link className="nav-link" to={item.path}>
                   {item.label}

@@ -1,4 +1,5 @@
 const { Products } = require("../models");
+const EmailService = require("./EmailService");
 
 class LowStockAlertService {
   /**
@@ -98,30 +99,38 @@ class LowStockAlertService {
   }
 
   /**
-   * Send email alert (placeholder - implement with actual email service)
+   * Send email alert using EmailService
    * @param {Object} product - Product information
    * @returns {Promise<boolean>} - Success status
    */
   static async sendEmailAlert(product) {
     try {
-      // TODO: Implement actual email sending
-      // For now, just log the alert
-      console.log('LOW STOCK ALERT:', {
-        sku: product.sku,
-        itemName: product.itemName,
-        brand: product.brand,
-        currentQuantity: product.quantity,
-        minimumQuantity: product.minimumQuantity,
-        timestamp: new Date().toISOString()
-      });
+      // Get recipient email from environment variable
+      const recipientEmail = process.env.LOW_STOCK_ALERT_EMAIL || process.env.ALERT_EMAIL;
+      
+      if (!recipientEmail) {
+        console.warn('Low stock alert email not configured. Set LOW_STOCK_ALERT_EMAIL in .env file.');
+        console.log('LOW STOCK ALERT (no email sent):', {
+          sku: product.sku,
+          itemName: product.itemName,
+          brand: product.brand,
+          currentQuantity: product.quantity,
+          minimumQuantity: product.minimumQuantity,
+          timestamp: new Date().toISOString()
+        });
+        return false;
+      }
 
-      // If email service is configured, send email here
-      // Example with nodemailer:
-      // const nodemailer = require('nodemailer');
-      // const transporter = nodemailer.createTransport({...});
-      // await transporter.sendMail({...});
+      // Send email using EmailService
+      const emailSent = await EmailService.sendLowStockAlert(product, recipientEmail);
+      
+      if (emailSent) {
+        console.log('Low stock alert email sent successfully for product:', product.sku);
+      } else {
+        console.error('Failed to send low stock alert email for product:', product.sku);
+      }
 
-      return true;
+      return emailSent;
     } catch (error) {
       console.error('Error sending email alert:', error);
       return false;

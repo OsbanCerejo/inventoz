@@ -296,4 +296,31 @@ router.get("/low-stock", auth, async (req, res) => {
   }
 });
 
+// Test email configuration (admin only)
+router.post("/test-email", auth, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    }
+
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email address is required' });
+    }
+
+    const EmailService = require("../Services/EmailService");
+    const success = await EmailService.sendTestEmail(email);
+    
+    if (success) {
+      res.json({ success: true, message: 'Test email sent successfully' });
+    } else {
+      res.status(500).json({ error: 'Failed to send test email. Check server logs for details.' });
+    }
+  } catch (error) {
+    console.error("Error sending test email:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 module.exports = router;
