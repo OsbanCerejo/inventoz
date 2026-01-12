@@ -50,9 +50,9 @@ class StockUpdateService {
       const lowStockCheck = await LowStockAlertService.checkAndHandleLowStock(sku, newQuantity);
       if (lowStockCheck.shouldAlert) {
         // Send email alert asynchronously (don't wait for it)
-        // LowStockAlertService.sendEmailAlert(lowStockCheck.product).catch(err => {
-        //   console.error('Failed to send low stock alert email:', err);
-        // });
+        LowStockAlertService.sendEmailAlert(lowStockCheck.product).catch(err => {
+          console.error('Failed to send low stock alert email:', err);
+        });
       }
 
       return {
