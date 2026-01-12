@@ -1,33 +1,74 @@
-const axios = require('axios');
+const nodemailer = require('nodemailer');
 
 class EmailService {
+  static transporter = null;
+
   /**
-   * Get Mailtrap API token from environment variables
+   * Initialize email transporter with Hostinger SMTP configuration
    */
-  static getApiToken() {
-    return process.env.MAILTRAP_API_TOKEN || process.env.MAILTRAP_TOKEN;
+  static initializeTransporter() {
+    if (this.transporter) {
+      return this.transporter;
+    }
+
+    const smtpHost = process.env.SMTP_HOST || 'smtp.hostinger.com';
+    const smtpPort = parseInt(process.env.SMTP_PORT || '465');
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+
+    if (!smtpUser || !smtpPass) {
+      console.warn('Email service not configured. SMTP credentials missing.');
+      return null;
+    }
+
+    this.transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: true, // true for 465, false for other ports
+      auth: {
+        user: smtpUser,
+        pass: smtpPass
+      },
+      tls: {
+        rejectUnauthorized: false
+      },
+      debug: false, // Set to true for detailed SMTP logs
+      logger: false // Set to true to log to console
+    });
+
+    return this.transporter;
   }
 
   /**
-   * Check if email service is configured
+   * Verify SMTP connection (optional, can be called separately)
    */
-  static isConfigured() {
-    const token = this.getApiToken();
-    return !!token;
+  static async verifyConnection() {
+    try {
+      const transporter = this.initializeTransporter();
+      if (!transporter) {
+        return false;
+      }
+      await transporter.verify();
+      console.log('✅ SMTP server connection verified successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ SMTP server connection failed:', error.message);
+      return false;
+    }
   }
 
   /**
-   * Send low stock alert email using Mailtrap API
+   * Send low stock alert email using SMTP
    * @param {Object} product - Product information
    * @param {string} recipientEmail - Email address to send alert to
    * @returns {Promise<boolean>} - Success status
    */
   static async sendLowStockAlert(product, recipientEmail) {
     try {
-      const apiToken = this.getApiToken();
+      const transporter = this.initializeTransporter();
       
-      if (!apiToken) {
-        console.warn('Mailtrap API token not configured. Set MAILTRAP_API_TOKEN in .env file.');
+      if (!transporter) {
+        console.warn('Email transporter not initialized. Skipping email send.');
         console.log('LOW STOCK ALERT (no email sent):', {
           sku: product.sku,
           itemName: product.itemName,
@@ -39,10 +80,7 @@ class EmailService {
         return false;
       }
 
-      // For Mailtrap, the "from" email must be verified in your Mailtrap account
-      // If using Mailtrap's testing inbox, you can use any email format
-      // For production, you need to verify the domain in Mailtrap's Sending Domains
-      const emailFrom = process.env.EMAIL_FROM || 'mailtrap@demomail.trap';
+      const emailFrom = process.env.EMAIL_FROM || process.env.SMTP_USER;
       const emailFromName = process.env.EMAIL_FROM_NAME || 'Inventoz Inventory System';
 
       const htmlContent = `
@@ -81,7 +119,7 @@ class EmailService {
               <p><strong>Action Required:</strong> Please review the inventory and consider restocking this product.</p>
               
               <div class="footer">
-                <p>This is an automated message from Inventoz Inventory Management System.</p>
+                <p>This is an automated message from Inventoz.</p>
                 <p>Timestamp: ${new Date().toLocaleString()}</p>
               </div>
             </div>
@@ -103,122 +141,76 @@ ${product.location ? `- Location: ${product.location}` : ''}
 
 Action Required: Please review the inventory and consider restocking this product.
 
-This is an automated message from Inventoz Inventory Management System.
+This is an automated message from Inventoz.
 Timestamp: ${new Date().toLocaleString()}
       `;
 
-      const requestBody = {
-        from: {
-          email: emailFrom,
-          name: emailFromName
-        },
-        to: [
-          {
-            email: recipientEmail
-          }
-        ],
+      const mailOptions = {
+        from: `"${emailFromName}" <${emailFrom}>`,
+        to: recipientEmail,
         subject: `Low Stock Alert: ${product.itemName} (${product.sku})`,
         html: htmlContent,
         text: textContent
       };
 
-      const response = await axios.post(
-        'https://send.api.mailtrap.io/api/send',
-        requestBody,
-        {
-          headers: {
-            'Api-Token': apiToken,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      console.log('Low stock alert email sent successfully via Mailtrap API:', response.data);
+      const info = await transporter.sendMail(mailOptions);
+      console.log('✅ Low stock alert email accepted by SMTP server');
+      console.log('   Message ID:', info.messageId);
+      console.log('   To:', info.envelope.to);
       return true;
     } catch (error) {
-      const errorDetails = error.response?.data || error.message;
-      console.error('Error sending low stock alert email:', errorDetails);
-      console.error('Full error response:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        headers: error.response?.headers
+      console.error('Error sending low stock alert email:', error.message);
+      console.error('Full error:', {
+        code: error.code,
+        command: error.command,
+        response: error.response
       });
-      
-      // Log helpful troubleshooting info
-      if (error.response?.status === 401) {
-        console.error('Unauthorized error. Please check:');
-        console.error('1. API token is correct in .env file');
-        console.error('2. The "From" email domain is verified in Mailtrap');
-        console.error('3. API token has sending permissions enabled');
-      }
-      
       return false;
     }
   }
 
   /**
-   * Test email configuration using Mailtrap API
+   * Test email configuration using SMTP
    * @param {string} testEmail - Email address to send test email to
    * @returns {Promise<boolean>} - Success status
    */
   static async sendTestEmail(testEmail) {
     try {
-      const apiToken = this.getApiToken();
+      const transporter = this.initializeTransporter();
       
-      if (!apiToken) {
-        console.error('Mailtrap API token not configured. Please set MAILTRAP_API_TOKEN in .env file.');
+      if (!transporter) {
+        console.error('Email transporter not initialized. Please check your SMTP configuration in .env file.');
         return false;
       }
 
-      // For Mailtrap, the "from" email must be verified in your Mailtrap account
-      const emailFrom = process.env.EMAIL_FROM || 'mailtrap@demomail.trap';
+      const emailFrom = process.env.EMAIL_FROM || process.env.SMTP_USER;
       const emailFromName = process.env.EMAIL_FROM_NAME || 'Inventoz Inventory System';
 
-      const requestBody = {
-        from: {
-          email: emailFrom,
-          name: emailFromName
-        },
-        to: [
-          {
-            email: testEmail
-          }
-        ],
+      const mailOptions = {
+        from: `"${emailFromName}" <${emailFrom}>`,
+        to: testEmail,
         subject: 'Test Email from Inventoz',
-        html: '<p>This is a test email from Inventoz Inventory Management System.</p><p>If you received this email, your Mailtrap API configuration is working correctly.</p>',
-        text: 'This is a test email from Inventoz Inventory Management System. If you received this email, your Mailtrap API configuration is working correctly.'
+        html: '<p>This is a test email from Inventoz Inventory Management System.</p><p>If you received this email, your SMTP configuration is working correctly.</p>',
+        text: 'This is a test email from Inventoz Inventory Management System. If you received this email, your SMTP configuration is working correctly.'
       };
 
-      const response = await axios.post(
-        'https://send.api.mailtrap.io/api/send',
-        requestBody,
-        {
-          headers: {
-            'Api-Token': apiToken,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      console.log('Test email sent successfully via Mailtrap API:', response.data);
+      const info = await transporter.sendMail(mailOptions);
+      console.log('✅ Email accepted by SMTP server');
+      console.log('   Message ID:', info.messageId);
+      console.log('   Response:', info.response);
+      console.log('   Envelope:', info.envelope);
+      console.log('\n📧 Note: If you don\'t receive the email, check:');
+      console.log('   1. Spam/Junk folder');
+      console.log('   2. Email server logs for delivery status');
+      console.log('   3. Recipient email provider might be blocking the email');
       return true;
     } catch (error) {
-      const errorDetails = error.response?.data || error.message;
-      console.error('Error sending test email:', errorDetails);
-      console.error('Full error response:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data
+      console.error('Error sending test email:', error.message);
+      console.error('Full error:', {
+        code: error.code,
+        command: error.command,
+        response: error.response
       });
-      
-      if (error.response?.status === 401) {
-        console.error('Unauthorized error. Please check:');
-        console.error('1. API token is correct in .env file');
-        console.error('2. The "From" email domain is verified in Mailtrap');
-        console.error('3. API token has sending permissions enabled');
-      }
-      
       return false;
     }
   }
