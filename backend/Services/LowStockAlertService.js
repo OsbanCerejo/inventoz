@@ -1,4 +1,4 @@
-const { Products } = require("../models");
+const { Products, ProductDetails } = require("../models");
 const EmailService = require("./EmailService");
 
 class LowStockAlertService {
@@ -10,7 +10,15 @@ class LowStockAlertService {
    */
   static async checkAndHandleLowStock(sku, newQuantity) {
     try {
-      const product = await Products.findOne({ where: { sku } });
+      const db = require("../models");
+      const product = await Products.findOne({ 
+        where: { sku },
+        include: [{
+          model: db.ProductDetails,
+          required: false,
+          attributes: ['tester']
+        }]
+      });
       
       if (!product) {
         return { shouldAlert: false, reason: 'Product not found' };
@@ -39,6 +47,15 @@ class LowStockAlertService {
           { where: { sku } }
         );
         
+        // Format size display
+        const sizeDisplay = product.sizeOz && product.sizeMl 
+          ? `${product.sizeOz} oz. / ${product.sizeMl} ml`
+          : product.sizeOz 
+            ? `${product.sizeOz} oz.`
+            : product.sizeMl 
+              ? `${product.sizeMl} ml`
+              : 'N/A';
+        
         return {
           shouldAlert: true,
           product: {
@@ -46,7 +63,16 @@ class LowStockAlertService {
             itemName: product.itemName,
             brand: product.brand,
             quantity: newQuantity,
-            minimumQuantity: product.minimumQuantity
+            minimumQuantity: product.minimumQuantity,
+            sizeOz: product.sizeOz,
+            sizeMl: product.sizeMl,
+            size: sizeDisplay,
+            strength: product.strength || 'N/A',
+            shade: product.shade || 'N/A',
+            condition: product.condition || 'N/A',
+            upc: product.upc || 'N/A',
+            tester: product.ProductDetails?.tester || false,
+            location: product.location
           }
         };
       }
@@ -75,23 +101,45 @@ class LowStockAlertService {
    */
   static async getLowStockProducts() {
     try {
+      const db = require("../models");
       const lowStockProducts = await Products.findAll({
         where: {
           trackQuantity: true,
           lowStockAlertSent: true
         },
+        include: [{
+          model: db.ProductDetails,
+          required: false,
+          attributes: ['tester']
+        }],
         order: [['itemName', 'ASC']]
       });
 
-      return lowStockProducts.map(product => ({
-        sku: product.sku,
-        brand: product.brand,
-        itemName: product.itemName,
-        quantity: product.quantity,
-        minimumQuantity: product.minimumQuantity,
-        location: product.location,
-        image: product.image
-      }));
+      return lowStockProducts.map(product => {
+        // Format size display
+        const sizeDisplay = product.sizeOz && product.sizeMl 
+          ? `${product.sizeOz} oz. / ${product.sizeMl} ml`
+          : product.sizeOz 
+            ? `${product.sizeOz} oz.`
+            : product.sizeMl 
+              ? `${product.sizeMl} ml`
+              : 'N/A';
+        
+        return {
+          sku: product.sku,
+          brand: product.brand,
+          itemName: product.itemName,
+          quantity: product.quantity,
+          minimumQuantity: product.minimumQuantity,
+          location: product.location,
+          image: product.image,
+          size: sizeDisplay,
+          sizeOz: product.sizeOz,
+          sizeMl: product.sizeMl,
+          strength: product.strength,
+          tester: product.ProductDetails?.tester || false
+        };
+      });
     } catch (error) {
       console.error('Error getting low stock products:', error);
       throw error;

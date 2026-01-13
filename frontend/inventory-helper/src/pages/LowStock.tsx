@@ -14,7 +14,10 @@ import {
   TableRow,
   CircularProgress,
   Alert,
+  Chip,
+  Tooltip,
 } from "@mui/material";
+import ScienceIcon from "@mui/icons-material/Science";
 import { getApiUrl } from "../config/api";
 import { useAuth } from "../context/AuthContext";
 
@@ -26,6 +29,9 @@ interface LowStockProduct {
   minimumQuantity: number;
   location: string | null;
   image: string | null;
+  size: string;
+  strength: string | null;
+  tester: boolean;
 }
 
 function LowStock() {
@@ -111,6 +117,9 @@ function LowStock() {
                 <TableCell><strong>SKU</strong></TableCell>
                 <TableCell><strong>Brand</strong></TableCell>
                 <TableCell><strong>Item Name</strong></TableCell>
+                <TableCell><strong>Size</strong></TableCell>
+                <TableCell><strong>Strength</strong></TableCell>
+                <TableCell><strong>Tester</strong></TableCell>
                 <TableCell align="right"><strong>Current Quantity</strong></TableCell>
                 <TableCell align="right"><strong>Minimum Quantity</strong></TableCell>
                 <TableCell><strong>Location</strong></TableCell>
@@ -131,6 +140,23 @@ function LowStock() {
                   <TableCell>{product.sku}</TableCell>
                   <TableCell>{product.brand}</TableCell>
                   <TableCell>{product.itemName}</TableCell>
+                  <TableCell>{product.size || "N/A"}</TableCell>
+                  <TableCell>{product.strength || "N/A"}</TableCell>
+                  <TableCell>
+                    {product.tester ? (
+                      <Tooltip title="Tester Product">
+                        <Chip
+                          icon={<ScienceIcon />}
+                          label="Tester"
+                          size="small"
+                          color="warning"
+                          variant="outlined"
+                        />
+                      </Tooltip>
+                    ) : (
+                      <span style={{ color: '#999' }}>—</span>
+                    )}
+                  </TableCell>
                   <TableCell align="right">
                     <Typography
                       color={product.quantity < product.minimumQuantity ? "error" : "text.primary"}

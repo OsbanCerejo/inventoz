@@ -111,6 +111,12 @@ class EmailService {
                 <p><span class="label">SKU:</span> <span class="value">${product.sku}</span></p>
                 <p><span class="label">Brand:</span> <span class="value">${product.brand}</span></p>
                 <p><span class="label">Item Name:</span> <span class="value">${product.itemName}</span></p>
+                <p><span class="label">Size:</span> <span class="value">${product.size || 'N/A'}</span></p>
+                <p><span class="label">Strength:</span> <span class="value">${product.strength || 'N/A'}</span></p>
+                <p><span class="label">Shade / Variant:</span> <span class="value">${product.shade || 'N/A'}</span></p>
+                <p><span class="label">Condition:</span> <span class="value">${product.condition || 'N/A'}</span></p>
+                <p><span class="label">UPC:</span> <span class="value">${product.upc || 'N/A'}</span></p>
+                <p><span class="label">Tester:</span> <span class="value">${product.tester ? 'Yes' : 'No'}</span></p>
                 <p><span class="label">Current Quantity:</span> <span class="value quantity-low">${product.quantity}</span></p>
                 <p><span class="label">Minimum Quantity:</span> <span class="value">${product.minimumQuantity}</span></p>
                 ${product.location ? `<p><span class="label">Location:</span> <span class="value">${product.location}</span></p>` : ''}
@@ -135,13 +141,19 @@ Product Details:
 - SKU: ${product.sku}
 - Brand: ${product.brand}
 - Item Name: ${product.itemName}
+- Size: ${product.size || 'N/A'}
+- Strength: ${product.strength || 'N/A'}
+- Shade / Variant: ${product.shade || 'N/A'}
+- Condition: ${product.condition || 'N/A'}
+- UPC: ${product.upc || 'N/A'}
+- Tester: ${product.tester ? 'Yes' : 'No'}
 - Current Quantity: ${product.quantity}
 - Minimum Quantity: ${product.minimumQuantity}
 ${product.location ? `- Location: ${product.location}` : ''}
 
 Action Required: Please review the inventory and consider restocking this product.
 
-This is an automated message from Inventoz.
+This is an automated message from Inventoz Inventory Management System.
 Timestamp: ${new Date().toLocaleString()}
       `;
 
