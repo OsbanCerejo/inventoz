@@ -73,7 +73,7 @@ class LowStockAlertService {
               shade: product.shade || 'N/A',
               condition: product.condition || 'N/A',
               upc: product.upc || 'N/A',
-              tester: product.ProductDetail ? (product.ProductDetail.tester || false) : false,
+              tester: (product.ProductDetail || product.ProductDetails) ? ((product.ProductDetail || product.ProductDetails).tester === true || (product.ProductDetail || product.ProductDetails).tester === 1) : false,
               location: product.location
             }
           };
@@ -131,6 +131,10 @@ class LowStockAlertService {
               ? `${product.sizeMl} ml`
               : 'N/A';
         
+        // Get tester value - handle both ProductDetail (singular) and ProductDetails (plural) for compatibility
+        const productDetails = product.ProductDetail || product.ProductDetails;
+        const testerValue = productDetails ? (productDetails.tester === true || productDetails.tester === 1) : false;
+        
         return {
           sku: product.sku,
           brand: product.brand,
@@ -143,7 +147,7 @@ class LowStockAlertService {
           sizeOz: product.sizeOz,
           sizeMl: product.sizeMl,
           strength: product.strength,
-          tester: product.ProductDetail ? (product.ProductDetail.tester || false) : false
+          tester: testerValue
         };
       });
     } catch (error) {

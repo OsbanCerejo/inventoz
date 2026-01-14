@@ -143,7 +143,7 @@ function LowStock() {
                   <TableCell>{product.size || "N/A"}</TableCell>
                   <TableCell>{product.strength || "N/A"}</TableCell>
                   <TableCell>
-                    {product.tester ? (
+                    {product.tester === true || product.tester === 1 ? (
                       <Tooltip title="Tester Product">
                         <Chip
                           icon={<ScienceIcon />}
