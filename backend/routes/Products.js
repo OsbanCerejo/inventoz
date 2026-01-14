@@ -135,13 +135,53 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
       );
     }
 
-    // If trackQuantity or minimumQuantity changed, check low stock status
-    // (StockUpdateService already checks when quantity changes, so only check if tracking settings changed)
-    if ((currentProduct.trackQuantity !== product.trackQuantity || 
-        currentProduct.minimumQuantity !== product.minimumQuantity) &&
-        currentProduct.quantity === product.quantity) {
+    // If trackQuantity or minimumQuantity changed, handle tracking status
+    // This handles: tracking turned on/off, minimum quantity changed
+    if (currentProduct.trackQuantity !== product.trackQuantity || 
+        currentProduct.minimumQuantity !== product.minimumQuantity) {
       const LowStockAlertService = require("../Services/LowStockAlertService");
-      await LowStockAlertService.checkAndHandleLowStock(product.sku, updatedQuantity);
+      
+      // If tracking was just turned ON (from OFF), reset the alert flag first
+      // This ensures we can send an alert if stock is currently low
+      if (!currentProduct.trackQuantity && product.trackQuantity) {
+        await Products.update(
+          { lowStockAlertSent: false },
+          { where: { sku: product.sku } }
+        );
+        
+        // Check if stock is currently low and send alert if needed
+        const lowStockCheck = await LowStockAlertService.checkAndHandleLowStock(product.sku, updatedQuantity);
+        
+        // Send email if needed
+        if (lowStockCheck.shouldAlert) {
+          const EmailService = require("../Services/EmailService");
+          const recipientEmail = process.env.LOW_STOCK_ALERT_EMAIL || process.env.ALERT_EMAIL;
+          if (recipientEmail) {
+            EmailService.sendLowStockAlert(lowStockCheck.product, recipientEmail).catch(err => {
+              console.error('Failed to send low stock alert email:', err);
+            });
+          }
+        }
+      } 
+      // If tracking was turned OFF, the checkAndHandleLowStock will reset the flag
+      // But we should also check if tracking is still ON and quantity/minimum changed
+      else if (product.trackQuantity) {
+        // Tracking is still ON, check low stock status with current quantity
+        const lowStockCheck = await LowStockAlertService.checkAndHandleLowStock(product.sku, updatedQuantity);
+        
+        // Send email if needed
+        if (lowStockCheck.shouldAlert) {
+          const EmailService = require("../Services/EmailService");
+          const recipientEmail = process.env.LOW_STOCK_ALERT_EMAIL || process.env.ALERT_EMAIL;
+          if (recipientEmail) {
+            EmailService.sendLowStockAlert(lowStockCheck.product, recipientEmail).catch(err => {
+              console.error('Failed to send low stock alert email:', err);
+            });
+          }
+        }
+      }
+      // If tracking was turned OFF, checkAndHandleLowStock will handle resetting the flag
+      // No need to do anything else here
     }
 
     // Get the updated product data

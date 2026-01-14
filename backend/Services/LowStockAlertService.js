@@ -24,7 +24,7 @@ class LowStockAlertService {
         return { shouldAlert: false, reason: 'Product not found' };
       }
 
-      // If tracking is not enabled, no need to check
+      // If tracking is not enabled, reset alert sent flag and return
       if (!product.trackQuantity || !product.minimumQuantity) {
         // If tracking was disabled, reset alert sent flag
         if (product.lowStockAlertSent) {
@@ -37,47 +37,53 @@ class LowStockAlertService {
       }
 
       const isLowStock = newQuantity < product.minimumQuantity;
-      const wasLowStock = product.quantity < product.minimumQuantity;
 
-      // If product is now low on stock and alert hasn't been sent
-      if (isLowStock && !product.lowStockAlertSent) {
-        // Mark that alert should be sent
-        await Products.update(
-          { lowStockAlertSent: true },
-          { where: { sku } }
-        );
-        
-        // Format size display
-        const sizeDisplay = product.sizeOz && product.sizeMl 
-          ? `${product.sizeOz} oz. / ${product.sizeMl} ml`
-          : product.sizeOz 
-            ? `${product.sizeOz} oz.`
-            : product.sizeMl 
-              ? `${product.sizeMl} ml`
-              : 'N/A';
-        
-        return {
-          shouldAlert: true,
-          product: {
-            sku: product.sku,
-            itemName: product.itemName,
-            brand: product.brand,
-            quantity: newQuantity,
-            minimumQuantity: product.minimumQuantity,
-            sizeOz: product.sizeOz,
-            sizeMl: product.sizeMl,
-            size: sizeDisplay,
-            strength: product.strength || 'N/A',
-            shade: product.shade || 'N/A',
-            condition: product.condition || 'N/A',
-            upc: product.upc || 'N/A',
-            tester: product.ProductDetails?.tester || false,
-            location: product.location
-          }
-        };
+      // If product is low on stock
+      if (isLowStock) {
+        // If alert hasn't been sent yet, send it
+        // This handles: first time tracking is enabled, or tracking was turned back on
+        if (!product.lowStockAlertSent) {
+          // Mark that alert should be sent
+          await Products.update(
+            { lowStockAlertSent: true },
+            { where: { sku } }
+          );
+          
+          // Format size display
+          const sizeDisplay = product.sizeOz && product.sizeMl 
+            ? `${product.sizeOz} oz. / ${product.sizeMl} ml`
+            : product.sizeOz 
+              ? `${product.sizeOz} oz.`
+              : product.sizeMl 
+                ? `${product.sizeMl} ml`
+                : 'N/A';
+          
+          return {
+            shouldAlert: true,
+            product: {
+              sku: product.sku,
+              itemName: product.itemName,
+              brand: product.brand,
+              quantity: newQuantity,
+              minimumQuantity: product.minimumQuantity,
+              sizeOz: product.sizeOz,
+              sizeMl: product.sizeMl,
+              size: sizeDisplay,
+              strength: product.strength || 'N/A',
+              shade: product.shade || 'N/A',
+              condition: product.condition || 'N/A',
+              upc: product.upc || 'N/A',
+              tester: product.ProductDetail ? (product.ProductDetail.tester || false) : false,
+              location: product.location
+            }
+          };
+        }
+        // If alert was already sent, don't send again
+        return { shouldAlert: false, reason: 'Alert already sent' };
       }
 
       // If product is no longer low on stock, reset the alert flag
+      // This allows future alerts when it goes low again
       if (!isLowStock && product.lowStockAlertSent) {
         await Products.update(
           { lowStockAlertSent: false },
@@ -137,7 +143,7 @@ class LowStockAlertService {
           sizeOz: product.sizeOz,
           sizeMl: product.sizeMl,
           strength: product.strength,
-          tester: product.ProductDetails?.tester || false
+          tester: product.ProductDetail ? (product.ProductDetail.tester || false) : false
         };
       });
     } catch (error) {
