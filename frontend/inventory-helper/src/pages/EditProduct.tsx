@@ -1383,7 +1383,7 @@ function EditProduct() {
                     <Typography variant="subtitle1">Pricing</Typography>
                     {averagePrice !== null && (
                       <Typography variant="body2" color="text.secondary">
-                        Average cost: ${averagePrice.toFixed(2)}
+                        Average price: ${averagePrice.toFixed(2)}
                       </Typography>
                     )}
                   </Box>
