@@ -2,26 +2,46 @@
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    // Add trackQuantity column to Products table
-    await queryInterface.addColumn('Products', 'trackQuantity', {
-      type: Sequelize.BOOLEAN,
-      allowNull: true,
-      defaultValue: false
-    });
+    // Make this migration idempotent: only add columns if they don't exist
 
-    // Add minimumQuantity column to Products table
-    await queryInterface.addColumn('Products', 'minimumQuantity', {
-      type: Sequelize.INTEGER,
-      allowNull: true,
-      defaultValue: null
-    });
+    // Helper to check if a column exists
+    const columnExists = async (table, column) => {
+      const [results] = await queryInterface.sequelize.query(`
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = '${table}'
+          AND COLUMN_NAME = '${column}'
+      `);
+      return results && results.length > 0;
+    };
 
-    // Add lowStockAlertSent column to track if alert has been sent
-    await queryInterface.addColumn('Products', 'lowStockAlertSent', {
-      type: Sequelize.BOOLEAN,
-      allowNull: true,
-      defaultValue: false
-    });
+    // trackQuantity
+    if (!(await columnExists('Products', 'trackQuantity'))) {
+      await queryInterface.addColumn('Products', 'trackQuantity', {
+        type: Sequelize.BOOLEAN,
+        allowNull: true,
+        defaultValue: false
+      });
+    }
+
+    // minimumQuantity
+    if (!(await columnExists('Products', 'minimumQuantity'))) {
+      await queryInterface.addColumn('Products', 'minimumQuantity', {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        defaultValue: null
+      });
+    }
+
+    // lowStockAlertSent
+    if (!(await columnExists('Products', 'lowStockAlertSent'))) {
+      await queryInterface.addColumn('Products', 'lowStockAlertSent', {
+        type: Sequelize.BOOLEAN,
+        allowNull: true,
+        defaultValue: false
+      });
+    }
   },
 
   down: async (queryInterface, Sequelize) => {
