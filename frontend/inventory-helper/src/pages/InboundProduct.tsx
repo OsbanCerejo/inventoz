@@ -19,12 +19,10 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
 import dayjs from "dayjs";
 import { useState } from "react";
-import { useAuth } from "../context/AuthContext";
 
 function InboundProduct() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
 
   const productObject = location.state.productObject;
   const today = new Date();
@@ -36,8 +34,6 @@ function InboundProduct() {
     date: newDate,
     batch: "",
     compositeSku: "",
-    unitCost: "",
-    currency: "USD",
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -46,8 +42,6 @@ function InboundProduct() {
     quantity: Yup.string().required(),
     date: Yup.date().required(),
     batch: Yup.string(),
-    unitCost: Yup.number().nullable(),
-    currency: Yup.string(),
   });
 
   const formik = useFormik({
@@ -64,18 +58,11 @@ function InboundProduct() {
         data.date.year() +
         "-" +
         data.batch;
-
-      const payload = {
-        ...data,
-        compositeSku: compositeInboundKey, //Change compositeSKU in data to compositeInboundSku
-        // Pricing data (optional, admin-only)
-        price: data.unitCost,
-        currency: data.currency || "USD",
-      };
+      data.compositeSku = compositeInboundKey; //Change compositeSKU in data to compositeInboundSku
       
       try {
         // First, try to create the inbound record
-        const inboundResponse = await axios.post(getApiUrl('inbound'), payload);
+        const inboundResponse = await axios.post(getApiUrl('inbound'), data);
         
         if (inboundResponse.data === "Created New") {
           // Only update quantity if the inbound record was successfully created
@@ -134,47 +121,6 @@ function InboundProduct() {
                 helperText={formik.touched.vendor && formik.errors.vendor}
               />
             </Box>
-            {user?.role === "admin" && (
-              <>
-                <Box m={2} pt={3}>
-                  <TextField
-                    fullWidth
-                    id="unitCost"
-                    name="unitCost"
-                    label="Unit Cost (Vendor Price)"
-                    type="number"
-                    value={formik.values.unitCost}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    error={
-                      formik.touched.unitCost &&
-                      Boolean(formik.errors.unitCost)
-                    }
-                    helperText={
-                      formik.touched.unitCost && formik.errors.unitCost
-                    }
-                  />
-                </Box>
-                <Box m={2} pt={3}>
-                  <TextField
-                    fullWidth
-                    id="currency"
-                    name="currency"
-                    label="Currency"
-                    value={formik.values.currency}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    error={
-                      formik.touched.currency &&
-                      Boolean(formik.errors.currency)
-                    }
-                    helperText={
-                      formik.touched.currency && formik.errors.currency
-                    }
-                  />
-                </Box>
-              </>
-            )}
             <Box m={2} pt={3}>
               <TextField
                 fullWidth
