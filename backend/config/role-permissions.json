@@ -5,6 +5,7 @@
     "products": ["view", "create", "edit", "delete"],
     "inbound": ["view", "create", "edit", "delete"],
     "addProduct": ["view", "create", "edit", "delete"],
+    "pricing": ["view", "create", "edit", "delete"],
     "packing": ["view"],
     "whatnot": ["view", "create", "edit", "delete"],
     "employeeInfo": ["view", "create", "edit", "delete"],

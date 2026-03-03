@@ -117,6 +117,9 @@ function AddProduct() {
     // Low Stock Tracking (Admin only)
     trackQuantity: false,
     minimumQuantity: "",
+    // Pricing (admin-only, used during inbound)
+    unitCost: "",
+    currency: "USD",
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -168,6 +171,9 @@ function AddProduct() {
     // Low Stock Tracking
     trackQuantity: Yup.boolean(),
     minimumQuantity: Yup.number().nullable(),
+    // Pricing
+    unitCost: Yup.number().nullable(),
+    currency: Yup.string(),
   });
 
   const formik = useFormik({
@@ -253,6 +259,9 @@ function AddProduct() {
               date: newDate,
               batch: data.batch,
               compositeSku: compositeInboundKey,
+              // Pricing data (optional, admin-only)
+              price: data.unitCost,
+              currency: data.currency || "USD",
             };
 
             // Add the product to Inbound table along with the new composite Inbound key
@@ -1354,6 +1363,51 @@ function AddProduct() {
                         />
                       </Box>
                     </Grid>
+                    {user?.role === 'admin' && (
+                      <>
+                        <Grid item xs={12}>
+                          <Box pt={4}>
+                            <TextField
+                              fullWidth
+                              id="unitCost"
+                              name="unitCost"
+                              label="Unit Cost (Vendor Price)"
+                              type="number"
+                              value={formik.values.unitCost}
+                              onChange={formik.handleChange}
+                              onBlur={formik.handleBlur}
+                              error={
+                                formik.touched.unitCost &&
+                                Boolean(formik.errors.unitCost)
+                              }
+                              helperText={
+                                formik.touched.unitCost && formik.errors.unitCost
+                              }
+                            />
+                          </Box>
+                        </Grid>
+                        <Grid item xs={12}>
+                          <Box pt={4}>
+                            <TextField
+                              fullWidth
+                              id="currency"
+                              name="currency"
+                              label="Currency"
+                              value={formik.values.currency}
+                              onChange={formik.handleChange}
+                              onBlur={formik.handleBlur}
+                              error={
+                                formik.touched.currency &&
+                                Boolean(formik.errors.currency)
+                              }
+                              helperText={
+                                formik.touched.currency && formik.errors.currency
+                              }
+                            />
+                          </Box>
+                        </Grid>
+                      </>
+                    )}
                     <Grid item xs={12}>
                       <Box m={-3} pt={6}>
                         <LocalizationProvider dateAdapter={AdapterDayjs}>
