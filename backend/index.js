@@ -124,26 +124,49 @@ app.get('/test-cors', (req, res) => {
 
 // Start server even if database connection fails
 const startServer = () => {
-  // Use a single, predictable port; configure this in EasyPanel
-  const port = Number(process.env.PORT) || 3000;
-
+  // Try multiple common ports for EasyPanel
+  const possiblePorts = [
+    process.env.PORT,
+    process.env.EASYPANEL_PORT,
+    80,  // EasyPanel typically uses port 80
+    3000,
+    8080
+  ].filter(Boolean); // Remove undefined values
+  
+  const port = possiblePorts[0] || 80;
+  
   console.log(`Environment variables:`);
   console.log(`- PORT: ${process.env.PORT || 'not set'}`);
+  console.log(`- EASYPANEL_PORT: ${process.env.EASYPANEL_PORT || 'not set'}`);
   console.log(`- NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
   console.log(`- DB_HOST: ${process.env.DB_HOST || 'not set'}`);
   console.log(`Attempting to start server on port ${port}...`);
-
-  const server = app
-    .listen(port, '0.0.0.0', () => {
-      console.log(`✅ Server is running on port ${port}`);
-      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`Server URL: http://0.0.0.0:${port}`);
-    })
-    .on('error', (err) => {
+  
+  const server = app.listen(port, '0.0.0.0', () => {
+    console.log(`✅ Server is running on port ${port}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Server URL: http://0.0.0.0:${port}`);
+  }).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`❌ Port ${port} is already in use. Trying alternative ports...`);
+      // Try alternative ports
+      const altPorts = [3001, 3002, 8081, 8082];
+      for (const altPort of altPorts) {
+        try {
+          app.listen(altPort, '0.0.0.0', () => {
+            console.log(`✅ Server is running on port ${altPort}`);
+            console.log(`Server URL: http://0.0.0.0:${altPort}`);
+          });
+          break;
+        } catch (altErr) {
+          console.error(`Port ${altPort} also in use`);
+        }
+      }
+    } else {
       console.error('Server error:', err);
-      process.exit(1);
-    });
-
+    }
+  });
+  
   // Handle graceful shutdown
   process.on('SIGTERM', () => {
     console.log('SIGTERM received, shutting down gracefully...');
@@ -152,7 +175,7 @@ const startServer = () => {
       process.exit(0);
     });
   });
-
+  
   process.on('SIGINT', () => {
     console.log('SIGINT received, shutting down gracefully...');
     server.close(() => {
