@@ -97,6 +97,9 @@ app.use("/api/users", usersRouter);
 const barcodeScanRouter = require("./routes/BarcodeScan");
 app.use("/api/barcode-scan", barcodeScanRouter);
 
+const productVendorPricesRouter = require("./routes/ProductVendorPrices");
+app.use("/product-vendor-prices", productVendorPricesRouter);
+
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
