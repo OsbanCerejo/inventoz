@@ -141,7 +141,7 @@ function InboundProduct() {
                     fullWidth
                     id="unitCost"
                     name="unitCost"
-                    label="Unit Price"
+                    label="Unit Cost (Vendor Price)"
                     type="number"
                     value={formik.values.unitCost}
                     onChange={formik.handleChange}
