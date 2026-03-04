@@ -30,9 +30,12 @@ import skuData from "../data/skuData.json";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import countriesData from "../data/countries.json";
 import { isEqual } from "lodash";
 import { useAuth } from "../context/AuthContext";
+import PermissionGuard from "../components/PermissionGuard";
 import { getApiUrl } from "../config/api";
 
 const formikValidationSchema = Yup.object().shape({
@@ -104,7 +107,7 @@ interface ListingsObject {
 function EditProduct() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, hasPermission, isLoading: authLoading } = useAuth();
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const productObject = location.state.productObject;
   const productDetails = location.state.productDetails || {};
@@ -116,6 +119,15 @@ function EditProduct() {
 
   const [tags, setTags] = useState<string[]>([]); // State for tags
   const [currentInput, setCurrentInput] = useState<string>("");
+
+  const [vendorPrices, setVendorPrices] = useState<any[]>([]);
+  const [averagePrice, setAveragePrice] = useState<number | null>(null);
+  const [loadingPrices, setLoadingPrices] = useState(false);
+  const [pricesError, setPricesError] = useState<string | null>(null);
+  const [editingPrice, setEditingPrice] = useState<any | null>(null);
+  const [isEditingExisting, setIsEditingExisting] = useState(false);
+
+  const canViewPricing = !authLoading && hasPermission("pricing", "view");
 
   const formikInitialValues = useMemo(
     () => ({
@@ -172,9 +184,44 @@ function EditProduct() {
     [productObject, productDetails]
   );
 
+  const loadVendorPrices = useCallback(async () => {
+    if (!canViewPricing) return;
+
+    try {
+      setLoadingPrices(true);
+      setPricesError(null);
+
+      const response = await axios.get(
+        getApiUrl(`product-vendor-prices/${productObject.sku}`)
+      );
+      const data = response.data || {};
+
+      setVendorPrices(data.vendorPrices || []);
+
+      const avg = data.averagePrice;
+      if (avg === null || avg === undefined) {
+        setAveragePrice(null);
+      } else if (typeof avg === "number") {
+        setAveragePrice(avg);
+      } else {
+        const parsed = Number(avg);
+        setAveragePrice(Number.isNaN(parsed) ? null : parsed);
+      }
+    } catch (error) {
+      console.error("Error fetching vendor prices:", error);
+      setPricesError("Failed to load pricing data");
+    } finally {
+      setLoadingPrices(false);
+    }
+  }, [canViewPricing, productObject.sku]);
+
   const toggleMoreDetails = useCallback(() => {
     setShowMoreDetails((prev) => !prev);
   }, []);
+
+  useEffect(() => {
+    loadVendorPrices();
+  }, [loadVendorPrices]);
 
   const formik = useFormik({
     initialValues: formikInitialValues,
@@ -329,6 +376,92 @@ function EditProduct() {
     const updatedTags = tags.filter((tag) => tag !== tagToDelete);
     setTags(updatedTags);
     formik.setFieldValue("warehouseLocations", updatedTags.join(", "));
+  };
+
+  const handleAddNewPrice = () => {
+    if (!canViewPricing) return;
+
+    setEditingPrice({
+      id: null,
+      sku: productObject.sku,
+      vendor: "",
+      price: "",
+      currency: "USD",
+      notes: "",
+      isActive: true,
+    });
+    setIsEditingExisting(false);
+  };
+
+  const handleEditPrice = (price: any) => {
+    if (!canViewPricing) return;
+
+    setEditingPrice({
+      ...price,
+      price: price.price ?? "",
+      currency: price.currency || "USD",
+      notes: price.notes || "",
+    });
+    setIsEditingExisting(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingPrice(null);
+    setIsEditingExisting(false);
+  };
+
+  const handleSavePrice = async () => {
+    if (!canViewPricing || !editingPrice) return;
+
+    try {
+      setLoadingPrices(true);
+      setPricesError(null);
+
+      const payload = {
+        sku: productObject.sku,
+        vendor: editingPrice.vendor,
+        price: editingPrice.price,
+        currency: editingPrice.currency,
+        notes: editingPrice.notes,
+        isActive:
+          editingPrice.isActive === undefined ? true : editingPrice.isActive,
+      };
+
+      if (isEditingExisting && editingPrice.id) {
+        await axios.put(
+          getApiUrl(`product-vendor-prices/${editingPrice.id}`),
+          payload
+        );
+      } else {
+        await axios.post(getApiUrl("product-vendor-prices"), payload);
+      }
+
+      setEditingPrice(null);
+      setIsEditingExisting(false);
+      await loadVendorPrices();
+    } catch (error) {
+      console.error("Error saving vendor price:", error);
+      setPricesError("Failed to save vendor price");
+    } finally {
+      setLoadingPrices(false);
+    }
+  };
+
+  const handleDeletePrice = async (id: number) => {
+    if (!canViewPricing) return;
+
+    try {
+      setLoadingPrices(true);
+      setPricesError(null);
+
+      await axios.delete(getApiUrl(`product-vendor-prices/${id}`));
+      await loadVendorPrices();
+    } catch (error) {
+      console.error("Error deleting vendor price:", error);
+      setPricesError("Failed to delete vendor price");
+    } finally {
+      setLoadingPrices(false);
+    }
   };
 
   return (
@@ -1235,6 +1368,164 @@ function EditProduct() {
                 </Grid>
               </Paper>
             </Container>
+            <PermissionGuard resource="pricing" action="view" showError={false}>
+              <Container>
+                <Paper
+                  variant="outlined"
+                  sx={{ my: { xs: 3, md: 3 }, p: { xs: 1, md: 4 } }}
+                >
+                  <Box
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    mb={1}
+                  >
+                    <Typography variant="subtitle1">Pricing</Typography>
+                    {averagePrice !== null && (
+                      <Typography variant="body2" color="text.secondary">
+                        Average cost: ${averagePrice.toFixed(2)}
+                      </Typography>
+                    )}
+                  </Box>
+                  {pricesError && (
+                    <Typography variant="body2" color="error" mb={1}>
+                      {pricesError}
+                    </Typography>
+                  )}
+                  {loadingPrices && (
+                    <Typography variant="body2" color="text.secondary">
+                      Loading pricing...
+                    </Typography>
+                  )}
+                  {!loadingPrices && vendorPrices.length === 0 && (
+                    <Typography variant="body2" color="text.secondary">
+                      No vendor prices recorded.
+                    </Typography>
+                  )}
+                  {!loadingPrices &&
+                    vendorPrices.map((price: any) => (
+                      <Box
+                        key={price.id}
+                        display="flex"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        mt={1}
+                      >
+                        <Box>
+                          <Typography variant="body2">
+                            {price.vendor} — {price.currency} {price.price}
+                          </Typography>
+                          {price.inboundCompositeSku && (
+                            <Typography variant="caption" color="text.secondary">
+                              Inbound: {price.inboundCompositeSku}
+                            </Typography>
+                          )}
+                        </Box>
+                        <Box>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleEditPrice(price)}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDeletePrice(price.id)}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      </Box>
+                    ))}
+                  {editingPrice && (
+                    <Box mt={2}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        {isEditingExisting ? "Edit Vendor Price" : "Add Vendor Price"}
+                      </Typography>
+                      <Box display="flex" flexDirection="column" gap={2}>
+                        <TextField
+                          fullWidth
+                          id="editingVendor"
+                          label="Vendor"
+                          value={editingPrice.vendor || ""}
+                          onChange={(e) =>
+                            setEditingPrice({
+                              ...editingPrice,
+                              vendor: e.target.value,
+                            })
+                          }
+                        />
+                        <TextField
+                          fullWidth
+                          id="editingPrice"
+                          label="Price"
+                          type="number"
+                          value={editingPrice.price ?? ""}
+                          onChange={(e) =>
+                            setEditingPrice({
+                              ...editingPrice,
+                              price: e.target.value,
+                            })
+                          }
+                        />
+                        <TextField
+                          fullWidth
+                          id="editingCurrency"
+                          label="Currency"
+                          value={editingPrice.currency || "USD"}
+                          onChange={(e) =>
+                            setEditingPrice({
+                              ...editingPrice,
+                              currency: e.target.value,
+                            })
+                          }
+                        />
+                        <TextField
+                          fullWidth
+                          id="editingNotes"
+                          label="Notes"
+                          multiline
+                          minRows={2}
+                          value={editingPrice.notes || ""}
+                          onChange={(e) =>
+                            setEditingPrice({
+                              ...editingPrice,
+                              notes: e.target.value,
+                            })
+                          }
+                        />
+                        <Box display="flex" justifyContent="flex-end" gap={1}>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={handleCancelEdit}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            variant="contained"
+                            size="small"
+                            onClick={handleSavePrice}
+                          >
+                            Save
+                          </Button>
+                        </Box>
+                      </Box>
+                    </Box>
+                  )}
+                  <Box mt={2}>
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      size="small"
+                      onClick={handleAddNewPrice}
+                    >
+                      Add Vendor Price
+                    </Button>
+                  </Box>
+                </Paper>
+              </Container>
+            </PermissionGuard>
             {formik.values.listed && (
               <Container>
                 <Paper

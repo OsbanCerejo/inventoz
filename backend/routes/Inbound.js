@@ -6,21 +6,41 @@ const Op = Sequelize.Op;
 const StockUpdateService = require("../Services/StockUpdateService");
 const { auth } = require('../middleware/auth');
 const { checkPermission } = require('../middleware/permissions');
+const PricingService = require("../Services/PricingService");
 
 router.post("/", auth, checkPermission('inbound', 'create'), async (req, res) => {
-  const inboundItem = req.body;
-  // console.log("Inbound object in backend is : ", inboundItem);
+  try {
+    const inboundItem = req.body;
+    // console.log("Inbound object in backend is : ", inboundItem);
 
-  const [found, created] = await Inbound.findOrCreate({
-    where: { compositeSku: inboundItem.compositeSku },
-    defaults: inboundItem,
-  });
-  if (created) {
-    // console.log("Created New");
-  } else {
-    // console.log("Already Exists");
+    const [found, created] = await Inbound.findOrCreate({
+      where: { compositeSku: inboundItem.compositeSku },
+      defaults: inboundItem,
+    });
+
+    // If a unit cost was provided, create a vendor price entry linked to this inbound record
+    try {
+      await PricingService.createPriceFromInbound(
+        {
+          sku: inboundItem.sku,
+          vendor: inboundItem.vendor,
+          price: inboundItem.price,
+          currency: inboundItem.currency,
+          inboundCompositeSku: inboundItem.compositeSku,
+          notes: inboundItem.priceNotes,
+        },
+        req.user
+      );
+    } catch (pricingError) {
+      console.error("Error creating vendor price from inbound:", pricingError);
+      // Do not fail the inbound operation if pricing fails
+    }
+
+    res.json(created ? "Created New" : "Already Exists");
+  } catch (error) {
+    console.error("Error creating inbound record:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
-  res.json(created ? "Created New" : "Already Exists");
 });
 
 router.put("/", auth, checkPermission('inbound', 'edit'), async (req, res) => {
