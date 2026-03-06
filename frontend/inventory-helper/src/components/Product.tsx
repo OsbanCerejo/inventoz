@@ -75,18 +75,6 @@ function Product() {
         );
         setProductListings(listings);
 
-        if (user?.role === "admin") {
-          try {
-            const { data: pricingData } = await axios.get(
-              getApiUrl(`product-vendor-prices/${product.sku}`)
-            );
-            setVendorPrices(pricingData.vendorPrices || []);
-            const avg = pricingData.averagePrice;
-            setAveragePrice(avg !== null && avg !== undefined ? Number(avg) : null);
-          } catch (pricingError) {
-            console.error("Error fetching vendor prices:", pricingError);
-          }
-        }
       } catch (error) {
         console.error("Error fetching product data:", error);
       }
@@ -102,6 +90,20 @@ function Product() {
       fetchData(); // Fetch only if no updated product is passed
     }
   }, [id, location.state]);
+
+  useEffect(() => {
+    const sku = productObject.sku;
+    if (!sku || user?.role !== "admin") return;
+
+    axios
+      .get(getApiUrl(`product-vendor-prices/${sku}`))
+      .then(({ data: pricingData }) => {
+        setVendorPrices(pricingData.vendorPrices || []);
+        const avg = pricingData.averagePrice;
+        setAveragePrice(avg !== null && avg !== undefined ? Number(avg) : null);
+      })
+      .catch((err) => console.error("Error fetching vendor prices:", err));
+  }, [productObject.sku, user]);
 
   // Handle the edit button click and redirect with the product to edit page
   const handleEditOnClick = useCallback(() => {
