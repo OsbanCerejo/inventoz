@@ -386,6 +386,7 @@ function EditProduct() {
       sku: productObject.sku,
       vendor: "",
       price: "",
+      quantity: 1,
       currency: "USD",
       notes: "",
       isActive: true,
@@ -399,6 +400,7 @@ function EditProduct() {
     setEditingPrice({
       ...price,
       price: price.price ?? "",
+      quantity: price.quantity ?? 1,
       currency: price.currency || "USD",
       notes: price.notes || "",
     });
@@ -421,6 +423,7 @@ function EditProduct() {
         sku: productObject.sku,
         vendor: editingPrice.vendor,
         price: editingPrice.price,
+        quantity: editingPrice.quantity ?? 1,
         currency: editingPrice.currency,
         notes: editingPrice.notes,
         isActive:
@@ -1413,7 +1416,7 @@ function EditProduct() {
                       >
                         <Box>
                           <Typography variant="body2">
-                            {price.vendor} — {price.currency} {price.price}
+                            {price.vendor} — {price.currency} {parseFloat(price.price).toFixed(2)} × {price.quantity ?? 1} unit{(price.quantity ?? 1) !== 1 ? "s" : ""}
                           </Typography>
                           {price.inboundCompositeSku && (
                             <Typography variant="caption" color="text.secondary">
@@ -1458,13 +1461,27 @@ function EditProduct() {
                         <TextField
                           fullWidth
                           id="editingPrice"
-                          label="Price"
+                          label="Unit Price"
                           type="number"
                           value={editingPrice.price ?? ""}
                           onChange={(e) =>
                             setEditingPrice({
                               ...editingPrice,
                               price: e.target.value,
+                            })
+                          }
+                        />
+                        <TextField
+                          fullWidth
+                          id="editingQuantity"
+                          label="Quantity Purchased"
+                          type="number"
+                          inputProps={{ min: 1 }}
+                          value={editingPrice.quantity ?? 1}
+                          onChange={(e) =>
+                            setEditingPrice({
+                              ...editingPrice,
+                              quantity: parseInt(e.target.value, 10) || 1,
                             })
                           }
                         />

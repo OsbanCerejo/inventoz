@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   CardContent,
+  Divider,
   Grid,
   Paper,
   Typography,
@@ -43,6 +44,9 @@ function Product() {
   const [priceDialogOpen, setPriceDialogOpen] = useState(false);
   const [updatePrice, setUpdatePrice] = useState<number>(0);
 
+  const [vendorPrices, setVendorPrices] = useState<any[]>([]);
+  const [averagePrice, setAveragePrice] = useState<number | null>(null);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -70,6 +74,19 @@ function Product() {
           }
         );
         setProductListings(listings);
+
+        if (user?.role === "admin") {
+          try {
+            const { data: pricingData } = await axios.get(
+              getApiUrl(`product-vendor-prices/${product.sku}`)
+            );
+            setVendorPrices(pricingData.vendorPrices || []);
+            const avg = pricingData.averagePrice;
+            setAveragePrice(avg !== null && avg !== undefined ? Number(avg) : null);
+          } catch (pricingError) {
+            console.error("Error fetching vendor prices:", pricingError);
+          }
+        }
       } catch (error) {
         console.error("Error fetching product data:", error);
       }
@@ -390,6 +407,40 @@ function Product() {
                   <Box display="flex" justifyContent="space-between" py={1}>
                     {productObject.warehouseLocations}
                   </Box>
+
+                  {user?.role === "admin" && (
+                    <>
+                      <Divider sx={{ my: 2 }} />
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                        <Typography variant="subtitle2" fontWeight="bold">
+                          Vendor Pricing
+                        </Typography>
+                        {averagePrice !== null && (
+                          <Typography variant="body2" color="text.secondary">
+                            Avg cost: ${averagePrice.toFixed(2)}
+                          </Typography>
+                        )}
+                      </Box>
+                      {vendorPrices.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          No vendor prices recorded.
+                        </Typography>
+                      ) : (
+                        vendorPrices.map((vp: any) => (
+                          <Box key={vp.id} py={0.5}>
+                            <Typography variant="body2">
+                              {vp.vendor} — {vp.currency} {parseFloat(vp.price).toFixed(2)} × {vp.quantity} unit{vp.quantity !== 1 ? "s" : ""}
+                            </Typography>
+                            {vp.inboundCompositeSku && (
+                              <Typography variant="caption" color="text.secondary">
+                                Inbound: {vp.inboundCompositeSku}
+                              </Typography>
+                            )}
+                          </Box>
+                        ))
+                      )}
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </Box>

@@ -2,7 +2,7 @@ const { Products, ProductVendorPrice } = require("../models");
 
 class PricingService {
   /**
-   * Get all active vendor prices for a SKU with computed average
+   * Get all active vendor prices for a SKU with computed weighted average
    * @param {string} sku
    */
   static async getPricesBySku(sku) {
@@ -21,31 +21,40 @@ class PricingService {
   }
 
   /**
-   * Compute average price for a SKU based on active vendor prices
-   * (does not persist it on the product)
+   * Compute weighted average price for a SKU based on active vendor prices.
+   * Formula: sum(price * quantity) / sum(quantities)
    * @param {string} sku
    */
   static async getAveragePriceForSku(sku) {
     const records = await ProductVendorPrice.findAll({
       where: { sku, isActive: true },
-      attributes: ["price"],
+      attributes: ["price", "quantity"],
     });
 
     if (!records.length) {
       return null;
     }
 
-    const total = records.reduce(
-      (sum, record) => sum + parseFloat(record.price),
-      0
-    );
-    const avg = total / records.length;
+    let totalCost = 0;
+    let totalQuantity = 0;
 
+    for (const record of records) {
+      const price = parseFloat(record.price);
+      const qty = parseInt(record.quantity, 10) || 1;
+      totalCost += price * qty;
+      totalQuantity += qty;
+    }
+
+    if (totalQuantity === 0) {
+      return null;
+    }
+
+    const avg = totalCost / totalQuantity;
     return Number(avg.toFixed(2));
   }
 
   /**
-   * Recompute and persist average price for a SKU on the Products table
+   * Recompute and persist weighted average price for a SKU on the Products table
    * @param {string} sku
    */
   static async recomputeAndPersistAveragePrice(sku) {
@@ -71,6 +80,7 @@ class PricingService {
       sku,
       vendor,
       price,
+      quantity,
       currency,
       inboundCompositeSku,
       notes,
@@ -86,12 +96,18 @@ class PricingService {
       throw new Error("price must be a valid number");
     }
 
+    const numericQuantity = quantity !== undefined && quantity !== null ? parseInt(quantity, 10) : 1;
+    if (Number.isNaN(numericQuantity) || numericQuantity < 1) {
+      throw new Error("quantity must be a positive integer");
+    }
+
     const createdBy = user && user.id ? user.id : null;
 
     const record = await ProductVendorPrice.create({
       sku,
       vendor,
       price: numericPrice,
+      quantity: numericQuantity,
       currency: currency || "USD",
       inboundCompositeSku: inboundCompositeSku || null,
       isActive: isActive !== undefined ? isActive : true,
@@ -108,7 +124,7 @@ class PricingService {
   }
 
   /**
-   * Update an existing vendor price entry and recalculate average
+   * Update an existing vendor price entry and recalculate weighted average
    * @param {number} id
    * @param {Object} data
    */
@@ -122,6 +138,7 @@ class PricingService {
     const updatableFields = [
       "vendor",
       "price",
+      "quantity",
       "currency",
       "inboundCompositeSku",
       "isActive",
@@ -130,7 +147,13 @@ class PricingService {
 
     updatableFields.forEach((field) => {
       if (Object.prototype.hasOwnProperty.call(data, field)) {
-        updates[field] = field === "price" ? Number(data[field]) : data[field];
+        if (field === "price") {
+          updates[field] = Number(data[field]);
+        } else if (field === "quantity") {
+          updates[field] = parseInt(data[field], 10);
+        } else {
+          updates[field] = data[field];
+        }
       }
     });
 
@@ -141,11 +164,16 @@ class PricingService {
       throw new Error("price must be a valid number");
     }
 
+    if (
+      Object.prototype.hasOwnProperty.call(updates, "quantity") &&
+      (Number.isNaN(updates.quantity) || updates.quantity < 1)
+    ) {
+      throw new Error("quantity must be a positive integer");
+    }
+
     await record.update(updates);
 
-    const averagePrice = await this.recomputeAndPersistAveragePrice(
-      record.sku
-    );
+    const averagePrice = await this.recomputeAndPersistAveragePrice(record.sku);
 
     return {
       price: record,
@@ -154,7 +182,7 @@ class PricingService {
   }
 
   /**
-   * Soft-delete a price entry (set isActive=false) and recalc average
+   * Soft-delete a price entry (set isActive=false) and recalc weighted average
    * @param {number} id
    */
   static async deletePrice(id) {
@@ -165,9 +193,7 @@ class PricingService {
 
     await record.update({ isActive: false });
 
-    const averagePrice = await this.recomputeAndPersistAveragePrice(
-      record.sku
-    );
+    const averagePrice = await this.recomputeAndPersistAveragePrice(record.sku);
 
     return {
       price: record,
@@ -176,7 +202,8 @@ class PricingService {
   }
 
   /**
-   * Convenience helper: create a price entry during inbound flow if price provided
+   * Convenience helper: create a price entry during inbound flow if price provided.
+   * Only call this when a brand-new inbound record was created.
    * @param {Object} data
    * @param {Object} user
    */
@@ -192,4 +219,3 @@ class PricingService {
 }
 
 module.exports = PricingService;
-

@@ -18,22 +18,27 @@ router.post("/", auth, checkPermission('inbound', 'create'), async (req, res) =>
       defaults: inboundItem,
     });
 
-    // If a unit cost was provided, create a vendor price entry linked to this inbound record
-    try {
-      await PricingService.createPriceFromInbound(
-        {
-          sku: inboundItem.sku,
-          vendor: inboundItem.vendor,
-          price: inboundItem.price,
-          currency: inboundItem.currency,
-          inboundCompositeSku: inboundItem.compositeSku,
-          notes: inboundItem.priceNotes,
-        },
-        req.user
-      );
-    } catch (pricingError) {
-      console.error("Error creating vendor price from inbound:", pricingError);
-      // Do not fail the inbound operation if pricing fails
+    // Only create a vendor price entry when a brand-new inbound record was created.
+    // If the record already existed (duplicate compositeSku), skip pricing to avoid
+    // double-counting entries in the weighted average calculation.
+    if (created) {
+      try {
+        await PricingService.createPriceFromInbound(
+          {
+            sku: inboundItem.sku,
+            vendor: inboundItem.vendor,
+            price: inboundItem.price,
+            quantity: inboundItem.quantity,
+            currency: inboundItem.currency,
+            inboundCompositeSku: inboundItem.compositeSku,
+            notes: inboundItem.priceNotes,
+          },
+          req.user
+        );
+      } catch (pricingError) {
+        console.error("Error creating vendor price from inbound:", pricingError);
+        // Do not fail the inbound operation if pricing fails
+      }
     }
 
     res.json(created ? "Created New" : "Already Exists");
