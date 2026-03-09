@@ -44,7 +44,32 @@ function Products() {
         });
         setListOfProducts(response.data);
         try {
-          localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(response.data));
+          // Strip each product down to only the fields used for display/filtering
+          // to stay well under the localStorage 5 MB limit.
+          const slim = response.data.map((p: any) => ({
+            sku: p.sku,
+            brand: p.brand,
+            itemName: p.itemName,
+            sizeOz: p.sizeOz,
+            sizeMl: p.sizeMl,
+            strength: p.strength,
+            shade: p.shade,
+            location: p.location,
+            warehouseLocations: p.warehouseLocations,
+            quantity: p.quantity,
+            listed: p.listed,
+            verified: p.verified,
+            image: p.image,
+            category: p.category,
+            type: p.type,
+            condition: p.condition,
+            upc: p.upc,
+            alternativeSku: p.alternativeSku,
+            ProductDetail: p.ProductDetail
+              ? { tester: p.ProductDetail.tester, discontinued: p.ProductDetail.discontinued }
+              : undefined,
+          }));
+          localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(slim));
           localStorage.setItem(
             PRODUCTS_CACHE_TIMESTAMP_KEY,
             Date.now().toString()

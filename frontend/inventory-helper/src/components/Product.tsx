@@ -46,6 +46,7 @@ function Product() {
 
   const [vendorPrices, setVendorPrices] = useState<any[]>([]);
   const [averagePrice, setAveragePrice] = useState<number | null>(null);
+  const [inboundHistory, setInboundHistory] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -67,13 +68,21 @@ function Product() {
           }
         );
         setProductDetails(details);
-        const { data: listings } = await axios.get(
-          getApiUrl(`listings/bySku?nocache=${Date.now()}`),
-          {
-            params: { sku: product.sku },
+
+        try {
+          const { data: listings } = await axios.get(
+            getApiUrl(`listings/bySku?nocache=${Date.now()}`),
+            {
+              params: { sku: product.sku },
+            }
+          );
+          setProductListings(listings);
+        } catch (listingsError: any) {
+          if (listingsError?.response?.status !== 404) {
+            console.error("Error fetching product listings:", listingsError);
           }
-        );
-        setProductListings(listings);
+          setProductListings({});
+        }
 
       } catch (error) {
         console.error("Error fetching product data:", error);
@@ -91,18 +100,29 @@ function Product() {
     }
   }, [id, location.state]);
 
+  // Separate effect for pricing + inbound history.
+  // Kept separate so it re-fires when auth finishes loading (user was null on first render).
   useEffect(() => {
     const sku = productObject.sku;
-    if (!sku || user?.role !== "admin") return;
+    if (!sku || !user) return;
 
+    // Inbound history — visible to all authenticated users
     axios
-      .get(getApiUrl(`product-vendor-prices/${sku}`))
-      .then(({ data: pricingData }) => {
-        setVendorPrices(pricingData.vendorPrices || []);
-        const avg = pricingData.averagePrice;
-        setAveragePrice(avg !== null && avg !== undefined ? Number(avg) : null);
-      })
-      .catch((err) => console.error("Error fetching vendor prices:", err));
+      .get(getApiUrl(`inbound/bySku/${sku}`))
+      .then(({ data }) => setInboundHistory(data || []))
+      .catch((err) => console.error("Error fetching inbound history:", err));
+
+    // Vendor pricing — admin only
+    if (user.role === "admin") {
+      axios
+        .get(getApiUrl(`product-vendor-prices/${sku}`))
+        .then(({ data: pricingData }) => {
+          setVendorPrices(pricingData.vendorPrices || []);
+          const avg = pricingData.averagePrice;
+          setAveragePrice(avg !== null && avg !== undefined ? Number(avg) : null);
+        })
+        .catch((err) => console.error("Error fetching vendor prices:", err));
+    }
   }, [productObject.sku, user]);
 
   // Handle the edit button click and redirect with the product to edit page
@@ -345,7 +365,7 @@ function Product() {
                       <u>Warehouse Details</u>
                     </strong>
                   </Typography>
-                  <br></br>
+                  <br />
                   {[
                     ["Location", productObject.location],
                     ["Quantity Available", productObject.quantity],
@@ -362,58 +382,16 @@ function Product() {
                       <Typography variant="body1">{value}</Typography>
                     </Box>
                   ))}
-                  <strong>Listed Quantity</strong>
-                  {productObject.listed && (
-                    <>
-                      <Box
-                        display="flex"
-                        justifyContent="space-between"
-                        py={1}
-                        style={{
-                          backgroundColor: "#EE66A6",
-                        }}
-                      >
-                        B4L: {productListings.ebayBuy4LessToday} <br />
-                      </Box>
-                      <Box
-                        display="flex"
-                        justifyContent="space-between"
-                        py={1}
-                        style={{
-                          backgroundColor: "#FFEB55",
-                        }}
-                      >
-                        OLL: {productListings.ebayOneLifeLuxuries4}
-                        <br />
-                      </Box>
-                      <Box
-                        display="flex"
-                        justifyContent="space-between"
-                        py={1}
-                        style={{
-                          backgroundColor: "#0071ce",
-                        }}
-                      >
-                        Walmart: {productListings.walmartOneLifeLuxuries}
-                        <br />
-                      </Box>
-                      <br />
-                    </>
-                  )}
-                  {!productObject.listed && (
-                    <strong style={{ backgroundColor: "skyblue" }}>
-                      NOT LISTED
-                    </strong>
-                  )}
-                  <strong>Warehouse Location</strong>
+                  <Typography variant="body1" fontWeight="bold">Warehouse Location</Typography>
                   <Box display="flex" justifyContent="space-between" py={1}>
-                    {productObject.warehouseLocations}
+                    <Typography variant="body1">{productObject.warehouseLocations || "—"}</Typography>
                   </Box>
 
+                  {/* Vendor Pricing — admin only, fixed height scrollable */}
                   {user?.role === "admin" && (
                     <>
-                      <Divider sx={{ my: 2 }} />
-                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                      <Divider sx={{ my: 1.5 }} />
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
                         <Typography variant="subtitle2" fontWeight="bold">
                           Vendor Pricing
                         </Typography>
@@ -423,26 +401,76 @@ function Product() {
                           </Typography>
                         )}
                       </Box>
-                      {vendorPrices.length === 0 ? (
-                        <Typography variant="body2" color="text.secondary">
-                          No vendor prices recorded.
-                        </Typography>
-                      ) : (
-                        vendorPrices.map((vp: any) => (
-                          <Box key={vp.id} py={0.5}>
-                            <Typography variant="body2">
-                              {vp.vendor} — {vp.currency} {parseFloat(vp.price).toFixed(2)} × {vp.quantity} unit{vp.quantity !== 1 ? "s" : ""}
-                            </Typography>
-                            {vp.inboundCompositeSku && (
-                              <Typography variant="caption" color="text.secondary">
-                                Inbound: {vp.inboundCompositeSku}
+                      <Box
+                        sx={{
+                          height: 120,
+                          overflowY: "auto",
+                          border: "1px solid",
+                          borderColor: "divider",
+                          borderRadius: 1,
+                          p: 1,
+                          bgcolor: "background.paper",
+                        }}
+                      >
+                        {vendorPrices.length === 0 ? (
+                          <Typography variant="body2" color="text.secondary">
+                            No vendor prices recorded.
+                          </Typography>
+                        ) : (
+                          vendorPrices.map((vp: any) => (
+                            <Box key={vp.id} py={0.25}>
+                              <Typography variant="body2">
+                                {vp.vendor} — {vp.currency} {parseFloat(vp.price).toFixed(2)} × {vp.quantity ?? 1} unit{(vp.quantity ?? 1) !== 1 ? "s" : ""}
                               </Typography>
-                            )}
-                          </Box>
-                        ))
-                      )}
+                              {vp.inboundCompositeSku && (
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  Inbound: {vp.inboundCompositeSku}
+                                </Typography>
+                              )}
+                            </Box>
+                          ))
+                        )}
+                      </Box>
                     </>
                   )}
+
+                  {/* Inbound History — fixed height scrollable */}
+                  <Divider sx={{ my: 1.5 }} />
+                  <Typography variant="subtitle2" fontWeight="bold" mb={0.5}>
+                    Inbound History
+                  </Typography>
+                  <Box
+                    sx={{
+                      height: 120,
+                      overflowY: "auto",
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                      p: 1,
+                      bgcolor: "background.paper",
+                    }}
+                  >
+                    {inboundHistory.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        No inbound records found.
+                      </Typography>
+                    ) : (
+                      inboundHistory.map((record: any) => (
+                        <Box key={record.compositeSku} py={0.25}>
+                          <Typography variant="body2">
+                            {record.vendor || "Unknown vendor"} — Qty: {record.quantity} —{" "}
+                            {record.date
+                              ? new Date(record.date).toLocaleDateString("en-US", {
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                })
+                              : "No date"}
+                          </Typography>
+                        </Box>
+                      ))
+                    )}
+                  </Box>
                 </CardContent>
               </Card>
             </Box>

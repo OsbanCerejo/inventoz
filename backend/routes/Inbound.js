@@ -77,4 +77,18 @@ router.get("/search/:itemName", auth, checkPermission('inbound', 'view'), async 
   res.json(searchResults);
 });
 
+router.get("/bySku/:sku", auth, checkPermission('inbound', 'view'), async (req, res) => {
+  try {
+    const { sku } = req.params;
+    const records = await Inbound.findAll({
+      where: { sku },
+      order: [["date", "DESC"]],
+    });
+    res.json(records);
+  } catch (error) {
+    console.error("Error fetching inbound by SKU:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 module.exports = router;
