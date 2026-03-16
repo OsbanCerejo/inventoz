@@ -119,7 +119,6 @@ function AddProduct() {
     minimumQuantity: "",
     // Pricing (admin-only, used during inbound)
     unitCost: "",
-    currency: "USD",
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -173,7 +172,6 @@ function AddProduct() {
     minimumQuantity: Yup.number().nullable(),
     // Pricing
     unitCost: Yup.number().nullable(),
-    currency: Yup.string(),
   });
 
   const formik = useFormik({
@@ -261,7 +259,6 @@ function AddProduct() {
               compositeSku: compositeInboundKey,
               // Pricing data (optional, admin-only)
               price: data.unitCost,
-              currency: data.currency || "USD",
             };
 
             // Add the product to Inbound table along with the new composite Inbound key
@@ -1382,26 +1379,6 @@ function AddProduct() {
                               }
                               helperText={
                                 formik.touched.unitCost && formik.errors.unitCost
-                              }
-                            />
-                          </Box>
-                        </Grid>
-                        <Grid item xs={12}>
-                          <Box pt={4}>
-                            <TextField
-                              fullWidth
-                              id="currency"
-                              name="currency"
-                              label="Currency"
-                              value={formik.values.currency}
-                              onChange={formik.handleChange}
-                              onBlur={formik.handleBlur}
-                              error={
-                                formik.touched.currency &&
-                                Boolean(formik.errors.currency)
-                              }
-                              helperText={
-                                formik.touched.currency && formik.errors.currency
                               }
                             />
                           </Box>

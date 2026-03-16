@@ -12,9 +12,13 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: false
       },
-      vendor: {
+      vendorInvoiceNumber: {
         type: DataTypes.STRING,
         allowNull: false
+      },
+      vendorName: {
+        type: DataTypes.STRING,
+        allowNull: true
       },
       price: {
         type: DataTypes.DECIMAL(10, 2),
@@ -24,11 +28,6 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         defaultValue: 1
-      },
-      currency: {
-        type: DataTypes.STRING,
-        allowNull: false,
-        defaultValue: 'USD'
       },
       inboundCompositeSku: {
         type: DataTypes.STRING,

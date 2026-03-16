@@ -417,18 +417,71 @@ function Product() {
                             No vendor prices recorded.
                           </Typography>
                         ) : (
-                          vendorPrices.map((vp: any) => (
-                            <Box key={vp.id} py={0.25}>
-                              <Typography variant="body2">
-                                {vp.vendor} — {vp.currency} {parseFloat(vp.price).toFixed(2)} × {vp.quantity ?? 1} unit{(vp.quantity ?? 1) !== 1 ? "s" : ""}
-                              </Typography>
-                              {vp.inboundCompositeSku && (
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                  Inbound: {vp.inboundCompositeSku}
-                                </Typography>
-                              )}
-                            </Box>
-                          ))
+                          <table
+                            style={{
+                              width: "100%",
+                              borderCollapse: "collapse",
+                              fontSize: 13,
+                            }}
+                          >
+                            <thead>
+                              <tr>
+                                <th
+                                  style={{ textAlign: "left", padding: 4 }}
+                                >
+                                  Vendor Name
+                                </th>
+                                <th
+                                  style={{ textAlign: "left", padding: 4 }}
+                                >
+                                  Invoice #
+                                </th>
+                                <th
+                                  style={{ textAlign: "right", padding: 4 }}
+                                >
+                                  Price
+                                </th>
+                                <th
+                                  style={{ textAlign: "right", padding: 4 }}
+                                >
+                                  Qty
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {vendorPrices.map((vp: any) => {
+                                const name =
+                                  vp.vendorName ||
+                                  vp.vendor ||
+                                  "Unknown vendor";
+                                const invoice = vp.vendorInvoiceNumber || "";
+                                const qty = vp.quantity ?? 1;
+
+                                return (
+                                  <tr key={vp.id}>
+                                    <td style={{ padding: 4 }}>{name}</td>
+                                    <td style={{ padding: 4 }}>{invoice}</td>
+                                    <td
+                                      style={{
+                                        padding: 4,
+                                        textAlign: "right",
+                                      }}
+                                    >
+                                      ${parseFloat(vp.price).toFixed(2)}
+                                    </td>
+                                    <td
+                                      style={{
+                                        padding: 4,
+                                        textAlign: "right",
+                                      }}
+                                    >
+                                      {qty}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
                         )}
                       </Box>
                     </>
@@ -457,16 +510,29 @@ function Product() {
                     ) : (
                       inboundHistory.map((record: any) => (
                         <Box key={record.compositeSku} py={0.25}>
-                          <Typography variant="body2">
-                            {record.vendor || "Unknown vendor"} — Qty: {record.quantity} —{" "}
-                            {record.date
-                              ? new Date(record.date).toLocaleDateString("en-US", {
-                                  year: "numeric",
-                                  month: "short",
-                                  day: "numeric",
-                                })
-                              : "No date"}
-                          </Typography>
+                          {(() => {
+                            const name =
+                              record.vendorName ||
+                              record.vendor ||
+                              "Unknown vendor";
+                            const invoice =
+                              record.vendorInvoiceNumber || "";
+                            const vendorDisplay = invoice
+                              ? `${name} (Invoice: ${invoice})`
+                              : name;
+                            return (
+                              <Typography variant="body2">
+                                {vendorDisplay} — Qty: {record.quantity} —{" "}
+                                {record.date
+                                  ? new Date(record.date).toLocaleDateString("en-US", {
+                                      year: "numeric",
+                                      month: "short",
+                                      day: "numeric",
+                                    })
+                                  : "No date"}
+                              </Typography>
+                            );
+                          })()}
                         </Box>
                       ))
                     )}

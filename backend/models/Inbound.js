@@ -18,7 +18,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      vendor: {
+      vendorInvoiceNumber: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      vendorName: {
         type: DataTypes.STRING,
         allowNull: true,
       },

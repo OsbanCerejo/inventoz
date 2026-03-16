@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { Inbound, Products } = require("../models");
+const { Inbound, Products, Logs } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 const StockUpdateService = require("../Services/StockUpdateService");
@@ -13,9 +13,21 @@ router.post("/", auth, checkPermission('inbound', 'create'), async (req, res) =>
     const inboundItem = req.body;
     // console.log("Inbound object in backend is : ", inboundItem);
 
+    const vendorInvoiceNumber =
+      inboundItem.vendorInvoiceNumber || inboundItem.vendor || null;
+    const vendorName =
+      inboundItem.vendorName || inboundItem.vendor || null;
+
+    const inboundDefaults = {
+      ...inboundItem,
+      vendorInvoiceNumber,
+      vendorName,
+    };
+    delete inboundDefaults.vendor;
+
     const [found, created] = await Inbound.findOrCreate({
       where: { compositeSku: inboundItem.compositeSku },
-      defaults: inboundItem,
+      defaults: inboundDefaults,
     });
 
     // Only create a vendor price entry when a brand-new inbound record was created.
@@ -26,10 +38,10 @@ router.post("/", auth, checkPermission('inbound', 'create'), async (req, res) =>
         await PricingService.createPriceFromInbound(
           {
             sku: inboundItem.sku,
-            vendor: inboundItem.vendor,
+            vendorInvoiceNumber,
+            vendorName,
             price: inboundItem.price,
             quantity: inboundItem.quantity,
-            currency: inboundItem.currency,
             inboundCompositeSku: inboundItem.compositeSku,
             notes: inboundItem.priceNotes,
           },
@@ -39,6 +51,36 @@ router.post("/", auth, checkPermission('inbound', 'create'), async (req, res) =>
         console.error("Error creating vendor price from inbound:", pricingError);
         // Do not fail the inbound operation if pricing fails
       }
+
+      await Logs.create({
+        type: "inbound",
+        action: "create",
+        entityType: "inbound",
+        entityId: inboundItem.compositeSku,
+        changes: null,
+        previousState: null,
+        newState: inboundItem,
+        userId: req.user ? String(req.user.id) : null,
+        metaData: {
+          source: "inbound_post",
+          createdWithPricing: true,
+        },
+      });
+    } else {
+      await Logs.create({
+        type: "inbound",
+        action: "create",
+        entityType: "inbound",
+        entityId: inboundItem.compositeSku,
+        changes: null,
+        previousState: found,
+        newState: inboundItem,
+        userId: req.user ? String(req.user.id) : null,
+        metaData: {
+          source: "inbound_post",
+          note: "Duplicate compositeSku, inbound record already existed",
+        },
+      });
     }
 
     res.json(created ? "Created New" : "Already Exists");
@@ -51,7 +93,24 @@ router.post("/", auth, checkPermission('inbound', 'create'), async (req, res) =>
 router.put("/", auth, checkPermission('inbound', 'edit'), async (req, res) => {
   try {
     const { sku, quantity } = req.body;
+    const previousInboundRecords = await Inbound.findAll({ where: { sku } });
+
     await StockUpdateService.updateProductQuantity(sku, quantity);
+
+    await Logs.create({
+      type: "inbound",
+      action: "update",
+      entityType: "inbound",
+      entityId: sku,
+      changes: { quantity },
+      previousState: previousInboundRecords,
+      newState: null,
+      userId: req.user ? String(req.user.id) : null,
+      metaData: {
+        source: "inbound_put",
+      },
+    });
+
     res.json("Updated");
   } catch (error) {
     console.error("Error updating product quantity:", error);

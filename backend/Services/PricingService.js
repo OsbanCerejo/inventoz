@@ -78,17 +78,20 @@ class PricingService {
   static async createPrice(data, user) {
     const {
       sku,
-      vendor,
+      vendorInvoiceNumber,
+      vendor, // backwards compatibility with old payloads
+      vendorName,
       price,
       quantity,
-      currency,
       inboundCompositeSku,
       notes,
       isActive,
     } = data;
 
-    if (!sku || !vendor || price === undefined || price === null) {
-      throw new Error("sku, vendor, and price are required");
+    const resolvedVendorInvoiceNumber = vendorInvoiceNumber || vendor;
+
+    if (!sku || !resolvedVendorInvoiceNumber || price === undefined || price === null) {
+      throw new Error("sku, vendorInvoiceNumber, and price are required");
     }
 
     const numericPrice = Number(price);
@@ -105,10 +108,10 @@ class PricingService {
 
     const record = await ProductVendorPrice.create({
       sku,
-      vendor,
+      vendorInvoiceNumber: resolvedVendorInvoiceNumber,
+      vendorName: vendorName || vendor || null,
       price: numericPrice,
       quantity: numericQuantity,
-      currency: currency || "USD",
       inboundCompositeSku: inboundCompositeSku || null,
       isActive: isActive !== undefined ? isActive : true,
       createdBy,
@@ -136,10 +139,11 @@ class PricingService {
 
     const updates = {};
     const updatableFields = [
-      "vendor",
+      "vendorInvoiceNumber",
+      "vendor", // backwards compatibility
+      "vendorName",
       "price",
       "quantity",
-      "currency",
       "inboundCompositeSku",
       "isActive",
       "notes",
@@ -151,6 +155,9 @@ class PricingService {
           updates[field] = Number(data[field]);
         } else if (field === "quantity") {
           updates[field] = parseInt(data[field], 10);
+        } else if (field === "vendor") {
+          // map legacy 'vendor' to 'vendorInvoiceNumber'
+          updates.vendorInvoiceNumber = data[field];
         } else {
           updates[field] = data[field];
         }

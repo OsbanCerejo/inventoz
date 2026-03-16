@@ -37,7 +37,6 @@ function InboundProduct() {
     batch: "",
     compositeSku: "",
     unitCost: "",
-    currency: "USD",
   };
 
   const formikValidationSchema = Yup.object().shape({
@@ -47,7 +46,6 @@ function InboundProduct() {
     date: Yup.date().required(),
     batch: Yup.string(),
     unitCost: Yup.number().nullable(),
-    currency: Yup.string(),
   });
 
   const formik = useFormik({
@@ -70,7 +68,6 @@ function InboundProduct() {
         compositeSku: compositeInboundKey, //Change compositeSKU in data to compositeInboundSku
         // Pricing data (optional, admin-only)
         price: data.unitCost,
-        currency: data.currency || "USD",
       };
       
       try {
@@ -152,24 +149,6 @@ function InboundProduct() {
                     }
                     helperText={
                       formik.touched.unitCost && formik.errors.unitCost
-                    }
-                  />
-                </Box>
-                <Box m={2} pt={3}>
-                  <TextField
-                    fullWidth
-                    id="currency"
-                    name="currency"
-                    label="Currency"
-                    value={formik.values.currency}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    error={
-                      formik.touched.currency &&
-                      Boolean(formik.errors.currency)
-                    }
-                    helperText={
-                      formik.touched.currency && formik.errors.currency
                     }
                   />
                 </Box>

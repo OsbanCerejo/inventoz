@@ -384,10 +384,10 @@ function EditProduct() {
     setEditingPrice({
       id: null,
       sku: productObject.sku,
-      vendor: "",
+      vendorInvoiceNumber: "",
+      vendorName: "",
       price: "",
       quantity: 1,
-      currency: "USD",
       notes: "",
       isActive: true,
     });
@@ -401,7 +401,6 @@ function EditProduct() {
       ...price,
       price: price.price ?? "",
       quantity: price.quantity ?? 1,
-      currency: price.currency || "USD",
       notes: price.notes || "",
     });
     setIsEditingExisting(true);
@@ -421,10 +420,10 @@ function EditProduct() {
 
       const payload = {
         sku: productObject.sku,
-        vendor: editingPrice.vendor,
+        vendorInvoiceNumber: editingPrice.vendorInvoiceNumber || editingPrice.vendor || "",
+        vendorName: editingPrice.vendorName || "",
         price: editingPrice.price,
         quantity: editingPrice.quantity ?? 1,
-        currency: editingPrice.currency,
         notes: editingPrice.notes,
         isActive:
           editingPrice.isActive === undefined ? true : editingPrice.isActive,
@@ -1360,7 +1359,9 @@ function EditProduct() {
                                 Boolean(formik.errors.minimumQuantity)
                               }
                               helperText={
-                                formik.touched.minimumQuantity && formik.errors.minimumQuantity
+                                formik.touched.minimumQuantity && typeof formik.errors.minimumQuantity === "string"
+                                  ? formik.errors.minimumQuantity
+                                  : ""
                               }
                             />
                           </Box>
@@ -1405,41 +1406,102 @@ function EditProduct() {
                       No vendor prices recorded.
                     </Typography>
                   )}
-                  {!loadingPrices &&
-                    vendorPrices.map((price: any) => (
-                      <Box
-                        key={price.id}
-                        display="flex"
-                        justifyContent="space-between"
-                        alignItems="center"
-                        mt={1}
+                  {!loadingPrices && vendorPrices.length > 0 && (
+                    <Box mt={1}>
+                      <table
+                        style={{
+                          width: "100%",
+                          borderCollapse: "collapse",
+                          fontSize: 13,
+                        }}
                       >
-                        <Box>
-                          <Typography variant="body2">
-                            {price.vendor} — {price.currency} {parseFloat(price.price).toFixed(2)} × {price.quantity ?? 1} unit{(price.quantity ?? 1) !== 1 ? "s" : ""}
-                          </Typography>
-                          {price.inboundCompositeSku && (
-                            <Typography variant="caption" color="text.secondary">
-                              Inbound: {price.inboundCompositeSku}
-                            </Typography>
-                          )}
-                        </Box>
-                        <Box>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleEditPrice(price)}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDeletePrice(price.id)}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Box>
-                      </Box>
-                    ))}
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign: "left", padding: 4 }}>
+                              Vendor Name
+                            </th>
+                            <th style={{ textAlign: "left", padding: 4 }}>
+                              Invoice #
+                            </th>
+                            <th style={{ textAlign: "right", padding: 4 }}>
+                              Price
+                            </th>
+                            <th style={{ textAlign: "right", padding: 4 }}>
+                              Qty
+                            </th>
+                            <th style={{ textAlign: "center", padding: 4 }}>
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {vendorPrices.map((price: any) => {
+                            const name =
+                              price.vendorName ||
+                              price.vendor ||
+                              "Unknown vendor";
+                            const invoice = price.vendorInvoiceNumber || "";
+                            const qty = price.quantity ?? 1;
+
+                            return (
+                              <tr key={price.id}>
+                                <td style={{ padding: 4 }}>{name}</td>
+                                <td style={{ padding: 4 }}>{invoice}</td>
+                                <td
+                                  style={{
+                                    padding: 4,
+                                    textAlign: "right",
+                                  }}
+                                >
+                                  ${parseFloat(price.price).toFixed(2)}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: 4,
+                                    textAlign: "right",
+                                  }}
+                                >
+                                  {qty}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: 2,
+                                    textAlign: "center",
+                                  }}
+                                >
+                                  <Box
+                                    display="flex"
+                                    justifyContent="center"
+                                    alignItems="center"
+                                    gap={0.25}
+                                  >
+                                    <IconButton
+                                      size="small"
+                                      color="primary"
+                                      onClick={() => handleEditPrice(price)}
+                                      sx={{ p: 0.25 }}
+                                    >
+                                      <EditIcon sx={{ fontSize: 14 }} />
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      color="error"
+                                      onClick={() =>
+                                        handleDeletePrice(price.id)
+                                      }
+                                      sx={{ p: 0.25 }}
+                                    >
+                                      <DeleteIcon sx={{ fontSize: 14 }} />
+                                    </IconButton>
+                                  </Box>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </Box>
+                  )}
                   {editingPrice && (
                     <Box mt={2}>
                       <Typography variant="subtitle2" gutterBottom>
@@ -1448,13 +1510,25 @@ function EditProduct() {
                       <Box display="flex" flexDirection="column" gap={2}>
                         <TextField
                           fullWidth
-                          id="editingVendor"
-                          label="Vendor"
-                          value={editingPrice.vendor || ""}
+                          id="editingVendorInvoiceNumber"
+                          label="Vendor Invoice Number"
+                          value={editingPrice.vendorInvoiceNumber || editingPrice.vendor || ""}
                           onChange={(e) =>
                             setEditingPrice({
                               ...editingPrice,
-                              vendor: e.target.value,
+                              vendorInvoiceNumber: e.target.value,
+                            })
+                          }
+                        />
+                        <TextField
+                          fullWidth
+                          id="editingVendorName"
+                          label="Vendor Name"
+                          value={editingPrice.vendorName || ""}
+                          onChange={(e) =>
+                            setEditingPrice({
+                              ...editingPrice,
+                              vendorName: e.target.value,
                             })
                           }
                         />
@@ -1482,18 +1556,6 @@ function EditProduct() {
                             setEditingPrice({
                               ...editingPrice,
                               quantity: parseInt(e.target.value, 10) || 1,
-                            })
-                          }
-                        />
-                        <TextField
-                          fullWidth
-                          id="editingCurrency"
-                          label="Currency"
-                          value={editingPrice.currency || "USD"}
-                          onChange={(e) =>
-                            setEditingPrice({
-                              ...editingPrice,
-                              currency: e.target.value,
                             })
                           }
                         />
