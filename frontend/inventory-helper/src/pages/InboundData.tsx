@@ -15,9 +15,16 @@ function InboundData() {
     direction: "asc",
   });
   const [filterConfig, setFilterConfig] = useState<{
-    key: string;
-    value: string;
-  }>({ key: "", value: "" });
+    sku: string;
+    itemName: string;
+    batch: string;
+    vendorName: string;
+  }>({
+    sku: "",
+    itemName: "",
+    batch: "",
+    vendorName: "",
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [productsPerPage] = useState(20);
 
@@ -36,34 +43,23 @@ function InboundData() {
     }
   };
 
+  const includesIgnoreCase = (value: any, query: string) => {
+    if (!query) return true;
+    if (value === null || value === undefined) return false;
+    return value.toString().toLowerCase().includes(query.toLowerCase());
+  };
+
   const sortedAndFilteredInbound = listOfInbound
     .filter((product) => {
-      if (filterConfig.key && filterConfig.value) {
-        if (filterConfig.key === "itemName") {
-          const productValue = product.Product[filterConfig.key];
-          return productValue
-            ? productValue
-                .toLowerCase()
-                .includes(filterConfig.value.toLowerCase())
-            : false;
-        } else if (filterConfig.key === "vendorName") {
-          const vendorValue =
-            product.vendorName || product.vendor || product.vendorInvoiceNumber;
-          return vendorValue
-            ? vendorValue
-                .toLowerCase()
-                .includes(filterConfig.value.toLowerCase())
-            : false;
-        } else {
-          const productValue = product[filterConfig.key];
-          return productValue
-            ? productValue
-                .toLowerCase()
-                .includes(filterConfig.value.toLowerCase())
-            : false;
-        }
-      }
-      return true;
+      const vendorValue =
+        product.vendorName || product.vendor || product.vendorInvoiceNumber;
+
+      return (
+        includesIgnoreCase(product.sku, filterConfig.sku) &&
+        includesIgnoreCase(product.Product?.itemName, filterConfig.itemName) &&
+        includesIgnoreCase(product.batch, filterConfig.batch) &&
+        includesIgnoreCase(vendorValue, filterConfig.vendorName)
+      );
     })
     .sort((a, b) => {
       if (sortConfig.key) {
@@ -99,10 +95,12 @@ function InboundData() {
 
   const handleFilterChange = (
     e: React.ChangeEvent<HTMLInputElement>,
-    columnKey: string
+    columnKey: "sku" | "itemName" | "batch" | "vendorName"
   ) => {
-    const newFilterConfig = { key: columnKey, value: e.target.value };
-    setFilterConfig(newFilterConfig);
+    setFilterConfig((prev) => ({
+      ...prev,
+      [columnKey]: e.target.value,
+    }));
     paginate(1);
   };
   const paginate = (pageNumber: number) => {

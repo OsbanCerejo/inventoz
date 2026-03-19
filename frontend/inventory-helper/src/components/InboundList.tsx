@@ -14,10 +14,15 @@ interface Props {
   heading: string;
   handleSort: (columnKey: string) => void;
   sortConfig: { key: string | null; direction: string };
-  filterConfig: { key: string; value: string };
+  filterConfig: {
+    sku: string;
+    itemName: string;
+    batch: string;
+    vendorName: string;
+  };
   handleFilterChange: (
     e: React.ChangeEvent<HTMLInputElement>,
-    columnKey: string
+    columnKey: "sku" | "itemName" | "batch" | "vendorName"
   ) => void;
   currentPage: number;
   productsPerPage: number;
@@ -100,7 +105,7 @@ function ProductList({
                 <br></br>
                 <input
                   type="text"
-                  value={filterConfig.key === "sku" ? filterConfig.value : ""}
+                  value={filterConfig.sku}
                   onChange={(e) => handleFilterChange(e, "sku")}
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -120,9 +125,7 @@ function ProductList({
                 <br></br>
                 <input
                   type="text"
-                  value={
-                    filterConfig.key === "itemName" ? filterConfig.value : ""
-                  }
+                  value={filterConfig.itemName}
                   onChange={(e) => handleFilterChange(e, "itemName")}
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -136,7 +139,7 @@ function ProductList({
                 <input
                   type="text"
                   style={{ width: "100%" }}
-                  value={filterConfig.key === "batch" ? filterConfig.value : ""}
+                  value={filterConfig.batch}
                   onChange={(e) => handleFilterChange(e, "batch")}
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -163,9 +166,7 @@ function ProductList({
                 <input
                   type="text"
                   style={{ width: "100%" }}
-                  value={
-                    filterConfig.key === "vendorName" ? filterConfig.value : ""
-                  }
+                  value={filterConfig.vendorName}
                   onChange={(e) => handleFilterChange(e, "vendorName")}
                   onClick={(e) => e.stopPropagation()}
                 />
