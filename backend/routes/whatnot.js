@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Products, WhatnotLog, WhatnotShow } = require('../models');
+const { Products, ProductDetails, WhatnotLog, WhatnotShow } = require('../models');
 const { auth } = require('../middleware/auth');
 const { checkPermission } = require('../middleware/permissions');
 const { Op } = require('sequelize');
@@ -204,19 +204,60 @@ router.post('/search-barcode', auth, checkPermission('whatnot', 'view'), async (
 // Get Whatnot logs
 router.get('/logs', auth, checkPermission('whatnot', 'view'), async (req, res) => {
   try {
+    const { showId, limit } = req.query;
+    const where = {};
+
+    if (showId) {
+      where.whatnotShowId = showId;
+    }
+
+    const parsedLimit = Number(limit);
+    const rowLimit = Number.isNaN(parsedLimit) ? 100 : Math.min(parsedLimit, 500);
+
     const logs = await WhatnotLog.findAll({
-      include: [{
-        model: Products,
-        as: 'product'
-      }, {
-        model: WhatnotShow,
-        as: 'show'
-      }],
+      where,
       order: [['createdAt', 'DESC']],
-      limit: 100
+      limit: rowLimit
     });
-    
-    res.json(logs);
+
+    const skus = [
+      ...new Set(
+        logs
+          .map((log) => log.sku)
+          .filter((sku) => typeof sku === 'string' && sku.length > 0)
+      ),
+    ];
+
+    let productsBySku = {};
+    if (skus.length > 0) {
+      const products = await Products.findAll({
+        where: {
+          sku: {
+            [Op.in]: skus,
+          },
+        },
+        include: [{
+          model: ProductDetails,
+          required: false,
+          attributes: ['tester']
+        }]
+      });
+
+      productsBySku = products.reduce((acc, product) => {
+        acc[product.sku] = product;
+        return acc;
+      }, {});
+    }
+
+    const enrichedLogs = logs.map((log) => {
+      const plain = log.toJSON();
+      return {
+        ...plain,
+        product: plain.sku ? productsBySku[plain.sku] || null : null,
+      };
+    });
+
+    res.json(enrichedLogs);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

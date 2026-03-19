@@ -21,8 +21,10 @@ import {
   FormControl,
   InputLabel,
   MenuItem,
-  Select
+  Select,
+  ListItemText
 } from '@mui/material';
+import ScienceIcon from "@mui/icons-material/Science";
 import { invalidateProductsCache } from "../utils/productCache";
 import { useAuth } from "../context/AuthContext";
 
@@ -41,6 +43,9 @@ interface Product {
   brand: string;
   quantity: number;
   productDetails?: ProductDetails;
+  ProductDetail?: {
+    tester?: boolean;
+  };
   image?: string;
   category?: string;
   sizeOz?: number;
@@ -63,6 +68,17 @@ interface WhatnotShow {
   isActive: boolean;
 }
 
+interface WhatnotScanLog {
+  id: number;
+  barcode: string;
+  status: 'not_found' | 'found' | 'multiple_found';
+  sku?: string | null;
+  previousQuantity?: number | null;
+  newQuantity?: number | null;
+  createdAt: string;
+  product?: Product | null;
+}
+
 
 
 const Whatnot: React.FC = () => {
@@ -78,7 +94,12 @@ const Whatnot: React.FC = () => {
   const [shows, setShows] = useState<WhatnotShow[]>([]);
   const [selectedShowId, setSelectedShowId] = useState<string>('');
   const [newShowName, setNewShowName] = useState('');
+  const [scanLogs, setScanLogs] = useState<WhatnotScanLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const showStorageKey = user?.id
+    ? `whatnot:selectedShow:${user.id}`
+    : 'whatnot:selectedShow';
 
   const fetchShows = async () => {
     try {
@@ -87,14 +108,55 @@ const Whatnot: React.FC = () => {
       const showList: WhatnotShow[] = response.data || [];
       setShows(showList);
 
-      if (!selectedShowId && showList.length > 0) {
+      let savedShowId = '';
+      try {
+        savedShowId = localStorage.getItem(showStorageKey) || '';
+      } catch (storageError) {
+        console.warn('Unable to read selected show from localStorage', storageError);
+      }
+
+      const hasSelectedShow = selectedShowId
+        ? showList.some((show) => String(show.id) === selectedShowId)
+        : false;
+      const hasSavedShow = savedShowId
+        ? showList.some((show) => String(show.id) === savedShowId)
+        : false;
+
+      if (hasSavedShow && savedShowId !== selectedShowId) {
+        setSelectedShowId(savedShowId);
+      } else if (!hasSelectedShow && showList.length > 0) {
         setSelectedShowId(String(showList[0].id));
+      } else if (showList.length === 0) {
+        setSelectedShowId('');
       }
     } catch (err) {
       console.error('Error fetching Whatnot shows:', err);
       setError('Failed to load shows');
     } finally {
       setShowsLoading(false);
+    }
+  };
+
+  const fetchScanLogs = async (showId: string) => {
+    if (!showId) {
+      setScanLogs([]);
+      return;
+    }
+
+    try {
+      setLogsLoading(true);
+      const response = await axios.get(getApiUrl('whatnot/logs'), {
+        params: {
+          showId: Number(showId),
+          limit: 10
+        }
+      });
+      setScanLogs(response.data || []);
+    } catch (err) {
+      console.error('Error fetching Whatnot scan logs:', err);
+      setError('Failed to load recent scans');
+    } finally {
+      setLogsLoading(false);
     }
   };
 
@@ -105,6 +167,22 @@ const Whatnot: React.FC = () => {
     fetchShows();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!selectedShowId) {
+      return;
+    }
+
+    try {
+      localStorage.setItem(showStorageKey, selectedShowId);
+    } catch (storageError) {
+      console.warn('Unable to save selected show in localStorage', storageError);
+    }
+  }, [selectedShowId, showStorageKey]);
+
+  useEffect(() => {
+    fetchScanLogs(selectedShowId);
+  }, [selectedShowId]);
 
   const handleBarcodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,6 +209,7 @@ const Whatnot: React.FC = () => {
         setSearchResult(response.data);
         if (response.data.found && !response.data.multiple) {
           invalidateProductsCache();
+          await fetchScanLogs(selectedShowId);
         }
         if (!response.data.found) {
           setError(response.data.message);
@@ -181,6 +260,7 @@ const Whatnot: React.FC = () => {
         
         setSearchResult(newSearchResult);
         invalidateProductsCache();
+        await fetchScanLogs(selectedShowId);
         setSuccess('Product quantity updated successfully');
         
         setBarcode('');
@@ -218,6 +298,7 @@ const Whatnot: React.FC = () => {
       }
       setNewShowName('');
       setSuccess('Show added successfully');
+      await fetchScanLogs(String(response.data.id || selectedShowId));
     } catch (err: unknown) {
       console.error('Error creating show:', err);
       const errorMessage =
@@ -231,7 +312,6 @@ const Whatnot: React.FC = () => {
   };
 
   const selectedShow = shows.find((show) => String(show.id) === selectedShowId);
-
   return (
     <Box sx={{ mt: 4, px: 3 }}>
       <Typography variant="h4" component="h1" sx={{ mb: 3 }}>
@@ -294,7 +374,7 @@ const Whatnot: React.FC = () => {
           </Grid>
         )}
       </Paper>
-      
+
       <Paper elevation={3} sx={{ p: 4, mb: 4 }}>
         <Typography variant="h5" gutterBottom>
           Barcode Scanner
@@ -349,6 +429,126 @@ const Whatnot: React.FC = () => {
           )}
         </Box>
       )}
+
+      <Paper elevation={3} sx={{ p: 4, mb: 4 }}>
+        <Typography variant="h5" gutterBottom>
+          Recent Scans (Newest to Oldest)
+        </Typography>
+
+        {!selectedShowId && (
+          <Alert severity="info">Select a show to view recent scans.</Alert>
+        )}
+
+        {selectedShowId && logsLoading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+            <CircularProgress size={24} />
+          </Box>
+        )}
+
+        {selectedShowId && !logsLoading && scanLogs.length === 0 && (
+          <Alert severity="info">No scans yet for this show.</Alert>
+        )}
+
+        {selectedShowId && !logsLoading && scanLogs.length > 0 && (
+          <List>
+            {scanLogs.map((log) => {
+              const qtyText =
+                log.previousQuantity !== null &&
+                log.previousQuantity !== undefined &&
+                log.newQuantity !== null &&
+                log.newQuantity !== undefined
+                  ? `Qty: ${log.previousQuantity} -> ${log.newQuantity}`
+                  : 'Qty unchanged';
+              const brand = log.product?.brand || 'N/A';
+              const itemName = log.product?.itemName || log.sku || log.barcode;
+              const size =
+                log.product?.sizeOz
+                  ? `${log.product.sizeOz} oz`
+                  : log.product?.sizeMl
+                  ? `${log.product.sizeMl} ml`
+                  : 'N/A';
+              const strength = log.product?.strength || 'N/A';
+              const condition = log.product?.condition || 'N/A';
+              const isTester = Boolean(log.product?.ProductDetail?.tester);
+              const thumbnailUrl = log.product?.image || '';
+              const formattedTitle = [
+                log.product?.brand,
+                log.product?.itemName,
+                log.product?.strength,
+                log.product?.sizeOz ? `${log.product.sizeOz} oz` : null,
+              ]
+                .filter(Boolean)
+                .join(' ');
+
+              return (
+                <ListItem key={log.id} divider sx={{ alignItems: 'flex-start', gap: 2 }}>
+                  <Box
+                    sx={{
+                      width: 56,
+                      height: 56,
+                      flexShrink: 0,
+                      borderRadius: 1,
+                      border: '1px solid #e0e0e0',
+                      overflow: 'hidden',
+                      bgcolor: '#fafafa',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    {thumbnailUrl ? (
+                      <Box
+                        component="img"
+                        src={thumbnailUrl}
+                        alt={itemName}
+                        loading="lazy"
+                        sx={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover'
+                        }}
+                      />
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">
+                        No Img
+                      </Typography>
+                    )}
+                  </Box>
+                  <ListItemText
+                    primary={
+                      <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+                        <Typography variant="body1" component="span" sx={{ fontWeight: 600 }}>
+                          {formattedTitle || itemName}
+                        </Typography>
+                        {isTester && (
+                          <ScienceIcon sx={{ color: "red", fontSize: 16 }} />
+                        )}
+                        <Typography variant="body2" component="span" color="text.secondary">
+                          ({log.status})
+                        </Typography>
+                      </Box>
+                    }
+                    secondary={
+                      <>
+                        <Typography variant="body2" component="span" display="block">
+                          {new Date(log.createdAt).toLocaleString()} | Barcode: {log.barcode} | {qtyText}
+                        </Typography>
+                        <Typography variant="body2" component="span" display="block">
+                          Brand: {brand} | Size: {size} | Strength: {strength}
+                        </Typography>
+                        <Typography variant="body2" component="span" display="block">
+                          Condition: {condition} | Tester: {isTester ? 'Yes' : 'No'}
+                        </Typography>
+                      </>
+                    }
+                  />
+                </ListItem>
+              );
+            })}
+          </List>
+        )}
+
+      </Paper>
 
       <Dialog 
         open={openDialog} 
