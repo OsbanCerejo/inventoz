@@ -27,13 +27,21 @@ const isSaleCondition = `
   AND wl.newQuantity = wl.previousQuantity - 1
 `;
 
+const isDateOnly = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+
 const parseDateRange = (query) => {
   const now = new Date();
   const defaultFrom = new Date(now);
   defaultFrom.setDate(defaultFrom.getDate() - 30);
 
   const from = query.from ? new Date(query.from) : defaultFrom;
-  const to = query.to ? new Date(query.to) : now;
+  let to = query.to ? new Date(query.to) : now;
+
+  // For date-only input (YYYY-MM-DD), treat "to" as end-exclusive next day
+  // so selected day is fully included in analytics.
+  if (query.to && isDateOnly(query.to)) {
+    to = new Date(to.getTime() + 24 * 60 * 60 * 1000);
+  }
 
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
     return null;
