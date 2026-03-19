@@ -56,21 +56,25 @@ router.post("/", auth, checkPermission('products', 'create'), async (req, res) =
 
     if (created) {
       // Log the product creation
-      await Logs.create({
-        type: "Product",
-        action: "create",
-        entityType: "product",
-        entityId: product.sku,
-        userId: req.user.id.toString(),
-        changes: [{
-          sku: product.sku,
-          changes: []
-        }],
-        newState: product,
-        metaData: {
-          message: "New product created"
-        }
-      });
+      try {
+        await Logs.create({
+          type: "Product",
+          action: "create",
+          entityType: "product",
+          entityId: product.sku,
+          userId: req.user.id.toString(),
+          changes: [{
+            sku: product.sku,
+            changes: []
+          }],
+          newState: product,
+          metaData: {
+            message: "New product created"
+          }
+        });
+      } catch (logError) {
+        console.error("Failed to create product log:", logError);
+      }
       res.json("Created New");
     } else {
       res.json("Already Exists");
@@ -84,6 +88,14 @@ router.post("/", auth, checkPermission('products', 'create'), async (req, res) =
 router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
   const product = req.body;
   // console.log("Edited Product Value in Server : ", product);
+
+  const normalizeMinimumQuantity = (value) => {
+    if (value === "" || value === null || value === undefined) {
+      return null;
+    }
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
   
   try {
     // Get the current product state
@@ -119,7 +131,10 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
         image: product.image,
         alternativeSku: product.alternativeSku,
         trackQuantity: product.trackQuantity !== undefined ? product.trackQuantity : currentProduct.trackQuantity,
-        minimumQuantity: product.minimumQuantity !== undefined ? product.minimumQuantity : currentProduct.minimumQuantity,
+        minimumQuantity:
+          product.minimumQuantity !== undefined
+            ? normalizeMinimumQuantity(product.minimumQuantity)
+            : currentProduct.minimumQuantity,
       },
       { where: { sku: product.sku } }
     );
@@ -200,24 +215,28 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
     });
 
     // Log the product update
-    await Logs.create({
-      type: "Product",
-      action: "update",
-      entityType: "product",
-      entityId: product.sku,
-      userId: req.user.id.toString(),
-      changes: [{
-        sku: product.sku,
-        changes: changes
-      }],
-      previousState: previousState,
-      newState: updatedProduct.toJSON(),
-      metaData: {
-        message: "Product updated",
-        quantityChanged: currentProduct.quantity !== product.quantity,
-        verificationChanged: currentProduct.verified !== product.verified
-      }
-    });
+    try {
+      await Logs.create({
+        type: "Product",
+        action: "update",
+        entityType: "product",
+        entityId: product.sku,
+        userId: req.user.id.toString(),
+        changes: [{
+          sku: product.sku,
+          changes: changes
+        }],
+        previousState: previousState,
+        newState: updatedProduct.toJSON(),
+        metaData: {
+          message: "Product updated",
+          quantityChanged: currentProduct.quantity !== product.quantity,
+          verificationChanged: currentProduct.verified !== product.verified
+        }
+      });
+    } catch (logError) {
+      console.error("Failed to create product update log:", logError);
+    }
 
     res.json(updatedProduct);
   } catch (error) {
@@ -227,31 +246,43 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
 });
 
 router.delete("/delete/:id", auth, checkPermission('products', 'delete'), async (req, res) => {
-  const id = req.params.id;
+  try {
+    const id = req.params.id;
 
-  const currentProduct = await Products.findOne({ where: { sku: id } });
-
-  const status = await Products.destroy({
-    where: {
-      sku: id,
-    },
-  });
-
-  await Logs.create({
-    type: "Product",
-    action: "delete",
-    entityType: "product",
-    entityId: currentProduct.sku,
-    userId: req.user.id.toString(),
-    changes: [],
-    previousState: currentProduct.toJSON(),
-    newState: [],
-    metaData: {
-      message: "Product has been deleted",
+    const currentProduct = await Products.findOne({ where: { sku: id } });
+    if (!currentProduct) {
+      return res.status(404).json({ error: "Product not found" });
     }
-  });
 
-  res.json(status);
+    const status = await Products.destroy({
+      where: {
+        sku: id,
+      },
+    });
+
+    try {
+      await Logs.create({
+        type: "Product",
+        action: "delete",
+        entityType: "product",
+        entityId: currentProduct.sku,
+        userId: req.user.id.toString(),
+        changes: [],
+        previousState: currentProduct.toJSON(),
+        newState: [],
+        metaData: {
+          message: "Product has been deleted",
+        }
+      });
+    } catch (logError) {
+      console.error("Failed to create product delete log:", logError);
+    }
+
+    res.json(status);
+  } catch (error) {
+    console.error("Error deleting product:", error);
+    res.status(500).json({ error: "Failed to delete product" });
+  }
 });
 
 router.get("/findAndCount/:skuPrefix", auth, checkPermission('products', 'view'), async (req, res) => {

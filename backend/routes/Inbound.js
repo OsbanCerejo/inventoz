@@ -19,11 +19,14 @@ router.post("/", auth, checkPermission('inbound', 'create'), async (req, res) =>
       inboundItem.vendorName || inboundItem.vendor || null;
 
     const inboundDefaults = {
-      ...inboundItem,
+      sku: inboundItem.sku,
+      quantity: inboundItem.quantity,
+      date: inboundItem.date,
+      batch: inboundItem.batch,
+      compositeSku: inboundItem.compositeSku,
       vendorInvoiceNumber,
       vendorName,
     };
-    delete inboundDefaults.vendor;
 
     const [found, created] = await Inbound.findOrCreate({
       where: { compositeSku: inboundItem.compositeSku },
@@ -52,35 +55,43 @@ router.post("/", auth, checkPermission('inbound', 'create'), async (req, res) =>
         // Do not fail the inbound operation if pricing fails
       }
 
-      await Logs.create({
-        type: "inbound",
-        action: "create",
-        entityType: "inbound",
-        entityId: inboundItem.compositeSku,
-        changes: null,
-        previousState: null,
-        newState: inboundItem,
-        userId: req.user ? String(req.user.id) : null,
-        metaData: {
-          source: "inbound_post",
-          createdWithPricing: true,
-        },
-      });
+      try {
+        await Logs.create({
+          type: "inbound",
+          action: "create",
+          entityType: "inbound",
+          entityId: inboundItem.compositeSku,
+          changes: null,
+          previousState: null,
+          newState: inboundItem,
+          userId: req.user ? String(req.user.id) : null,
+          metaData: {
+            source: "inbound_post",
+            createdWithPricing: true,
+          },
+        });
+      } catch (logError) {
+        console.error("Failed to create inbound log:", logError);
+      }
     } else {
-      await Logs.create({
-        type: "inbound",
-        action: "create",
-        entityType: "inbound",
-        entityId: inboundItem.compositeSku,
-        changes: null,
-        previousState: found,
-        newState: inboundItem,
-        userId: req.user ? String(req.user.id) : null,
-        metaData: {
-          source: "inbound_post",
-          note: "Duplicate compositeSku, inbound record already existed",
-        },
-      });
+      try {
+        await Logs.create({
+          type: "inbound",
+          action: "create",
+          entityType: "inbound",
+          entityId: inboundItem.compositeSku,
+          changes: null,
+          previousState: found,
+          newState: inboundItem,
+          userId: req.user ? String(req.user.id) : null,
+          metaData: {
+            source: "inbound_post",
+            note: "Duplicate compositeSku, inbound record already existed",
+          },
+        });
+      } catch (logError) {
+        console.error("Failed to create inbound duplicate log:", logError);
+      }
     }
 
     res.json(created ? "Created New" : "Already Exists");
@@ -97,19 +108,23 @@ router.put("/", auth, checkPermission('inbound', 'edit'), async (req, res) => {
 
     await StockUpdateService.updateProductQuantity(sku, quantity);
 
-    await Logs.create({
-      type: "inbound",
-      action: "update",
-      entityType: "inbound",
-      entityId: sku,
-      changes: { quantity },
-      previousState: previousInboundRecords,
-      newState: null,
-      userId: req.user ? String(req.user.id) : null,
-      metaData: {
-        source: "inbound_put",
-      },
-    });
+    try {
+      await Logs.create({
+        type: "inbound",
+        action: "update",
+        entityType: "inbound",
+        entityId: sku,
+        changes: { quantity },
+        previousState: previousInboundRecords,
+        newState: null,
+        userId: req.user ? String(req.user.id) : null,
+        metaData: {
+          source: "inbound_put",
+        },
+      });
+    } catch (logError) {
+      console.error("Failed to create inbound update log:", logError);
+    }
 
     res.json("Updated");
   } catch (error) {

@@ -1,11 +1,52 @@
 const express = require('express');
 const router = express.Router();
-const { Settings, Products, WhatnotLog } = require('../models');
+const { Products, WhatnotLog, WhatnotShow } = require('../models');
 const { auth } = require('../middleware/auth');
 const { checkPermission } = require('../middleware/permissions');
 const { Op } = require('sequelize');
-const axios = require('axios');
 const StockUpdateService = require('../Services/StockUpdateService');
+
+// Get available Whatnot shows
+router.get('/shows', auth, checkPermission('whatnot', 'view'), async (req, res) => {
+  try {
+    const shows = await WhatnotShow.findAll({
+      where: { isActive: true },
+      order: [['createdAt', 'DESC'], ['name', 'ASC']]
+    });
+
+    res.json(shows);
+  } catch (error) {
+    console.error('Error fetching whatnot shows:', error);
+    res.status(500).json({ error: 'Failed to fetch whatnot shows' });
+  }
+});
+
+// Create a new Whatnot show (admin/create permission only)
+router.post('/shows', auth, checkPermission('whatnot', 'create'), async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+
+    const [show] = await WhatnotShow.findOrCreate({
+      where: {
+        name: name.trim()
+      },
+      defaults: {
+        name: name.trim(),
+        isActive: true,
+        createdBy: req.user ? String(req.user.id) : null
+      }
+    });
+
+    res.status(201).json(show);
+  } catch (error) {
+    console.error('Error creating whatnot show:', error);
+    res.status(500).json({ error: 'Failed to create whatnot show' });
+  }
+});
 
 // Helper function to determine search type
 const determineSearchType = async (barcode) => {
@@ -29,9 +70,23 @@ const determineSearchType = async (barcode) => {
 // Search product by barcode
 router.post('/search-barcode', auth, checkPermission('whatnot', 'view'), async (req, res) => {
   try {
-    const { barcode, reduceQuantity, isMultipleSelection } = req.body;
+    const { barcode, reduceQuantity, isMultipleSelection, showId } = req.body;
     if (!barcode) {
       return res.status(400).json({ success: false, message: 'Barcode is required' });
+    }
+    if (!showId) {
+      return res.status(400).json({ success: false, message: 'Please select a show before scanning' });
+    }
+
+    const selectedShow = await WhatnotShow.findOne({
+      where: {
+        id: showId,
+        isActive: true
+      }
+    });
+
+    if (!selectedShow) {
+      return res.status(400).json({ success: false, message: 'Selected show is invalid or inactive' });
     }
 
     // Search for products with matching UPC or SKU
@@ -50,7 +105,8 @@ router.post('/search-barcode', auth, checkPermission('whatnot', 'view'), async (
       searchType: isMultipleSelection ? 'UPC' : await determineSearchType(barcode),
       status: products.length === 0 ? 'not_found' : products.length === 1 ? 'found' : 'multiple_found',
       sku: products.length > 0 ? products[0].sku : null,
-      userId: req.user.id.toString()
+      userId: req.user.id.toString(),
+      whatnotShowId: selectedShow.id
     });
 
     if (products.length === 0) {
@@ -152,6 +208,9 @@ router.get('/logs', auth, checkPermission('whatnot', 'view'), async (req, res) =
       include: [{
         model: Products,
         as: 'product'
+      }, {
+        model: WhatnotShow,
+        as: 'show'
       }],
       order: [['createdAt', 'DESC']],
       limit: 100

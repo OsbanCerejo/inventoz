@@ -6,17 +6,22 @@ const Op = Sequelize.Op;
 const StockUpdateService = require("../Services/StockUpdateService");
 
 router.post("/", async (req, res) => {
-    const saleItem = req.body;
-    const [found, created] = await Sales.findOrCreate({
-        where: { compositeSalesSku: saleItem.compositeSalesSku},
-        defaults: saleItem
-    });
-    if(created) {
-        // console.log("Created New")
-    } else {
-        // console.log("Already Exists")
+    try {
+        const saleItem = req.body;
+        const [found, created] = await Sales.findOrCreate({
+            where: { compositeSalesSku: saleItem.compositeSalesSku},
+            defaults: saleItem
+        });
+        if(created) {
+            // console.log("Created New")
+        } else {
+            // console.log("Already Exists")
+        }
+        res.json(created ? "Created New" : "Already Exists");
+    } catch (error) {
+        console.error("Error creating sales record:", error);
+        res.status(500).json({ error: "Failed to create sales record" });
     }
-    res.json(created ? "Created New" : "Already Exists");
 });
 
 router.put("/", async (req, res) => {

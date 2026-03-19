@@ -17,9 +17,14 @@ import {
   Alert,
   Grid,
   Card,
-  CardMedia
+  CardMedia,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select
 } from '@mui/material';
 import { invalidateProductsCache } from "../utils/productCache";
+import { useAuth } from "../context/AuthContext";
 
 
 interface ProductDetails {
@@ -52,21 +57,53 @@ interface SearchResult {
   message?: string;
 }
 
+interface WhatnotShow {
+  id: number;
+  name: string;
+  isActive: boolean;
+}
+
 
 
 const Whatnot: React.FC = () => {
+  const { user } = useAuth();
   const [barcode, setBarcode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showsLoading, setShowsLoading] = useState(false);
+  const [creatingShow, setCreatingShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
+  const [shows, setShows] = useState<WhatnotShow[]>([]);
+  const [selectedShowId, setSelectedShowId] = useState<string>('');
+  const [newShowName, setNewShowName] = useState('');
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchShows = async () => {
+    try {
+      setShowsLoading(true);
+      const response = await axios.get(getApiUrl('whatnot/shows'));
+      const showList: WhatnotShow[] = response.data || [];
+      setShows(showList);
+
+      if (!selectedShowId && showList.length > 0) {
+        setSelectedShowId(String(showList[0].id));
+      }
+    } catch (err) {
+      console.error('Error fetching Whatnot shows:', err);
+      setError('Failed to load shows');
+    } finally {
+      setShowsLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (barcodeInputRef.current) {
       barcodeInputRef.current.focus();
     }
+    fetchShows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleBarcodeSubmit = async (e: React.FormEvent) => {
@@ -75,10 +112,17 @@ const Whatnot: React.FC = () => {
     setSuccess('');
     setLoading(true);
     setSearchResult(null);
+
+    if (!selectedShowId) {
+      setError('Please select a show before scanning');
+      setLoading(false);
+      return;
+    }
     
     try {
       const response = await axios.post(getApiUrl('whatnot/search-barcode'), { 
-        barcode
+        barcode,
+        showId: Number(selectedShowId)
       });
       if (response.data.success) {
         if (response.data.multiple) {
@@ -92,7 +136,7 @@ const Whatnot: React.FC = () => {
           setError(response.data.message);
         }
       }
-    } catch (error) {
+    } catch {
       setError('Error searching product');
     } finally {
       setBarcode('');
@@ -114,6 +158,7 @@ const Whatnot: React.FC = () => {
         getApiUrl('whatnot/search-barcode'),
         { 
           barcode: product.sku,
+          showId: Number(selectedShowId),
           reduceQuantity: true,
           isMultipleSelection: true
         }
@@ -152,11 +197,103 @@ const Whatnot: React.FC = () => {
     }
   };
 
+  const handleCreateShow = async () => {
+    setError('');
+    setSuccess('');
+
+    if (!newShowName.trim()) {
+      setError('Show name is required');
+      return;
+    }
+
+    try {
+      setCreatingShow(true);
+      const response = await axios.post(getApiUrl('whatnot/shows'), {
+        name: newShowName.trim()
+      });
+
+      await fetchShows();
+      if (response.data?.id) {
+        setSelectedShowId(String(response.data.id));
+      }
+      setNewShowName('');
+      setSuccess('Show added successfully');
+    } catch (err: unknown) {
+      console.error('Error creating show:', err);
+      const errorMessage =
+        axios.isAxiosError(err) && err.response?.data?.error
+          ? String(err.response.data.error)
+          : 'Failed to create show';
+      setError(errorMessage);
+    } finally {
+      setCreatingShow(false);
+    }
+  };
+
+  const selectedShow = shows.find((show) => String(show.id) === selectedShowId);
+
   return (
     <Box sx={{ mt: 4, px: 3 }}>
       <Typography variant="h4" component="h1" sx={{ mb: 3 }}>
         Whatnot
       </Typography>
+
+      <Paper elevation={3} sx={{ p: 4, mb: 4 }}>
+        <Typography variant="h6" gutterBottom>
+          Select Show
+        </Typography>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={6}>
+            <FormControl fullWidth>
+              <InputLabel id="whatnot-show-label">Show</InputLabel>
+              <Select
+                labelId="whatnot-show-label"
+                value={selectedShowId}
+                label="Show"
+                onChange={(e) => setSelectedShowId(String(e.target.value))}
+                disabled={showsLoading}
+              >
+                {shows.map((show) => (
+                  <MenuItem key={show.id} value={String(show.id)}>
+                    {show.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            {selectedShow && (
+              <Typography variant="body2" color="text.secondary">
+                Scans will be associated with: <strong>{selectedShow.name}</strong>
+              </Typography>
+            )}
+          </Grid>
+        </Grid>
+
+        {user?.role === 'admin' && (
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} md={9}>
+              <TextField
+                fullWidth
+                label="New Show Name"
+                value={newShowName}
+                onChange={(e) => setNewShowName(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <Button
+                fullWidth
+                variant="contained"
+                onClick={handleCreateShow}
+                disabled={creatingShow}
+                sx={{ height: 56 }}
+              >
+                {creatingShow ? <CircularProgress size={24} /> : 'Add Show'}
+              </Button>
+            </Grid>
+          </Grid>
+        )}
+      </Paper>
       
       <Paper elevation={3} sx={{ p: 4, mb: 4 }}>
         <Typography variant="h5" gutterBottom>

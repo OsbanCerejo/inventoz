@@ -52,7 +52,9 @@ module.exports = (sequelize, DataTypes) => {
       }
     },
     {
-      timestamps: false,
+      timestamps: true,
+      createdAt: 'createdAt',
+      updatedAt: 'updatedAt',
       indexes: [
         {
           fields: ['timestamp']

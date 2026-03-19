@@ -4,20 +4,38 @@ const { Listings, Products } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 
-router.post("/", async (req, res) => {
-  const listingsObject = req.body;
-  // console.log("Listings object in backend is : ", listingsObject);
+const normalizeListingValue = (value) => {
+  if (value === "" || value === null || value === undefined) return 0;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
 
-  const [found, created] = await Listings.findOrCreate({
-    where: { sku: listingsObject.sku },
-    defaults: listingsObject,
-  });
-  if (created) {
-    // console.log("Created New");
-  } else {
-    // console.log("Already Exists");
+const normalizeListingsPayload = (payload) => ({
+  ...payload,
+  ebayBuy4LessToday: normalizeListingValue(payload.ebayBuy4LessToday),
+  ebayOneLifeLuxuries4: normalizeListingValue(payload.ebayOneLifeLuxuries4),
+  walmartOneLifeLuxuries: normalizeListingValue(payload.walmartOneLifeLuxuries),
+});
+
+router.post("/", async (req, res) => {
+  try {
+    const listingsObject = normalizeListingsPayload(req.body);
+    // console.log("Listings object in backend is : ", listingsObject);
+
+    const [found, created] = await Listings.findOrCreate({
+      where: { sku: listingsObject.sku },
+      defaults: listingsObject,
+    });
+    if (created) {
+      // console.log("Created New");
+    } else {
+      // console.log("Already Exists");
+    }
+    res.json(created ? "Created New" : "Already Exists");
+  } catch (error) {
+    console.error("Error creating product listing:", error);
+    res.status(500).json({ error: "Failed to create product listing" });
   }
-  res.json(created ? "Created New" : "Already Exists");
 });
 
 // Get product listings by SKU
@@ -37,7 +55,7 @@ router.get("/bySku", async (req, res) => {
 });
 
 router.put("/", async (req, res) => {
-  const productListings = req.body;
+  const productListings = normalizeListingsPayload(req.body);
   try {
     const [productListingsResponse, created] = await Listings.findOrCreate({
       where: { sku: productListings.sku },

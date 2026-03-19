@@ -36,6 +36,10 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: true
     },
+    whatnotShowId: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
     errors: {
       type: DataTypes.TEXT,
       allowNull: true
@@ -44,6 +48,19 @@ module.exports = (sequelize) => {
     tableName: 'whatnotLogs',
     timestamps: true
   });
+
+  WhatnotLog.associate = (models) => {
+    WhatnotLog.belongsTo(models.Products, {
+      foreignKey: 'sku',
+      targetKey: 'sku',
+      as: 'product'
+    });
+
+    WhatnotLog.belongsTo(models.WhatnotShow, {
+      foreignKey: 'whatnotShowId',
+      as: 'show'
+    });
+  };
 
   return WhatnotLog;
 }; 

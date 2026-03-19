@@ -99,10 +99,10 @@ interface ChangeRecord {
 
 interface ListingsObject {
   sku: string;
-  ebayBuy4LessToday: string;
-  ebayOneLifeLuxuries4: string;
-  walmartOneLifeLuxuries: string;
-  [key: string]: string;
+  ebayBuy4LessToday: number;
+  ebayOneLifeLuxuries4: number;
+  walmartOneLifeLuxuries: number;
+  [key: string]: string | number;
 }
 
 function EditProduct() {
@@ -233,9 +233,9 @@ function EditProduct() {
 
       const listingsObject: ListingsObject = {
         sku: data.sku,
-        ebayBuy4LessToday: data.buy4lesstoday,
-        ebayOneLifeLuxuries4: data.onelifeluxuries,
-        walmartOneLifeLuxuries: data.walmart,
+        ebayBuy4LessToday: data.buy4lesstoday === "" ? 0 : Number(data.buy4lesstoday),
+        ebayOneLifeLuxuries4: data.onelifeluxuries === "" ? 0 : Number(data.onelifeluxuries),
+        walmartOneLifeLuxuries: data.walmart === "" ? 0 : Number(data.walmart),
       };
 
       axios
