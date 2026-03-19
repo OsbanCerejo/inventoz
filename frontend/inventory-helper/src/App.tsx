@@ -15,6 +15,7 @@ import "./App.css";
 import PackingMode from "./pages/PackingMode";
 import EbayApi from "./pages/EbayApi";
 import Whatnot from "./pages/Whatnot";
+import WhatnotAnalytics from "./pages/WhatnotAnalytics";
 import PriceList from "./pages/PriceList";
 import EmployeeInformation from "./pages/EmployeeInformation";
 import Users from "./pages/Users";
@@ -154,6 +155,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="whatnot" action="view" menuItem="whatnot">
                   <Whatnot />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/whatnot-analytics"
+              element={
+                <ProtectedRoute requireAdmin={true}>
+                  <WhatnotAnalytics />
                 </ProtectedRoute>
               }
             />

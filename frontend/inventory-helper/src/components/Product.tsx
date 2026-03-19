@@ -44,6 +44,7 @@ function Product() {
   const [restockQuantity, setRestockQuantity] = useState<number>(0);
   const [priceDialogOpen, setPriceDialogOpen] = useState(false);
   const [updatePrice, setUpdatePrice] = useState<number>(0);
+  const isAdmin = user?.role === "admin";
 
   const [vendorPrices, setVendorPrices] = useState<any[]>([]);
   const [averagePrice, setAveragePrice] = useState<number | null>(null);
@@ -600,14 +601,16 @@ function Product() {
           >
             Inbound
           </Button>
-          <Button
-            variant="contained"
-            color="error"
-            startIcon={<DeleteIcon />}
-            onClick={handleDeleteClick}
-          >
-            Delete
-          </Button>
+          {isAdmin && (
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={handleDeleteClick}
+            >
+              Delete
+            </Button>
+          )}
           <Button
             variant="contained"
             startIcon={<SellIcon />}
@@ -615,86 +618,96 @@ function Product() {
           >
             Sold
           </Button>
-          <Button
-            variant="contained"
-            color="warning"
-            startIcon={<SellIcon />}
-            onClick={handleOutOfStockClick}
-          >
-            Out of Stock
-          </Button>
-          <Button
-            variant="contained"
-            color="info"
-            startIcon={<WarehouseIcon />}
-            onClick={() => setRestockDialogOpen(true)}
-          >
-            Restock
-          </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<EditIcon />}
-            onClick={() => setPriceDialogOpen(true)}
-          >
-            Update Price
-          </Button>
+          {isAdmin && (
+            <Button
+              variant="contained"
+              color="warning"
+              startIcon={<SellIcon />}
+              onClick={handleOutOfStockClick}
+            >
+              Out of Stock
+            </Button>
+          )}
+          {isAdmin && (
+            <Button
+              variant="contained"
+              color="info"
+              startIcon={<WarehouseIcon />}
+              onClick={() => setRestockDialogOpen(true)}
+            >
+              Restock
+            </Button>
+          )}
+          {isAdmin && (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<EditIcon />}
+              onClick={() => setPriceDialogOpen(true)}
+            >
+              Update Price
+            </Button>
+          )}
         </Box>
       </Paper>
-      <Dialog
-        open={restockDialogOpen}
-        onClose={() => setRestockDialogOpen(false)}
-        aria-labelledby="alert-dialog-title"
-        aria-describedby="alert-dialog-description"
-      >
-        <DialogTitle id="alert-dialog-title">{"Restock Product"}</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            id="name"
-            label="Quantity"
-            type="number"
-            fullWidth
-            value={restockQuantity}
-            onChange={(e) => setRestockQuantity(Number(e.target.value))}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setRestockDialogOpen(false)}>Cancel</Button>
-          <Button onClick={() => {
-            handleRestockClick();
-            setRestockDialogOpen(false);
-          }}>Restock</Button>
-        </DialogActions>
-      </Dialog>
-      <Dialog
-        open={priceDialogOpen}
-        onClose={() => setPriceDialogOpen(false)}
-        aria-labelledby="price-dialog-title"
-        aria-describedby="price-dialog-description"
-      >
-        <DialogTitle id="price-dialog-title">{"Update Product Price"}</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            id="price"
-            label="Price"
-            type="number"
-            fullWidth
-            value={updatePrice}
-            onChange={(e) => setUpdatePrice(Number(e.target.value))}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPriceDialogOpen(false)}>Cancel</Button>
-          <Button onClick={() => {
-            handlePriceUpdateClick();
-            setPriceDialogOpen(false);
-          }}>Update</Button>
-        </DialogActions>
-      </Dialog>
+      {isAdmin && (
+        <Dialog
+          open={restockDialogOpen}
+          onClose={() => setRestockDialogOpen(false)}
+          aria-labelledby="alert-dialog-title"
+          aria-describedby="alert-dialog-description"
+        >
+          <DialogTitle id="alert-dialog-title">{"Restock Product"}</DialogTitle>
+          <DialogContent>
+            <TextField
+              autoFocus
+              margin="dense"
+              id="name"
+              label="Quantity"
+              type="number"
+              fullWidth
+              value={restockQuantity}
+              onChange={(e) => setRestockQuantity(Number(e.target.value))}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setRestockDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => {
+              handleRestockClick();
+              setRestockDialogOpen(false);
+            }}>Restock</Button>
+          </DialogActions>
+        </Dialog>
+      )}
+      {isAdmin && (
+        <Dialog
+          open={priceDialogOpen}
+          onClose={() => setPriceDialogOpen(false)}
+          aria-labelledby="price-dialog-title"
+          aria-describedby="price-dialog-description"
+        >
+          <DialogTitle id="price-dialog-title">{"Update Product Price"}</DialogTitle>
+          <DialogContent>
+            <TextField
+              autoFocus
+              margin="dense"
+              id="price"
+              label="Price"
+              type="number"
+              fullWidth
+              value={updatePrice}
+              onChange={(e) => setUpdatePrice(Number(e.target.value))}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setPriceDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => {
+              handlePriceUpdateClick();
+              setPriceDialogOpen(false);
+            }}>Update</Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </div>
   );
 }

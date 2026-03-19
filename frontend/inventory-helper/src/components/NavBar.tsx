@@ -6,8 +6,10 @@ import { People as PeopleIcon } from '@mui/icons-material';
 function NavBar() {
   const [isOpen, setIsOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showAdminToolsMenu, setShowAdminToolsMenu] = useState(false);
   const navigate = useNavigate();
   const { user, logout, hasMenuAccess, isLoading, isAuthenticated } = useAuth();
+  const isAdmin = isAuthenticated && user?.role === "admin";
 
   const toggleNavbar = () => {
     setIsOpen(!isOpen);
@@ -15,6 +17,10 @@ function NavBar() {
 
   const toggleUserMenu = () => {
     setShowUserMenu(!showUserMenu);
+  };
+
+  const toggleAdminToolsMenu = () => {
+    setShowAdminToolsMenu(!showAdminToolsMenu);
   };
 
   const handleHomeClick = () => {
@@ -40,9 +46,19 @@ function NavBar() {
     { key: 'employeeInfo', label: 'Employees', path: '/employee-info' }
   ];
 
+  const adminCollapsedKeys = ['packing', 'pricelist', 'employeeInfo', 'whatnot'];
+
+  const adminToolsItems = [
+    { key: 'whatnot', label: 'Whatnot', path: '/whatnot' },
+    { key: 'packing', label: 'Packing', path: '/orders/packingMode' },
+    { key: 'pricelist', label: 'PriceList', path: '/price-list' },
+    { key: 'employeeInfo', label: 'Employees', path: '/employee-info' },
+    { key: 'lowStock', label: 'Low Stock', path: '/low-stock' }
+  ];
+
   // Admin-only menu items
   const adminMenuItems = [
-    { key: 'lowStock', label: 'Low Stock', path: '/low-stock' }
+    { key: 'whatnotAnalytics', label: 'Whatnot Analytics', path: '/whatnot-analytics' }
   ];
 
   // If still loading permissions, show minimal navbar
@@ -102,6 +118,10 @@ function NavBar() {
               if (!hasMenuAccess(item.key)) {
                 return null;
               }
+              // For admins, move selected items into Tools dropdown
+              if (isAdmin && adminCollapsedKeys.includes(item.key)) {
+                return null;
+              }
 
               return (
                 <li key={item.key} className="nav-item">
@@ -132,6 +152,61 @@ function NavBar() {
           </ul>
           {user && (
             <div className="navbar-nav ml-auto" style={{ position: "relative", zIndex: 9999 }}>
+              {isAdmin && (
+                <div className="nav-item dropdown" style={{ position: "relative" }}>
+                  <button
+                    className="btn btn-link nav-link dropdown-toggle"
+                    onClick={toggleAdminToolsMenu}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      padding: "0.5rem 1rem",
+                      color: "#212529",
+                    }}
+                  >
+                    Tools
+                  </button>
+                  {showAdminToolsMenu && (
+                    <div
+                      className="dropdown-menu show"
+                      style={{
+                        position: "absolute",
+                        right: "0",
+                        top: "100%",
+                        zIndex: 9999,
+                        minWidth: "200px",
+                        padding: "0.25rem 0",
+                        border: "1px solid #dee2e6",
+                        borderRadius: "6px",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                        backgroundColor: "#fff",
+                      }}
+                    >
+                      {adminToolsItems.map((item) => {
+                        const canAccess = item.key === 'lowStock' ? true : hasMenuAccess(item.key);
+                        if (!canAccess) return null;
+                        return (
+                          <Link
+                            key={item.key}
+                            className="dropdown-item"
+                            to={item.path}
+                            onClick={() => setShowAdminToolsMenu(false)}
+                            style={{
+                              padding: "8px 12px",
+                              textDecoration: "none",
+                              color: "#212529",
+                              display: "block",
+                              fontSize: "14px",
+                            }}
+                          >
+                            {item.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="nav-item dropdown">
                 <button
                   className="btn btn-link nav-link dropdown-toggle"

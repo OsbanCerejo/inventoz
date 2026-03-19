@@ -86,6 +86,9 @@ app.use("/ebayOrders", ebayOrdersRouter);
 const whatnotRouter = require("./routes/whatnot");
 app.use("/whatnot", whatnotRouter);
 
+const whatnotAnalyticsRouter = require("./routes/whatnotAnalytics");
+app.use("/whatnot/analytics", whatnotAnalyticsRouter);
+
 const priceListRouter = require("./routes/priceList");
 app.use("/api/price-list", priceListRouter);
 
