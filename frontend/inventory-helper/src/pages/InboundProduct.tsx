@@ -20,6 +20,7 @@ import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
 import dayjs from "dayjs";
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { invalidateProductsCache } from "../utils/productCache";
 
 function InboundProduct() {
   const location = useLocation();
@@ -85,6 +86,7 @@ function InboundProduct() {
             position: "top-right",
           });
           // console.log("Created New");
+          invalidateProductsCache();
           navigate("/", { replace: true, state: { clearFilters: true } });
         } else {
           toast.error("Inbound Entry Already Exists!", {

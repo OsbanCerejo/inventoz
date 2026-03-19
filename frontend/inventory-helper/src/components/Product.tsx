@@ -28,6 +28,7 @@ import PrintableLabel from "./PrintableLabel";
 import { useReactToPrint } from "react-to-print";
 import { useAuth } from "../context/AuthContext";
 import { getApiUrl } from "../config/api";
+import { invalidateProductsCache } from "../utils/productCache";
 
 function Product() {
   let { id } = useParams();
@@ -146,6 +147,7 @@ function Product() {
         await axios.delete(
           getApiUrl(`products/delete/${productObject.sku}`)
         );
+        invalidateProductsCache();
         toast.success("Deleted Successfully!", { position: "top-right" });
         navigate("/", { state: { clearFilters: true } });
       } catch (error) {

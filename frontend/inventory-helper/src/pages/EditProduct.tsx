@@ -37,6 +37,7 @@ import { isEqual } from "lodash";
 import { useAuth } from "../context/AuthContext";
 import PermissionGuard from "../components/PermissionGuard";
 import { getApiUrl } from "../config/api";
+import { invalidateProductsCache } from "../utils/productCache";
 
 const formikValidationSchema = Yup.object().shape({
   sku: Yup.string().required("Please enter a valid SKU"),
@@ -309,6 +310,7 @@ function EditProduct() {
               });
             }
 
+            invalidateProductsCache();
             navigate(`/products/${data.sku}`, {
               replace: true,
               state: {

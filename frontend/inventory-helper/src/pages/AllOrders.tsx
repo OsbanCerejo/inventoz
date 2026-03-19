@@ -30,6 +30,7 @@ import { useAuth } from "../context/AuthContext";
 import { getApiUrl } from '../config/api';
 import CircularProgress from '@mui/material/CircularProgress';
 import './AllOrdersPrint.css';
+import { invalidateProductsCache } from "../utils/productCache";
 
 function AllOrders() {
   const [groupedOrders, setGroupedOrders] = useState<any>({});
@@ -197,6 +198,7 @@ function AllOrders() {
 
         // Update quantities in the listings table for each store
         await updateStoreQuantities(skusToUpdate);
+        invalidateProductsCache();
         toast.success("Quantities Updated!", { position: "top-right" });
         navigate("/", { state: { clearFilters: true } });
       }

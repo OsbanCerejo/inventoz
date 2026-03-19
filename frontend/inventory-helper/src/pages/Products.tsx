@@ -5,9 +5,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button, Box, Stack, Typography } from "@mui/material";
 import PermissionGuard from "../components/PermissionGuard";
 import { getApiUrl } from '../config/api';
+import {
+  PRODUCTS_CACHE_KEY,
+  PRODUCTS_CACHE_TIMESTAMP_KEY,
+} from "../utils/productCache";
 
-const PRODUCTS_CACHE_KEY = "listOfProducts";
-const PRODUCTS_CACHE_TIMESTAMP_KEY = "listOfProductsTimestamp";
 const PRODUCTS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 function Products() {

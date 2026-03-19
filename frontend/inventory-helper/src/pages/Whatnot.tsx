@@ -19,6 +19,7 @@ import {
   Card,
   CardMedia
 } from '@mui/material';
+import { invalidateProductsCache } from "../utils/productCache";
 
 
 interface ProductDetails {
@@ -84,6 +85,9 @@ const Whatnot: React.FC = () => {
           setOpenDialog(true);
         }
         setSearchResult(response.data);
+        if (response.data.found && !response.data.multiple) {
+          invalidateProductsCache();
+        }
         if (!response.data.found) {
           setError(response.data.message);
         }
@@ -131,6 +135,7 @@ const Whatnot: React.FC = () => {
         };
         
         setSearchResult(newSearchResult);
+        invalidateProductsCache();
         setSuccess('Product quantity updated successfully');
         
         setBarcode('');

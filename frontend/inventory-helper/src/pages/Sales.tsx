@@ -16,6 +16,7 @@ import { useFormik } from "formik";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import * as Yup from "yup";
+import { invalidateProductsCache } from "../utils/productCache";
 
 function Sales() {
   const location = useLocation();
@@ -42,7 +43,7 @@ function Sales() {
   const formik = useFormik({
     initialValues: formikInitialValues,
     validationSchema: formikValidationSchema,
-    onSubmit: (data) => {
+    onSubmit: async (data) => {
       const compositeSalesKey =
         data.sku +
         "-" +
@@ -52,17 +53,12 @@ function Sales() {
         "-" +
         data.date.year();
       data.compositeSalesSku = compositeSalesKey;
-      axios
-        .put(getApiUrl('sales'), {
+      await axios.put(getApiUrl('sales'), {
           quantity: parseInt(productObject.quantity) - parseInt(data.quantity),
           sku: productObject.sku,
-        })
-        .then(() => {
-          // console.log("Quantity Updated in Inventory Table");
-        });
-      axios.post(getApiUrl('sales'), data).then((response) => {
-        console.log(response);
       });
+      await axios.post(getApiUrl('sales'), data);
+      invalidateProductsCache();
       navigate("/", { state: { clearFilters: true } });
     },
   });

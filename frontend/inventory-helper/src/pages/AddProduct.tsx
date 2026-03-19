@@ -39,6 +39,7 @@ import countriesData from "../data/countries.json";
 import { useLocation } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { invalidateProductsCache } from "../utils/productCache";
 
 function AddProduct() {
   const location = useLocation();
@@ -318,6 +319,7 @@ function AddProduct() {
           // Update the brand table with the next number for future
           await axios.put(getApiUrl('brands'), brandObjectOnSubmit);
 
+          invalidateProductsCache();
           toast.success("Product Added Successfully!", { position: "top-right" });
           resetForm();
           navigate("/", { replace: true, state: { clearFilters: true } });
