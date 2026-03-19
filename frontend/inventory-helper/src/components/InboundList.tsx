@@ -159,9 +159,16 @@ function ProductList({
               </th>
               <th scope="col">
                 Vendor
-              </th>
-              <th scope="col" onClick={() => handleSort("listed")}>
-                {getSortIcon("listed")} Listed
+                <br></br>
+                <input
+                  type="text"
+                  style={{ width: "100%" }}
+                  value={
+                    filterConfig.key === "vendorName" ? filterConfig.value : ""
+                  }
+                  onChange={(e) => handleFilterChange(e, "vendorName")}
+                  onClick={(e) => e.stopPropagation()}
+                />
               </th>
               {/* <th scope="col">Final</th> */}
             </tr>
@@ -199,17 +206,9 @@ function ProductList({
                   {combinedItem.quantity}
                 </td>
                 <td>
-                  {combinedItem.vendor}
-                </td>
-                <td
-                  style={{
-                    backgroundColor: combinedItem.Product.listed
-                      ? "#B2FF59"
-                      : "#FF5252",
-                    width: "7%",
-                  }}
-                >
-                  {combinedItem.Product.listed ? "Yes" : "No"}
+                  {combinedItem.vendorName ||
+                    combinedItem.vendor ||
+                    combinedItem.vendorInvoiceNumber}
                 </td>
               </tr>
             ))}

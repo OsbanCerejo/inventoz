@@ -46,6 +46,14 @@ function InboundData() {
                 .toLowerCase()
                 .includes(filterConfig.value.toLowerCase())
             : false;
+        } else if (filterConfig.key === "vendorName") {
+          const vendorValue =
+            product.vendorName || product.vendor || product.vendorInvoiceNumber;
+          return vendorValue
+            ? vendorValue
+                .toLowerCase()
+                .includes(filterConfig.value.toLowerCase())
+            : false;
         } else {
           const productValue = product[filterConfig.key];
           return productValue
@@ -62,13 +70,8 @@ function InboundData() {
         let aValue = a[sortConfig.key];
         let bValue = b[sortConfig.key];
 
-        if (sortConfig.key === "listed") {
-          aValue = a.Product.listed;
-          bValue = b.Product.listed;
-        } else {
-          aValue = a[sortConfig.key];
-          bValue = b[sortConfig.key];
-        }
+        aValue = a[sortConfig.key];
+        bValue = b[sortConfig.key];
 
         if (sortConfig.key === "quantity") {
           return sortConfig.direction === "asc"
