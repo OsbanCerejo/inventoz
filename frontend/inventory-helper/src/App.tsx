@@ -20,6 +20,7 @@ import PriceList from "./pages/PriceList";
 import EmployeeInformation from "./pages/EmployeeInformation";
 import Users from "./pages/Users";
 import BarcodeScan from "./pages/BarcodeScan";
+import PackingAnalytics from "./pages/PackingAnalytics";
 import Login from "./pages/Login";
 import LowStock from "./pages/LowStock";
 import { AuthProvider } from "./context/AuthContext";
@@ -195,6 +196,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="barcodeScan" action="view" menuItem="barcodeScan">
                   <BarcodeScan />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/packing-analytics"
+              element={
+                <ProtectedRoute requireAdmin={true}>
+                  <PackingAnalytics />
                 </ProtectedRoute>
               }
             />
