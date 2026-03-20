@@ -50,10 +50,16 @@ const Login = () => {
     setLoading(true);
     setError('');
     try {
-      const response = await axios.post(getApiUrl('auth/login'), {
-        email,
-        password
-      });
+      const response = await axios.post(
+        getApiUrl('auth/login'),
+        {
+          email,
+          password
+        },
+        {
+          withCredentials: true,
+        }
+      );
 
       const { token, user } = response.data;
       await login(token, user);

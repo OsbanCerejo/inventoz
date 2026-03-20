@@ -1,5 +1,5 @@
-const jwt = require('jsonwebtoken');
 const { User } = require('../models');
+const { verifyAccessToken } = require('../utils/authTokens');
 
 const auth = async (req, res, next) => {
   try {
@@ -9,10 +9,13 @@ const auth = async (req, res, next) => {
       throw new Error();
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const decoded = verifyAccessToken(token);
+    if (decoded.type !== 'access') {
+      throw new Error('Invalid token type');
+    }
     const user = await User.findOne({ where: { id: decoded.id } });
 
-    if (!user) {
+    if (!user || !user.isActive || Number(user.tokenVersion || 0) !== Number(decoded.tokenVersion || 0)) {
       throw new Error();
     }
 
@@ -32,10 +35,13 @@ const adminAuth = async (req, res, next) => {
       return res.status(401).json({ error: 'Please authenticate.' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const decoded = verifyAccessToken(token);
+    if (decoded.type !== 'access') {
+      return res.status(401).json({ error: 'Please authenticate.' });
+    }
     const user = await User.findOne({ where: { id: decoded.id } });
 
-    if (!user) {
+    if (!user || !user.isActive || Number(user.tokenVersion || 0) !== Number(decoded.tokenVersion || 0)) {
       return res.status(401).json({ error: 'Please authenticate.' });
     }
 

@@ -10,6 +10,17 @@ const path = require("path");
 
 app.use(express.json());
 
+const validateCriticalEnv = () => {
+  if (process.env.NODE_ENV !== "production") return;
+  const requiredVars = ["JWT_SECRET", "JWT_REFRESH_SECRET"];
+  const missing = requiredVars.filter((key) => !process.env[key]);
+  if (missing.length > 0) {
+    throw new Error(`Missing required production env variables: ${missing.join(", ")}`);
+  }
+};
+
+validateCriticalEnv();
+
 // CORS configuration for allowed domains
 const allowedOrigins = [
   'http://localhost:3000',
