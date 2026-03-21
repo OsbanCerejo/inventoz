@@ -26,13 +26,15 @@ function InboundProduct() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
-  const productObject = location.state.productObject;
+  const productObject = location.state?.productObject || { sku: "", quantity: 0 };
   const today = new Date();
   const [newDate, setNewDate] = useState(dayjs(today.toLocaleString()));
   const formikInitialValues = {
     sku: "" + productObject.sku,
     vendor: "",
+    vendorInvoiceNumber: "",
     quantity: "",
     date: newDate,
     batch: "",
@@ -43,16 +45,30 @@ function InboundProduct() {
   const formikValidationSchema = Yup.object().shape({
     sku: Yup.string(),
     vendor: Yup.string(),
-    quantity: Yup.string().required(),
+    vendorInvoiceNumber: Yup.string(),
+    quantity: Yup.number()
+      .typeError("Quantity must be a number")
+      .integer("Quantity must be a whole number")
+      .positive("Quantity must be greater than 0")
+      .required("Quantity is required"),
     date: Yup.date().required(),
     batch: Yup.string(),
-    unitCost: Yup.number().nullable(),
+    unitCost: Yup.number()
+      .transform((value, originalValue) => (originalValue === "" ? null : value))
+      .nullable(),
   });
 
   const formik = useFormik({
     initialValues: formikInitialValues,
     validationSchema: formikValidationSchema,
     onSubmit: async (data) => {
+      if (!location.state?.productObject) {
+        toast.error("Missing product context. Please open inbound from a product page.", {
+          position: "top-right",
+        });
+        return;
+      }
+
       const compositeInboundKey =
         data.sku +
         "-" +
@@ -66,22 +82,18 @@ function InboundProduct() {
 
       const payload = {
         ...data,
+        vendor: isAdmin ? data.vendor : "",
+        vendorInvoiceNumber: isAdmin ? data.vendorInvoiceNumber : "",
         compositeSku: compositeInboundKey, //Change compositeSKU in data to compositeInboundSku
         // Pricing data (optional, admin-only)
-        price: data.unitCost,
+        price: isAdmin ? data.unitCost : null,
       };
       
       try {
-        // First, try to create the inbound record
+        // Backend now handles create + quantity update atomically.
         const inboundResponse = await axios.post(getApiUrl('inbound'), payload);
         
         if (inboundResponse.data === "Created New") {
-          // Only update quantity if the inbound record was successfully created
-          await axios.put(getApiUrl('inbound'), {
-            quantity: parseInt(productObject.quantity) + parseInt(data.quantity),
-            sku: productObject.sku,
-          });
-          
           toast.success("Success Notification !", {
             position: "top-right",
           });
@@ -117,24 +129,43 @@ function InboundProduct() {
           >
             <Box m={2} pt={3}>
               <Typography variant="h6" color="text.secondary">
-                SKU: {productObject.sku}
+                SKU: {productObject.sku || "-"}
               </Typography>
             </Box>
-            <Box m={2} pt={3}>
-              <TextField
-                fullWidth
-                id="vendor"
-                name="vendor"
-                label="Vendor"
-                value={formik.values.vendor}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.vendor && Boolean(formik.errors.vendor)}
-                helperText={formik.touched.vendor && formik.errors.vendor}
-              />
-            </Box>
-            {user?.role === "admin" && (
+            {isAdmin && (
               <>
+                <Box m={2} pt={3}>
+                  <TextField
+                    fullWidth
+                    id="vendor"
+                    name="vendor"
+                    label="Vendor"
+                    value={formik.values.vendor}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={formik.touched.vendor && Boolean(formik.errors.vendor)}
+                    helperText={formik.touched.vendor && formik.errors.vendor}
+                  />
+                </Box>
+                <Box m={2} pt={3}>
+                  <TextField
+                    fullWidth
+                    id="vendorInvoiceNumber"
+                    name="vendorInvoiceNumber"
+                    label="Invoice Number"
+                    value={formik.values.vendorInvoiceNumber}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={
+                      formik.touched.vendorInvoiceNumber &&
+                      Boolean(formik.errors.vendorInvoiceNumber)
+                    }
+                    helperText={
+                      formik.touched.vendorInvoiceNumber &&
+                      formik.errors.vendorInvoiceNumber
+                    }
+                  />
+                </Box>
                 <Box m={2} pt={3}>
                   <TextField
                     fullWidth

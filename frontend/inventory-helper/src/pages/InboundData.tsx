@@ -3,9 +3,12 @@ import { useEffect, useState } from "react";
 import InboundList from "../components/InboundList";
 import { Typography, Box } from "@mui/material";
 import { getApiUrl } from '../config/api';
+import { useAuth } from "../context/AuthContext";
 
 function InboundData() {
   const [listOfInbound, setListOfInbound] = useState<any[]>([]);
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   const [sortConfig, setSortConfig] = useState<{
     key: string | null;
@@ -117,6 +120,7 @@ function InboundData() {
       <InboundList
         products={sortedAndFilteredInbound}
         heading=""
+        isAdmin={isAdmin}
         handleSort={handleSort}
         sortConfig={sortConfig}
         filterConfig={filterConfig}

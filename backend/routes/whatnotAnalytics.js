@@ -2,6 +2,7 @@ const express = require("express");
 const Sequelize = require("sequelize");
 const router = express.Router();
 const { auth } = require("../middleware/auth");
+const { checkPermission } = require("../middleware/permissions");
 const { sequelize, WhatnotLog, Products, ProductDetails, WhatnotShow } = require("../models");
 
 const toTableName = (model) => {
@@ -50,17 +51,7 @@ const parseDateRange = (query) => {
   return { from, to };
 };
 
-const requireAdmin = (req, res) => {
-  if (!req.user || req.user.role !== "admin") {
-    res.status(403).json({ error: "Access denied. Admin only." });
-    return false;
-  }
-  return true;
-};
-
-router.get("/overview", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/overview", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -116,9 +107,7 @@ router.get("/overview", auth, async (req, res) => {
   }
 });
 
-router.get("/trend", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/trend", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -165,9 +154,7 @@ router.get("/trend", auth, async (req, res) => {
   }
 });
 
-router.get("/shows-performance", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/shows-performance", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -206,9 +193,7 @@ router.get("/shows-performance", auth, async (req, res) => {
   }
 });
 
-router.get("/shows-hourly", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/shows-hourly", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -252,9 +237,7 @@ router.get("/shows-hourly", auth, async (req, res) => {
   }
 });
 
-router.get("/shows-top-skus", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/shows-top-skus", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -308,9 +291,7 @@ router.get("/shows-top-skus", auth, async (req, res) => {
   }
 });
 
-router.get("/products-top", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/products-top", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -362,9 +343,7 @@ router.get("/products-top", auth, async (req, res) => {
   }
 });
 
-router.get("/products-pareto", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/products-pareto", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -424,9 +403,7 @@ router.get("/products-pareto", auth, async (req, res) => {
   }
 });
 
-router.get("/products-brand-contribution", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/products-brand-contribution", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -475,9 +452,7 @@ router.get("/products-brand-contribution", auth, async (req, res) => {
   }
 });
 
-router.get("/products-velocity", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/products-velocity", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -566,9 +541,7 @@ router.get("/products-velocity", auth, async (req, res) => {
   }
 });
 
-router.get("/products-day-of-week", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/products-day-of-week", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -637,9 +610,7 @@ router.get("/products-day-of-week", auth, async (req, res) => {
   }
 });
 
-router.get("/products-sku-trend", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/products-sku-trend", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -690,9 +661,7 @@ router.get("/products-sku-trend", auth, async (req, res) => {
   }
 });
 
-router.get("/brand-mix", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/brand-mix", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -754,9 +723,7 @@ router.get("/brand-mix", auth, async (req, res) => {
   }
 });
 
-router.get("/operations-users", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/operations-users", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -795,9 +762,7 @@ router.get("/operations-users", auth, async (req, res) => {
   }
 });
 
-router.get("/operations-user-hourly", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/operations-user-hourly", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -838,9 +803,7 @@ router.get("/operations-user-hourly", auth, async (req, res) => {
   }
 });
 
-router.get("/operations-errors-trend", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/operations-errors-trend", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -885,9 +848,7 @@ router.get("/operations-errors-trend", auth, async (req, res) => {
   }
 });
 
-router.get("/operations-errors-table", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/operations-errors-table", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -942,9 +903,7 @@ router.get("/operations-errors-table", auth, async (req, res) => {
   }
 });
 
-router.get("/inventory-risk", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
+router.get("/inventory-risk", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -1009,3 +968,4 @@ router.get("/inventory-risk", auth, async (req, res) => {
 });
 
 module.exports = router;
+

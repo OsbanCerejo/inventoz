@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { User, UserSession } = require('../models');
+const { User, UserSession, Logs } = require('../models');
 const { auth } = require('../middleware/auth');
 const { checkPermission } = require('../middleware/permissions');
+const PermissionService = require('../Services/PermissionService');
 const { ValidationError, Op } = require('sequelize');
 
 // Get all users (users permission required)
@@ -18,6 +19,103 @@ router.get('/', auth, checkPermission('users', 'view'), async (req, res) => {
     console.error('Get users error:', error);
     res.status(500).json({ 
       error: 'Failed to retrieve users. Please try again.' 
+    });
+  }
+});
+
+router.get('/permissions/catalog', auth, checkPermission('users', 'view'), async (req, res) => {
+  try {
+    const catalog = await PermissionService.getCatalog();
+    res.json(catalog);
+  } catch (error) {
+    console.error('Get permissions catalog error:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve permissions catalog. Please try again.',
+    });
+  }
+});
+
+router.get('/:id/permissions', auth, checkPermission('users', 'view'), async (req, res) => {
+  try {
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: 'Invalid user id' });
+    }
+
+    const targetUser = await User.findByPk(userId, {
+      attributes: ['id', 'name', 'username', 'email', 'role', 'isActive'],
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const matrix = await PermissionService.getUserPermissionMatrix(userId);
+    res.json({
+      user: targetUser,
+      isAdmin: targetUser.role === 'admin',
+      permissions: matrix,
+    });
+  } catch (error) {
+    console.error('Get user permissions error:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve user permissions. Please try again.',
+    });
+  }
+});
+
+router.put('/:id/permissions', auth, checkPermission('users', 'edit'), async (req, res) => {
+  try {
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: 'Invalid user id' });
+    }
+
+    const targetUser = await User.findByPk(userId, {
+      attributes: ['id', 'name', 'username', 'role'],
+    });
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (targetUser.role === 'admin') {
+      return res.status(400).json({ error: 'Admin permissions cannot be edited.' });
+    }
+
+    const { permissions = [] } = req.body || {};
+    if (!Array.isArray(permissions)) {
+      return res.status(400).json({ error: 'permissions must be an array' });
+    }
+
+    await PermissionService.saveUserPermissionMatrix(userId, permissions);
+    const updatedMatrix = await PermissionService.getUserPermissionMatrix(userId);
+
+    await Logs.create({
+      timestamp: new Date().toISOString(),
+      type: 'User Permission',
+      action: 'update',
+      entityType: 'user_permission',
+      entityId: String(userId),
+      userId: req.user?.id?.toString(),
+      metaData: {
+        targetUser: {
+          id: targetUser.id,
+          username: targetUser.username,
+          role: targetUser.role,
+        },
+        changedCount: permissions.length,
+      },
+    }).catch(() => {});
+
+    res.json({
+      message: 'User permissions updated successfully',
+      user: targetUser,
+      permissions: updatedMatrix,
+    });
+  } catch (error) {
+    console.error('Update user permissions error:', error);
+    res.status(500).json({
+      error: 'Failed to update user permissions. Please try again.',
     });
   }
 });

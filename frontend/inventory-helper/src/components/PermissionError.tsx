@@ -46,8 +46,10 @@ const PermissionError: React.FC<PermissionErrorProps> = ({
       case 'sales': return 'Sales';
       case 'pricelist': return 'Price List';
       case 'whatnot': return 'Whatnot';
-      case 'employeeInfo': return 'Employee Information';
       case 'packing': return 'Packing';
+      case 'whatnotAnalytics': return 'Whatnot Analytics';
+      case 'packingAnalytics': return 'Packing Analytics';
+      case 'lowStock': return 'Low Stock';
       case 'ebay': return 'eBay';
       default: return resource;
     }
@@ -62,8 +64,10 @@ const PermissionError: React.FC<PermissionErrorProps> = ({
       case 'sales': return 'Sales';
       case 'pricelist': return 'Price List';
       case 'whatnot': return 'Whatnot';
-      case 'employeeInfo': return 'Employee Information';
       case 'packing': return 'Packing';
+      case 'whatnotAnalytics': return 'Whatnot Analytics';
+      case 'packingAnalytics': return 'Packing Analytics';
+      case 'lowStock': return 'Low Stock';
       default: return menuItem;
     }
   };

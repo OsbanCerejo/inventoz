@@ -23,7 +23,15 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Chip
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControlLabel,
+  Switch,
+  Divider,
+  Grid
 } from '@mui/material';
 
 type ActiveSession = {
@@ -48,6 +56,17 @@ type ActiveSession = {
   } | null;
 };
 
+type UserPermissionRow = {
+  id: number;
+  key: string;
+  scopeType: 'resource_action' | 'menu';
+  resource: string | null;
+  action: string | null;
+  menuKey: string | null;
+  label: string;
+  allowed: boolean;
+};
+
 const Users: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
@@ -55,6 +74,11 @@ const Users: React.FC = () => {
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
+  const [permissionsTargetUser, setPermissionsTargetUser] = useState<User | null>(null);
+  const [permissionRows, setPermissionRows] = useState<UserPermissionRow[]>([]);
+  const [permissionsLoading, setPermissionsLoading] = useState(false);
+  const [permissionsSaving, setPermissionsSaving] = useState(false);
   const { user: currentUser, token } = useAuth();
 
   const fetchUsers = async () => {
@@ -215,10 +239,82 @@ const Users: React.FC = () => {
     return new Date(value).toLocaleString();
   };
 
+  const handleEditPermissions = async (user: User) => {
+    if (user.role === 'admin') {
+      toast.info('Admin users always have full access.');
+      return;
+    }
+
+    try {
+      setPermissionsLoading(true);
+      setPermissionsDialogOpen(true);
+      setPermissionsTargetUser(user);
+      const response = await axios.get(getApiUrl(`api/users/${user.id}/permissions`), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setPermissionRows(response.data?.permissions || []);
+    } catch (error: any) {
+      console.error('Error loading user permissions:', error);
+      toast.error(error.response?.data?.error || 'Failed to load user permissions');
+      setPermissionsDialogOpen(false);
+      setPermissionsTargetUser(null);
+    } finally {
+      setPermissionsLoading(false);
+    }
+  };
+
+  const handlePermissionToggle = (permissionId: number, allowed: boolean) => {
+    setPermissionRows((prev) =>
+      prev.map((row) => (row.id === permissionId ? { ...row, allowed } : row))
+    );
+  };
+
+  const handleSavePermissions = async () => {
+    if (!permissionsTargetUser) return;
+    try {
+      setPermissionsSaving(true);
+      await axios.put(
+        getApiUrl(`api/users/${permissionsTargetUser.id}/permissions`),
+        {
+          permissions: permissionRows.map((row) => ({
+            permissionId: row.id,
+            allowed: row.allowed,
+          })),
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      toast.success('Permissions updated successfully');
+      setPermissionsDialogOpen(false);
+      setPermissionsTargetUser(null);
+      setPermissionRows([]);
+    } catch (error: any) {
+      console.error('Error saving user permissions:', error);
+      toast.error(error.response?.data?.error || 'Failed to save user permissions');
+    } finally {
+      setPermissionsSaving(false);
+    }
+  };
+
+  const closePermissionsDialog = () => {
+    if (permissionsSaving) return;
+    setPermissionsDialogOpen(false);
+    setPermissionsTargetUser(null);
+    setPermissionRows([]);
+  };
+
   const formatGeo = (session: ActiveSession) => {
     const parts = [session.geoCity, session.geoRegion, session.geoCountry].filter(Boolean);
     return parts.length > 0 ? parts.join(', ') : 'Unknown';
   };
+
+  const groupedPermissions = permissionRows.reduce((acc, row) => {
+    const group = row.scopeType === 'menu' ? 'Menu Visibility' : (row.resource || 'Other');
+    if (!acc[group]) acc[group] = [];
+    acc[group].push(row);
+    return acc;
+  }, {} as Record<string, UserPermissionRow[]>);
 
   return (
     <Box sx={{ mt: 4, px: 3 }}>
@@ -256,6 +352,7 @@ const Users: React.FC = () => {
             users={users}
             onEdit={handleEditUser}
             onDelete={handleDeleteUser}
+            onEditPermissions={handleEditPermissions}
             currentUserId={currentUser?.id}
           />
 
@@ -320,6 +417,84 @@ const Users: React.FC = () => {
           </Box>
         </>
       )}
+
+      <Dialog
+        open={permissionsDialogOpen}
+        onClose={closePermissionsDialog}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>
+          Edit Permissions{permissionsTargetUser ? ` - ${permissionsTargetUser.name || permissionsTargetUser.username}` : ''}
+        </DialogTitle>
+        <DialogContent dividers>
+          {permissionsLoading ? (
+            <Box display="flex" justifyContent="center" py={3}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : permissionsTargetUser?.role === 'admin' ? (
+            <Alert severity="info">Admins always have full access and cannot be edited.</Alert>
+          ) : (
+            <Box>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Toggle each permission on/off. Changes are saved for this user only.
+              </Alert>
+              {Object.entries(groupedPermissions).map(([groupName, rows]) => (
+                <Box key={groupName} sx={{ mb: 2 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                    {groupName}
+                  </Typography>
+                  <Grid container spacing={1}>
+                    {rows.map((row) => (
+                      <Grid item xs={12} sm={6} key={row.id}>
+                        <Box
+                          sx={{
+                            border: '1px solid #e5e7eb',
+                            borderRadius: 1,
+                            px: 1.5,
+                            py: 1,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {row.scopeType === 'menu' ? `Menu: ${row.menuKey}` : `${row.resource} - ${row.action}`}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {row.key}
+                            </Typography>
+                          </Box>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={!!row.allowed}
+                                onChange={(e) => handlePermissionToggle(row.id, e.target.checked)}
+                              />
+                            }
+                            label={row.allowed ? 'ON' : 'OFF'}
+                            labelPlacement="start"
+                          />
+                        </Box>
+                      </Grid>
+                    ))}
+                  </Grid>
+                  <Divider sx={{ mt: 2 }} />
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closePermissionsDialog} disabled={permissionsSaving}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleSavePermissions} disabled={permissionsSaving || permissionsLoading}>
+            {permissionsSaving ? 'Saving...' : 'Save Permissions'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

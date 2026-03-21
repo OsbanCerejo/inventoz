@@ -39,13 +39,6 @@ const parseDateRange = (query) => {
   return { from, to };
 };
 
-const requireAdmin = (req, res) => {
-  if (!req.user || req.user.role !== "admin") {
-    res.status(403).json({ error: "Access denied. Admin only." });
-    return false;
-  }
-  return true;
-};
 
 // Simplified analytics schedule:
 // Count all scans in each day, but for average/hour calculations use:
@@ -205,8 +198,7 @@ router.get("/", auth, checkPermission('barcodeScan', 'view'), async (req, res) =
 });
 
 // Analytics: Overview KPIs
-router.get("/analytics/overview", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+router.get("/analytics/overview", auth, checkPermission('packingAnalytics', 'view'), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
   const { userId } = req.query;
@@ -413,8 +405,7 @@ router.get("/analytics/overview", auth, async (req, res) => {
 });
 
 // Analytics: Throughput trend
-router.get("/analytics/trend", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+router.get("/analytics/trend", auth, checkPermission('packingAnalytics', 'view'), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
 
@@ -470,8 +461,7 @@ router.get("/analytics/trend", auth, async (req, res) => {
 });
 
 // Analytics: Packers daily output (for comparison charts)
-router.get("/analytics/packers-daily", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+router.get("/analytics/packers-daily", auth, checkPermission('packingAnalytics', 'view'), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
   const { userId } = req.query;
@@ -523,8 +513,7 @@ router.get("/analytics/packers-daily", auth, async (req, res) => {
 });
 
 // Analytics: Packers performance
-router.get("/analytics/packers", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+router.get("/analytics/packers", auth, checkPermission('packingAnalytics', 'view'), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
   const { userId } = req.query;
@@ -630,8 +619,7 @@ router.get("/analytics/packers", auth, async (req, res) => {
 });
 
 // Analytics: Day-of-week summary
-router.get("/analytics/weekday-summary", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+router.get("/analytics/weekday-summary", auth, checkPermission('packingAnalytics', 'view'), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
   const { userId } = req.query;
@@ -701,8 +689,7 @@ router.get("/analytics/weekday-summary", auth, async (req, res) => {
 });
 
 // Analytics: Day x hour heatmap
-router.get("/analytics/time-heatmap", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+router.get("/analytics/time-heatmap", auth, checkPermission('packingAnalytics', 'view'), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
   const { userId } = req.query;
@@ -752,8 +739,7 @@ router.get("/analytics/time-heatmap", auth, async (req, res) => {
 });
 
 // Analytics: Duplicate barcode scans
-router.get("/analytics/duplicates", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+router.get("/analytics/duplicates", auth, checkPermission('packingAnalytics', 'view'), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
   const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
@@ -796,8 +782,7 @@ router.get("/analytics/duplicates", auth, async (req, res) => {
 });
 
 // Analytics: Duplicate scan rate by user (raw scans, non-deduped)
-router.get("/analytics/duplicates-by-user", auth, async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+router.get("/analytics/duplicates-by-user", auth, checkPermission('packingAnalytics', 'view'), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
   const { userId } = req.query;

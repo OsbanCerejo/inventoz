@@ -8,11 +8,10 @@
     "pricing": ["view", "create", "edit", "delete"],
     "packing": ["view"],
     "whatnot": ["view", "create", "edit", "delete"],
-    "employeeInfo": ["view", "create", "edit", "delete"],
     "users": ["view", "create", "edit", "delete"],
     "sales": ["view", "create", "edit", "delete"],
     "barcodeScan": ["view", "create", "edit", "delete"],
-    "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "employeeInfo", "users", "addProduct", "barcodeScan", "sales" ]
+    "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "users", "addProduct", "barcodeScan", "sales" ]
   },
   "listing": {
     "addProduct": ["view", "create", "edit"],

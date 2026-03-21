@@ -12,6 +12,7 @@ import { toast } from "react-toastify";
 interface Props {
   products: any[];
   heading: string;
+  isAdmin: boolean;
   handleSort: (columnKey: string) => void;
   sortConfig: { key: string | null; direction: string };
   filterConfig: {
@@ -33,6 +34,7 @@ interface Props {
 function ProductList({
   products,
   heading,
+  isAdmin,
   handleSort,
   sortConfig,
   filterConfig,
@@ -160,17 +162,19 @@ function ProductList({
               <th scope="col" onClick={() => handleSort("quantity")}>
                 {getSortIcon("quantity")} Quantity
               </th>
-              <th scope="col">
-                Vendor
-                <br></br>
-                <input
-                  type="text"
-                  style={{ width: "100%" }}
-                  value={filterConfig.vendorName}
-                  onChange={(e) => handleFilterChange(e, "vendorName")}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </th>
+              {isAdmin && (
+                <th scope="col">
+                  Vendor
+                  <br></br>
+                  <input
+                    type="text"
+                    style={{ width: "100%" }}
+                    value={filterConfig.vendorName}
+                    onChange={(e) => handleFilterChange(e, "vendorName")}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </th>
+              )}
               {/* <th scope="col">Final</th> */}
             </tr>
           </thead>
@@ -195,10 +199,10 @@ function ProductList({
                   </IconButton>
                   {combinedItem.sku}
                 </td>
-                <td>{combinedItem.Product.itemName}</td>
+                <td>{combinedItem.Product?.itemName || "-"}</td>
                 <td>{formatDate(combinedItem.date)}</td>
                 <td style={{ width: "8%" }}>{combinedItem.batch}</td>
-                <td style={{ width: "8%" }}>{combinedItem.Product.location}</td>
+                <td style={{ width: "8%" }}>{combinedItem.Product?.location || "-"}</td>
                 <td
                   style={{
                     width: "7%",
@@ -206,11 +210,13 @@ function ProductList({
                 >
                   {combinedItem.quantity}
                 </td>
-                <td>
-                  {combinedItem.vendorName ||
-                    combinedItem.vendor ||
-                    combinedItem.vendorInvoiceNumber}
-                </td>
+                {isAdmin && (
+                  <td>
+                    {combinedItem.vendorName ||
+                      combinedItem.vendor ||
+                      combinedItem.vendorInvoiceNumber}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

@@ -351,13 +351,8 @@ router.post("/updateQuantities", auth, checkPermission('products', 'edit'), asyn
 });
 
 // Get low stock products (admin only)
-router.get("/low-stock", auth, async (req, res) => {
+router.get("/low-stock", auth, checkPermission('lowStock', 'view'), async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
-    }
-
     const LowStockAlertService = require("../Services/LowStockAlertService");
     const lowStockProducts = await LowStockAlertService.getLowStockProducts();
     res.json(lowStockProducts);
@@ -368,13 +363,8 @@ router.get("/low-stock", auth, async (req, res) => {
 });
 
 // Test email configuration (admin only)
-router.post("/test-email", auth, async (req, res) => {
+router.post("/test-email", auth, checkPermission('lowStock', 'view'), async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
-    }
-
     const { email } = req.body;
     if (!email) {
       return res.status(400).json({ error: 'Email address is required' });

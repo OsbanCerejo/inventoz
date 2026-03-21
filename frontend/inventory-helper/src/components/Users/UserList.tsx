@@ -3,7 +3,8 @@ import { User } from '../../types/User';
 import { 
   Edit as EditIcon, 
   Delete as DeleteIcon, 
-  People as PeopleIcon
+  People as PeopleIcon,
+  Security as SecurityIcon
 } from '@mui/icons-material';
 import {
   Table,
@@ -27,6 +28,7 @@ interface UserListProps {
   users: User[];
   onEdit: (user: User) => void;
   onDelete: (userId: number) => void;
+  onEditPermissions: (user: User) => void;
   currentUserId?: number;
 }
 
@@ -35,6 +37,7 @@ const UserList: React.FC<UserListProps> = ({
   users, 
   onEdit, 
   onDelete, 
+  onEditPermissions,
   currentUserId 
 }) => {
   const getRoleDisplayName = (role: User['role']) => {
@@ -158,6 +161,17 @@ const UserList: React.FC<UserListProps> = ({
                             <EditIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
+                        {user.role !== 'admin' && (
+                          <Tooltip title="Edit Permissions">
+                            <IconButton
+                              size="small"
+                              color="secondary"
+                              onClick={() => onEditPermissions(user)}
+                            >
+                              <SecurityIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                         
                         {user.id !== currentUserId && (
                           <>

@@ -7,7 +7,6 @@ import {
   LocalShipping as PackingIcon,
   AttachMoney as PriceListIcon,
   Store as WhatnotIcon,
-  People as EmployeeIcon,
   Add as AddProductIcon
 } from '@mui/icons-material';
 import { useAuth } from "../context/AuthContext";
@@ -74,14 +73,6 @@ function Home() {
       menuKey: "whatnot",
       color: "#f3e5f5"
     },
-    {
-      title: "Employees",
-      description: "Manage employee information",
-      icon: <EmployeeIcon sx={{ fontSize: 40, color: '#1976d2' }} />,
-      path: "/employee-info",
-      menuKey: "employeeInfo",
-      color: "#e3f2fd"
-    }
   ];
 
   return (

@@ -17,7 +17,6 @@ import EbayApi from "./pages/EbayApi";
 import Whatnot from "./pages/Whatnot";
 import WhatnotAnalytics from "./pages/WhatnotAnalytics";
 import PriceList from "./pages/PriceList";
-import EmployeeInformation from "./pages/EmployeeInformation";
 import Users from "./pages/Users";
 import BarcodeScan from "./pages/BarcodeScan";
 import PackingAnalytics from "./pages/PackingAnalytics";
@@ -74,7 +73,7 @@ function AppContent() {
             <Route
               path="/addProduct"
               element={
-                <ProtectedRoute resource="addProduct" action="create" menuItem="products">
+                <ProtectedRoute resource="addProduct" action="create" menuItem="addProduct">
                   <AddProduct />
                 </ProtectedRoute>
               }
@@ -114,7 +113,7 @@ function AppContent() {
             <Route
               path="/inbound/showAll"
               element={
-                <ProtectedRoute menuItem="inbound">
+                <ProtectedRoute resource="inbound" action="view" menuItem="inbound">
                   <InboundData />
                 </ProtectedRoute>
               }
@@ -162,7 +161,7 @@ function AppContent() {
             <Route
               path="/whatnot-analytics"
               element={
-                <ProtectedRoute requireAdmin={true}>
+                <ProtectedRoute resource="whatnotAnalytics" action="view" menuItem="whatnotAnalytics">
                   <WhatnotAnalytics />
                 </ProtectedRoute>
               }
@@ -172,14 +171,6 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="pricelist" action="view" menuItem="pricelist">
                   <PriceList />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/employee-info"
-              element={
-                <ProtectedRoute resource="employeeInfo" action="view" menuItem="employeeInfo">
-                  <EmployeeInformation />
                 </ProtectedRoute>
               }
             />
@@ -202,7 +193,7 @@ function AppContent() {
             <Route
               path="/packing-analytics"
               element={
-                <ProtectedRoute requireAdmin={true}>
+                <ProtectedRoute resource="packingAnalytics" action="view" menuItem="packingAnalytics">
                   <PackingAnalytics />
                 </ProtectedRoute>
               }
@@ -210,7 +201,7 @@ function AppContent() {
             <Route
               path="/low-stock"
               element={
-                <ProtectedRoute requireAdmin={true}>
+                <ProtectedRoute resource="lowStock" action="view" menuItem="lowStock">
                   <LowStock />
                 </ProtectedRoute>
               }

@@ -67,6 +67,10 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'userId',
       as: 'sessions'
     });
+    User.hasMany(models.UserPermission, {
+      foreignKey: 'userId',
+      as: 'userPermissions'
+    });
   };
 
   return User;

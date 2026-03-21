@@ -34,7 +34,7 @@ function Product() {
   let { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const [productObject, setProductObject]: any = useState({});
   const [barcodeValue, setBarcodeValue] = useState(productObject.sku);
   const [productDetails, setProductDetails]: any = useState({});
@@ -45,6 +45,7 @@ function Product() {
   const [priceDialogOpen, setPriceDialogOpen] = useState(false);
   const [updatePrice, setUpdatePrice] = useState<number>(0);
   const isAdmin = user?.role === "admin";
+  const canViewInboundHistory = isAdmin || hasPermission("inbound", "view");
 
   const [vendorPrices, setVendorPrices] = useState<any[]>([]);
   const [averagePrice, setAveragePrice] = useState<number | null>(null);
@@ -109,10 +110,14 @@ function Product() {
     if (!sku || !user) return;
 
     // Inbound history — visible to all authenticated users
-    axios
-      .get(getApiUrl(`inbound/bySku/${sku}`))
-      .then(({ data }) => setInboundHistory(data || []))
-      .catch((err) => console.error("Error fetching inbound history:", err));
+    if (canViewInboundHistory) {
+      axios
+        .get(getApiUrl(`inbound/bySku/${sku}`))
+        .then(({ data }) => setInboundHistory(data || []))
+        .catch((err) => console.error("Error fetching inbound history:", err));
+    } else {
+      setInboundHistory([]);
+    }
 
     // Vendor pricing — admin only
     if (user.role === "admin") {
@@ -125,7 +130,7 @@ function Product() {
         })
         .catch((err) => console.error("Error fetching vendor prices:", err));
     }
-  }, [productObject.sku, user]);
+  }, [productObject.sku, user, canViewInboundHistory]);
 
   // Handle the edit button click and redirect with the product to edit page
   const handleEditOnClick = useCallback(() => {
@@ -489,57 +494,60 @@ function Product() {
                       </Box>
                     </>
                   )}
-
-                  {/* Inbound History — fixed height scrollable */}
-                  <Divider sx={{ my: 1.5 }} />
-                  <Typography variant="subtitle2" fontWeight="bold" mb={0.5}>
-                    Inbound History
-                  </Typography>
-                  <Box
-                    sx={{
-                      height: 120,
-                      overflowY: "auto",
-                      border: "1px solid",
-                      borderColor: "divider",
-                      borderRadius: 1,
-                      p: 1,
-                      bgcolor: "background.paper",
-                    }}
-                  >
-                    {inboundHistory.length === 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        No inbound records found.
+                  {canViewInboundHistory && (
+                    <>
+                      {/* Inbound History - fixed height scrollable */}
+                      <Divider sx={{ my: 1.5 }} />
+                      <Typography variant="subtitle2" fontWeight="bold" mb={0.5}>
+                        Inbound History
                       </Typography>
-                    ) : (
-                      inboundHistory.map((record: any) => (
-                        <Box key={record.compositeSku} py={0.25}>
-                          {(() => {
-                            const name =
-                              record.vendorName ||
-                              record.vendor ||
-                              "Unknown vendor";
-                            const invoice =
-                              record.vendorInvoiceNumber || "";
-                            const vendorDisplay = invoice
-                              ? `${name} (Invoice: ${invoice})`
-                              : name;
-                            return (
-                              <Typography variant="body2">
-                                {vendorDisplay} — Qty: {record.quantity} —{" "}
-                                {record.date
-                                  ? new Date(record.date).toLocaleDateString("en-US", {
-                                      year: "numeric",
-                                      month: "short",
-                                      day: "numeric",
-                                    })
-                                  : "No date"}
-                              </Typography>
-                            );
-                          })()}
-                        </Box>
-                      ))
-                    )}
-                  </Box>
+                      <Box
+                        sx={{
+                          height: 120,
+                          overflowY: "auto",
+                          border: "1px solid",
+                          borderColor: "divider",
+                          borderRadius: 1,
+                          p: 1,
+                          bgcolor: "background.paper",
+                        }}
+                      >
+                        {inboundHistory.length === 0 ? (
+                          <Typography variant="body2" color="text.secondary">
+                            No inbound records found.
+                          </Typography>
+                        ) : (
+                          inboundHistory.map((record: any) => (
+                            <Box key={record.compositeSku} py={0.25}>
+                              {(() => {
+                                const name =
+                                  record.vendorName ||
+                                  record.vendor ||
+                                  "Unknown vendor";
+                                const invoice =
+                                  record.vendorInvoiceNumber || "";
+                                const vendorDisplay = invoice
+                                  ? `${name} (Invoice: ${invoice})`
+                                  : name;
+                                return (
+                                  <Typography variant="body2">
+                                    {vendorDisplay} - Qty: {record.quantity} -{" "}
+                                    {record.date
+                                      ? new Date(record.date).toLocaleDateString("en-US", {
+                                          year: "numeric",
+                                          month: "short",
+                                          day: "numeric",
+                                        })
+                                      : "No date"}
+                                  </Typography>
+                                );
+                              })()}
+                            </Box>
+                          ))
+                        )}
+                      </Box>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </Box>
@@ -713,3 +721,4 @@ function Product() {
 }
 
 export default Product;
+

@@ -232,7 +232,7 @@ router.get("/allOrders", auth, checkPermission('orders', 'view'), async (req, re
   }
 });
 
-router.post("/approve-preview", auth, checkPermission('orders', 'view'), async (req, res) => {
+router.post("/approve-preview", auth, checkPermission('orders', 'approve'), async (req, res) => {
   const { items = [], selectedStores = [] } = req.body || {};
 
   if (!Array.isArray(items) || items.length === 0) {
@@ -293,7 +293,7 @@ router.post("/approve-preview", auth, checkPermission('orders', 'view'), async (
   }
 });
 
-router.post("/approve-batch", auth, checkPermission('orders', 'view'), async (req, res) => {
+router.post("/approve-batch", auth, checkPermission('orders', 'approve'), async (req, res) => {
   const { items = [], selectedStores = [] } = req.body || {};
 
   if (!Array.isArray(items) || items.length === 0) {

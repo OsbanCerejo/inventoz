@@ -5,9 +5,10 @@ import {
   Sort,
   ContentCopy,
   Science,
+  QrCode2,
 } from "@mui/icons-material";
 import Pagination from "./Pagination";
-import { IconButton } from "@mui/material";
+import { IconButton, Box, TextField, InputAdornment, Typography } from "@mui/material";
 import { toast } from "react-toastify";
 
 interface Props {
@@ -111,13 +112,47 @@ function ProductList({
       />
       {products.length === 0 && <p>No item found</p>}
       <div>
-        UPC:{" "}
-        <input
-          type="text"
-          value={getFilterValue("upc")}
-          onChange={(e) => handleFilterChange(e, "upc")}
-          onClick={(e) => e.stopPropagation()}
-        />
+        <Box sx={{ mb: 1 }}>
+          <Box
+            sx={{
+              px: 1.25,
+              py: 0.75,
+              border: "1px solid #e2e8f0",
+              borderRadius: 1.5,
+              bgcolor: "#ffffff",
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              width: "100%",
+              maxWidth: 320,
+            }}
+          >
+            <QrCode2 sx={{ color: "#2563eb", fontSize: 18 }} />
+            <TextField
+              size="small"
+              fullWidth
+              placeholder="Search by UPC..."
+              value={getFilterValue("upc")}
+              onChange={(e) => handleFilterChange(e, "upc")}
+              onClick={(e) => e.stopPropagation()}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Typography variant="body2" sx={{ color: "#64748b", fontWeight: 600 }}>
+                      UPC
+                    </Typography>
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  bgcolor: "#fff",
+                  borderRadius: 1,
+                },
+              }}
+            />
+          </Box>
+        </Box>
         <table className="table table-bordered table-hover" border={1}>
           <thead>
             <tr>

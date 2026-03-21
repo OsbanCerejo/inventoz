@@ -104,9 +104,6 @@ app.use("/whatnot/analytics", whatnotAnalyticsRouter);
 const priceListRouter = require("./routes/priceList");
 app.use("/api/price-list", priceListRouter);
 
-const employeeInfoRouter = require("./routes/EmployeeInformation");
-app.use("/api/employee-info", employeeInfoRouter);
-
 const usersRouter = require("./routes/Users");
 app.use("/api/users", usersRouter);
 

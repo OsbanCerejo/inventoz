@@ -1,32 +1,56 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { People as PeopleIcon } from '@mui/icons-material';
 
 function NavBar() {
   const [isOpen, setIsOpen] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showAnalyticsMenu, setShowAnalyticsMenu] = useState(false);
-  const [showAdminToolsMenu, setShowAdminToolsMenu] = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState<"analytics" | "tools" | "user" | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout, hasMenuAccess, isLoading, isAuthenticated } = useAuth();
-  const isAdmin = isAuthenticated && user?.role === "admin";
+  const analyticsRef = useRef<HTMLLIElement | null>(null);
+  const toolsRef = useRef<HTMLLIElement | null>(null);
+  const userRef = useRef<HTMLDivElement | null>(null);
 
   const toggleNavbar = () => {
     setIsOpen(!isOpen);
   };
 
-  const toggleUserMenu = () => {
-    setShowUserMenu(!showUserMenu);
+  const toggleDropdown = (dropdown: "analytics" | "tools" | "user") => {
+    setActiveDropdown((prev) => (prev === dropdown ? null : dropdown));
   };
 
-  const toggleAdminToolsMenu = () => {
-    setShowAdminToolsMenu(!showAdminToolsMenu);
-  };
+  useEffect(() => {
+    setActiveDropdown(null);
+  }, [location.pathname]);
 
-  const toggleAnalyticsMenu = () => {
-    setShowAnalyticsMenu(!showAnalyticsMenu);
-  };
+  useEffect(() => {
+    const onDocumentClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        analyticsRef.current?.contains(target) ||
+        toolsRef.current?.contains(target) ||
+        userRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setActiveDropdown(null);
+    };
+
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActiveDropdown(null);
+      }
+    };
+
+    document.addEventListener("mousedown", onDocumentClick);
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.removeEventListener("mousedown", onDocumentClick);
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, []);
 
   const handleHomeClick = () => {
     // Navigate to products page
@@ -36,7 +60,7 @@ function NavBar() {
   const handleLogout = () => {
     logout();
     navigate("/login");
-    setShowUserMenu(false);
+    setActiveDropdown(null);
   };
 
   // Menu items configuration
@@ -47,28 +71,26 @@ function NavBar() {
     { key: 'packing', label: 'Packing', path: '/orders/packingMode' },
     { key: 'pricelist', label: 'PriceList', path: '/price-list' },
     { key: 'whatnot', label: 'Whatnot', path: '/whatnot' },
-    { key: 'barcodeScan', label: 'Barcode Scan', path: '/barcode-scan' },
-    { key: 'employeeInfo', label: 'Employees', path: '/employee-info' }
+    { key: 'barcodeScan', label: 'Barcode Scan', path: '/barcode-scan' }
   ];
 
-  const adminCollapsedKeys = ['packing', 'pricelist', 'employeeInfo', 'whatnot', 'barcodeScan'];
+  const collapsedKeys = ['packing', 'pricelist', 'whatnot', 'barcodeScan'];
 
-  const adminAnalyticsItems = [
+  const analyticsItems = [
     { key: 'whatnotAnalytics', label: 'Whatnot Analytics', path: '/whatnot-analytics' },
     { key: 'packingAnalytics', label: 'Packing Analytics', path: '/packing-analytics' },
   ];
 
-  const adminToolsItems = [
+  const toolsItems = [
     { key: 'whatnot', label: 'Whatnot', path: '/whatnot' },
     { key: 'packing', label: 'Packing', path: '/orders/packingMode' },
     { key: 'pricelist', label: 'PriceList', path: '/price-list' },
-    { key: 'employeeInfo', label: 'Employees', path: '/employee-info' },
     { key: 'lowStock', label: 'Low Stock', path: '/low-stock' },
     { key: 'barcodeScan', label: 'Barcode Scan', path: '/barcode-scan' },
   ];
 
-  // Admin-only menu items
-  const adminMenuItems: Array<{ key: string; label: string; path: string }> = [];
+  const visibleAnalyticsItems = analyticsItems.filter((item) => hasMenuAccess(item.key));
+  const visibleToolsItems = toolsItems.filter((item) => hasMenuAccess(item.key));
 
   // If still loading permissions, show minimal navbar
   if (isLoading) {
@@ -88,7 +110,10 @@ function NavBar() {
 
   return (
     <div>
-      <nav className="navbar navbar-expand-lg navbar-light bg-light" style={{ position: "relative" }}>
+      <nav
+        className="navbar navbar-expand-lg navbar-light bg-light"
+        style={{ position: "relative", zIndex: 1200, isolation: "isolate" }}
+      >
         {/* Role Watermark */}
         {user && (
           <div style={{
@@ -119,7 +144,7 @@ function NavBar() {
         <div
           className={`collapse navbar-collapse ${isOpen ? "show" : ""}`}
           id="navbarSupportedContent"
-          style={{ position: "relative", zIndex: 1 }}
+          style={{ position: "relative", zIndex: 1201 }}
         >
           <ul className="navbar-nav mr-auto">
             {menuItems.map((item) => {
@@ -127,8 +152,8 @@ function NavBar() {
               if (!hasMenuAccess(item.key)) {
                 return null;
               }
-              // For admins, move selected items into Tools dropdown
-              if (isAdmin && adminCollapsedKeys.includes(item.key)) {
+              // Move selected sections into Tools dropdown
+              if (collapsedKeys.includes(item.key)) {
                 return null;
               }
 
@@ -150,19 +175,11 @@ function NavBar() {
                 </li>
               );
             })}
-            {/* Admin-only menu items */}
-            {isAuthenticated && user && user.role === 'admin' && adminMenuItems.map((item) => (
-              <li key={item.key} className="nav-item">
-                <Link className="nav-link" to={item.path}>
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-            {isAdmin && (
-              <li className="nav-item dropdown" style={{ position: "relative" }}>
+            {visibleAnalyticsItems.length > 0 && (
+              <li className="nav-item dropdown" style={{ position: "relative" }} ref={analyticsRef}>
                 <button
                   className="btn btn-link nav-link dropdown-toggle"
-                  onClick={toggleAnalyticsMenu}
+                  onClick={() => toggleDropdown("analytics")}
                   style={{
                     background: "none",
                     border: "none",
@@ -172,28 +189,30 @@ function NavBar() {
                 >
                   Analytics
                 </button>
-                {showAnalyticsMenu && (
+                {activeDropdown === "analytics" && (
                   <div
                     className="dropdown-menu show"
                     style={{
                       position: "absolute",
                       left: "0",
                       top: "100%",
-                      zIndex: 9999,
+                      zIndex: 1300,
                       minWidth: "220px",
                       padding: "0.25rem 0",
                       border: "1px solid #dee2e6",
                       borderRadius: "6px",
                       boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                       backgroundColor: "#fff",
+                      opacity: 1,
+                      pointerEvents: "auto",
                     }}
                   >
-                    {adminAnalyticsItems.map((item) => (
+                    {visibleAnalyticsItems.map((item) => (
                       <Link
                         key={item.key}
                         className="dropdown-item"
                         to={item.path}
-                        onClick={() => setShowAnalyticsMenu(false)}
+                        onClick={() => setActiveDropdown(null)}
                         style={{
                           padding: "8px 12px",
                           textDecoration: "none",
@@ -209,11 +228,11 @@ function NavBar() {
                 )}
               </li>
             )}
-            {isAdmin && (
-              <li className="nav-item dropdown" style={{ position: "relative" }}>
+            {visibleToolsItems.length > 0 && (
+              <li className="nav-item dropdown" style={{ position: "relative" }} ref={toolsRef}>
                 <button
                   className="btn btn-link nav-link dropdown-toggle"
-                  onClick={toggleAdminToolsMenu}
+                  onClick={() => toggleDropdown("tools")}
                   style={{
                     background: "none",
                     border: "none",
@@ -223,31 +242,31 @@ function NavBar() {
                 >
                   Tools
                 </button>
-                {showAdminToolsMenu && (
+                {activeDropdown === "tools" && (
                   <div
                     className="dropdown-menu show"
                     style={{
                       position: "absolute",
                       right: "0",
                       top: "100%",
-                      zIndex: 9999,
+                      zIndex: 1300,
                       minWidth: "220px",
                       padding: "0.25rem 0",
                       border: "1px solid #dee2e6",
                       borderRadius: "6px",
                       boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                       backgroundColor: "#fff",
+                      opacity: 1,
+                      pointerEvents: "auto",
                     }}
                   >
-                    {adminToolsItems.map((item) => {
-                      const canAccess = item.key === 'lowStock' ? true : hasMenuAccess(item.key);
-                      if (!canAccess) return null;
+                    {visibleToolsItems.map((item) => {
                       return (
                         <Link
                           key={item.key}
                           className="dropdown-item"
                           to={item.path}
-                          onClick={() => setShowAdminToolsMenu(false)}
+                          onClick={() => setActiveDropdown(null)}
                           style={{
                             padding: "8px 12px",
                             textDecoration: "none",
@@ -266,11 +285,11 @@ function NavBar() {
             )}
           </ul>
           {user && (
-            <div className="navbar-nav ml-auto" style={{ position: "relative", zIndex: 9999 }}>
+            <div className="navbar-nav ml-auto" style={{ position: "relative", zIndex: 1202 }} ref={userRef}>
               <div className="nav-item dropdown">
                 <button
                   className="btn btn-link nav-link dropdown-toggle"
-                  onClick={toggleUserMenu}
+                  onClick={() => toggleDropdown("user")}
                   style={{ 
                     background: "none", 
                     border: "none", 
@@ -289,21 +308,23 @@ function NavBar() {
                     <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/>
                   </svg>
                 </button>
-                {showUserMenu && (
+                {activeDropdown === "user" && (
                   <div 
                     className="dropdown-menu show" 
                     style={{
                       position: "absolute",
                       right: "0",
                       top: "100%",
-                      zIndex: 9999,
+                      zIndex: 1300,
                       minWidth: "220px",
                       padding: "0",
                       margin: "0",
                       border: "1px solid #dee2e6",
                       borderRadius: "6px",
                       boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                      backgroundColor: "#fff"
+                      backgroundColor: "#fff",
+                      opacity: 1,
+                      pointerEvents: "auto"
                     }}
                   >
                     <div className="dropdown-item-text">
@@ -338,7 +359,7 @@ function NavBar() {
                         <Link
                           className="dropdown-item"
                           to="/users"
-                          onClick={() => setShowUserMenu(false)}
+                          onClick={() => setActiveDropdown(null)}
                           style={{ 
                             background: "none", 
                             border: "none", 
