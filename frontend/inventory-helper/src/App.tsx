@@ -185,7 +185,7 @@ function AppContent() {
             <Route
               path="/barcode-scan"
               element={
-                <ProtectedRoute resource="barcodeScan" action="view" menuItem="barcodeScan">
+                <ProtectedRoute menuItem="barcodeScan">
                   <BarcodeScan />
                 </ProtectedRoute>
               }

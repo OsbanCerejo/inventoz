@@ -36,6 +36,7 @@ function ProductList({
   currentPage,
   productsPerPage,
   paginate,
+  totalProducts,
 }: Props) {
   const navigate = useNavigate();
 
@@ -56,35 +57,56 @@ function ProductList({
   };
 
   const copyToClipboard = (sku: string) => {
-    // Create a temporary textarea element
+    const onSuccess = () =>
+      toast.success("SKU Copied!", { position: "top-right", autoClose: 1000 });
+    const onFailure = (err?: unknown) => {
+      toast.error("Failed to copy SKU", { position: "top-right", autoClose: 1000 });
+      if (err) {
+        console.error("Copy failed:", err);
+      }
+    };
+
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(sku).then(onSuccess).catch(() => {
+        // Fallback for older/insecure contexts
+        const textArea = document.createElement("textarea");
+        textArea.value = sku;
+        textArea.style.position = "fixed";
+        textArea.style.top = "0";
+        textArea.style.left = "0";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          const successful = document.execCommand("copy");
+          successful ? onSuccess() : onFailure();
+        } catch (err) {
+          onFailure(err);
+        } finally {
+          document.body.removeChild(textArea);
+        }
+      });
+      return;
+    }
+
     const textArea = document.createElement("textarea");
     textArea.value = sku;
-    textArea.style.position = "fixed"; // Avoid scrolling to bottom
+    textArea.style.position = "fixed";
     textArea.style.top = "0";
     textArea.style.left = "0";
-    textArea.style.opacity = "0"; // Make it invisible
-  
-    // Append the textarea to the document body
+    textArea.style.opacity = "0";
     document.body.appendChild(textArea);
-  
-    // Select and copy the text
     textArea.focus();
     textArea.select();
-  
     try {
-      const successful = document.execCommand('copy');
-      if (successful) {
-        toast.success("SKU Copied!", { position: "top-right", autoClose: 1000 });
-      } else {
-        toast.error("Failed to copy SKU", { position: "top-right", autoClose: 1000 });
-      }
+      const successful = document.execCommand("copy");
+      successful ? onSuccess() : onFailure();
     } catch (err) {
-      toast.error("Failed to copy SKU", { position: "top-right", autoClose: 1000 });
-      console.error("Copy failed:", err);
+      onFailure(err);
+    } finally {
+      document.body.removeChild(textArea);
     }
-  
-    // Clean up: remove the textarea from the document
-    document.body.removeChild(textArea);
   };
 
   // Calculate index of the last product on the current page
@@ -96,20 +118,36 @@ function ProductList({
     indexOfFirstProduct,
     indexOfLastProduct
   );
+  const showingFrom = products.length === 0 ? 0 : indexOfFirstProduct + 1;
+  const showingTo = indexOfFirstProduct + currentProducts.length;
 
   const getFilterValue = (columnKey: string) => {
     const filter = filterConfig.find((f) => f.key === columnKey);
     return filter ? filter.value : "";
   };
 
+  const renderFilterInput = (columnKey: string, placeholder = "Filter...") => (
+    <input
+      type="text"
+      placeholder={placeholder}
+      value={getFilterValue(columnKey)}
+      onChange={(e) => handleFilterChange(e, columnKey)}
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        width: "100%",
+        height: 30,
+        borderRadius: 6,
+        border: "1px solid #cbd5e1",
+        background: "#ffffff",
+        padding: "0 8px",
+        fontSize: 13,
+        color: "#1e293b",
+      }}
+    />
+  );
+
   return (
     <>
-      <Pagination
-        productsPerPage={productsPerPage}
-        totalProducts={products.length}
-        paginate={paginate}
-        currentPage={currentPage}
-      />
       {products.length === 0 && <p>No item found</p>}
       <div>
         <Box sx={{ mb: 1 }}>
@@ -153,146 +191,139 @@ function ProductList({
             />
           </Box>
         </Box>
-        <table className="table table-bordered table-hover" border={1}>
-          <thead>
-            <tr>
-              <th scope="col">#</th>
-              <th scope="col" onClick={() => handleSort("sku")}>
-                {getSortIcon("sku")} SKU
-                <br></br>
-                <input
-                  type="text"
-                  value={getFilterValue("sku")}
-                  onChange={(e) => handleFilterChange(e, "sku")}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </th>
-              <th scope="col" onClick={() => handleSort("brand")}>
-                {getSortIcon("brand")} Brand
-                <br></br>
-                <input
-                  type="text"
-                  value={getFilterValue("brand")}
-                  onChange={(e) => handleFilterChange(e, "brand")}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </th>
-              <th scope="col" onClick={() => handleSort("itemName")}>
-                {getSortIcon("itemName")} Item Name
-                <br></br>
-                <input
-                  type="text"
-                  value={getFilterValue("itemName")}
-                  onChange={(e) => handleFilterChange(e, "itemName")}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </th>
-              <th scope="col">
-                Size{" "}
-                <input
-                  type="text"
-                  style={{ width: "100%" }}
-                  value={getFilterValue("sizeOz")}
-                  onChange={(e) => handleFilterChange(e, "sizeOz")}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </th>
-              <th scope="col">
-                Strength{" "}
-                <input
-                  type="text"
-                  style={{ width: "100%" }}
-                  value={getFilterValue("strength")}
-                  onChange={(e) => handleFilterChange(e, "strength")}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </th>
-              <th scope="col" onClick={() => handleSort("shade")}>
-                {getSortIcon("shade")} Variant
-                <br></br>
-                <input
-                  type="text"
-                  style={{ width: "100%" }}
-                  value={getFilterValue("shade")}
-                  onChange={(e) => handleFilterChange(e, "shade")}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </th>
-              <th scope="col" onClick={() => handleSort("location")}>
-                {getSortIcon("location")} Location
-                <br></br>
-                <input
-                  type="text"
-                  style={{ width: "100%" }}
-                  value={getFilterValue("location")}
-                  onChange={(e) => handleFilterChange(e, "location")}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </th>
-              <th scope="col" onClick={() => handleSort("quantity")}>
-                {getSortIcon("quantity")} QTY
-              </th>
-              {/* <th scope="col" onClick={() => handleSort("listed")}>
-                {getSortIcon("listed")} Listed
-              </th> */}
-              {/* <th scope="col">Final</th> */}
-            </tr>
-          </thead>
-          <tbody>
-            {currentProducts.map((product, index) => (
-              <tr
-                key={index}
-                onClick={() => {
-                  // setSelectedIndex(index);
-                  handleSelect(product);
-                }}
-              >
-                <th scope="row">
-                  {index + 1}
-                  <img src={product.image} height="100" />
-                </th>
-                <td style={{ width: "12%" }}>
-                  <IconButton
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      copyToClipboard(product.sku);
-                    }}
-                  >
-                    <ContentCopy />
-                  </IconButton>
-                  {product.sku}
-                </td>
-                <td style={{ width: "8%" }}>{product.brand}</td>
-                <td>
-                  {product.itemName}
-                  {product.ProductDetail?.tester && (
-                    <Science sx={{ color: "red", fontSize: 20, ml: 1, verticalAlign: "middle" }} />
-                  )}
-                </td>
-                <td style={{ width: "5%" }}>{product.sizeOz} Oz</td>
-                <td>{product.strength}</td>
-                <td style={{ width: "8%" }}>{product.shade}</td>
-                <td style={{ width: "8%" }}>{product.location}</td>
-                <td
-                  style={{
-                    backgroundColor: product.verified ? "#B2FF59" : "#FF5252",
-                    width: "7%",
-                  }}
-                >
-                  {product.quantity}
-                </td>
-                {/* <td
-                  style={{
-                    backgroundColor: product.listed ? "#B2FF59" : "#FF5252",
-                    width: "7%",
-                  }}
-                >
-                  {product.listed ? "Yes" : "No"}
-                </td> */}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Box
+          sx={{
+            border: "1px solid #dbe2ea",
+            borderRadius: 2,
+            overflow: "hidden",
+            bgcolor: "#fff",
+          }}
+        >
+          <Box sx={{ overflowX: "auto", maxHeight: "70vh" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "separate",
+                borderSpacing: 0,
+                minWidth: 1120,
+              }}
+            >
+              <thead>
+                <tr>
+                  <th style={{ position: "sticky", top: 0, zIndex: 3, background: "#f8fafc", borderBottom: "1px solid #dbe2ea", borderRight: "1px solid #e5eaf1", textAlign: "left", padding: "12px 10px", fontSize: 14, fontWeight: 700, color: "#1e293b", width: 60 }}>#</th>
+                  <th onClick={() => handleSort("sku")} style={{ cursor: "pointer", position: "sticky", top: 0, zIndex: 3, background: "#f8fafc", borderBottom: "1px solid #dbe2ea", borderRight: "1px solid #e5eaf1", textAlign: "left", padding: "12px 10px", fontSize: 14, fontWeight: 700, color: "#1e293b", width: 230 }}>{getSortIcon("sku")} SKU</th>
+                  <th onClick={() => handleSort("brand")} style={{ cursor: "pointer", position: "sticky", top: 0, zIndex: 3, background: "#f8fafc", borderBottom: "1px solid #dbe2ea", borderRight: "1px solid #e5eaf1", textAlign: "left", padding: "12px 10px", fontSize: 14, fontWeight: 700, color: "#1e293b", width: 170 }}>{getSortIcon("brand")} Brand</th>
+                  <th onClick={() => handleSort("itemName")} style={{ cursor: "pointer", position: "sticky", top: 0, zIndex: 3, background: "#f8fafc", borderBottom: "1px solid #dbe2ea", borderRight: "1px solid #e5eaf1", textAlign: "left", padding: "12px 10px", fontSize: 14, fontWeight: 700, color: "#1e293b", minWidth: 280 }}>{getSortIcon("itemName")} Item Name</th>
+                  <th style={{ position: "sticky", top: 0, zIndex: 3, background: "#f8fafc", borderBottom: "1px solid #dbe2ea", borderRight: "1px solid #e5eaf1", textAlign: "left", padding: "12px 10px", fontSize: 14, fontWeight: 700, color: "#1e293b", width: 105 }}>Size</th>
+                  <th style={{ position: "sticky", top: 0, zIndex: 3, background: "#f8fafc", borderBottom: "1px solid #dbe2ea", borderRight: "1px solid #e5eaf1", textAlign: "left", padding: "12px 10px", fontSize: 14, fontWeight: 700, color: "#1e293b", width: 170 }}>Strength</th>
+                  <th onClick={() => handleSort("shade")} style={{ cursor: "pointer", position: "sticky", top: 0, zIndex: 3, background: "#f8fafc", borderBottom: "1px solid #dbe2ea", borderRight: "1px solid #e5eaf1", textAlign: "left", padding: "12px 10px", fontSize: 14, fontWeight: 700, color: "#1e293b", width: 150 }}>{getSortIcon("shade")} Variant</th>
+                  <th onClick={() => handleSort("location")} style={{ cursor: "pointer", position: "sticky", top: 0, zIndex: 3, background: "#f8fafc", borderBottom: "1px solid #dbe2ea", borderRight: "1px solid #e5eaf1", textAlign: "left", padding: "12px 10px", fontSize: 14, fontWeight: 700, color: "#1e293b", width: 150 }}>{getSortIcon("location")} Location</th>
+                  <th onClick={() => handleSort("quantity")} style={{ cursor: "pointer", position: "sticky", top: 0, zIndex: 3, background: "#f8fafc", borderBottom: "1px solid #dbe2ea", textAlign: "left", padding: "12px 10px", fontSize: 14, fontWeight: 700, color: "#1e293b", width: 110 }}>{getSortIcon("quantity")} QTY</th>
+                </tr>
+                <tr>
+                  <th style={{ position: "sticky", top: 46, zIndex: 2, background: "#ffffff", borderBottom: "1px solid #e7edf5", borderRight: "1px solid #eef2f7", padding: "8px 10px" }} />
+                  <th style={{ position: "sticky", top: 46, zIndex: 2, background: "#ffffff", borderBottom: "1px solid #e7edf5", borderRight: "1px solid #eef2f7", padding: "8px 10px" }}>{renderFilterInput("sku")}</th>
+                  <th style={{ position: "sticky", top: 46, zIndex: 2, background: "#ffffff", borderBottom: "1px solid #e7edf5", borderRight: "1px solid #eef2f7", padding: "8px 10px" }}>{renderFilterInput("brand")}</th>
+                  <th style={{ position: "sticky", top: 46, zIndex: 2, background: "#ffffff", borderBottom: "1px solid #e7edf5", borderRight: "1px solid #eef2f7", padding: "8px 10px" }}>{renderFilterInput("itemName")}</th>
+                  <th style={{ position: "sticky", top: 46, zIndex: 2, background: "#ffffff", borderBottom: "1px solid #e7edf5", borderRight: "1px solid #eef2f7", padding: "8px 10px" }}>{renderFilterInput("sizeOz")}</th>
+                  <th style={{ position: "sticky", top: 46, zIndex: 2, background: "#ffffff", borderBottom: "1px solid #e7edf5", borderRight: "1px solid #eef2f7", padding: "8px 10px" }}>{renderFilterInput("strength")}</th>
+                  <th style={{ position: "sticky", top: 46, zIndex: 2, background: "#ffffff", borderBottom: "1px solid #e7edf5", borderRight: "1px solid #eef2f7", padding: "8px 10px" }}>{renderFilterInput("shade")}</th>
+                  <th style={{ position: "sticky", top: 46, zIndex: 2, background: "#ffffff", borderBottom: "1px solid #e7edf5", borderRight: "1px solid #eef2f7", padding: "8px 10px" }}>{renderFilterInput("location")}</th>
+                  <th style={{ position: "sticky", top: 46, zIndex: 2, background: "#ffffff", borderBottom: "1px solid #e7edf5", padding: "8px 10px" }} />
+                </tr>
+              </thead>
+              <tbody>
+                {currentProducts.map((product, index) => {
+                  const isVerified =
+                    product.verified === true ||
+                    product.verified === 1 ||
+                    product.verified === "1";
+                  const qtyBadge = isVerified
+                    ? { bg: "#B2FF59", border: "#86efac", color: "#166534" }
+                    : { bg: "#FF5252", border: "#fca5a5", color: "#991b1b" };
+
+                  return (
+                    <tr
+                      key={product.sku || index}
+                      onClick={() => handleSelect(product)}
+                      style={{
+                        cursor: "pointer",
+                        background: index % 2 === 0 ? "#ffffff" : "#f8fafc",
+                      }}
+                    >
+                      <td style={{ padding: "10px", borderBottom: "1px solid #edf2f7", borderRight: "1px solid #eef2f7", verticalAlign: "top" }}>
+                        <div style={{ fontWeight: 700, color: "#334155", marginBottom: product.image ? 6 : 0 }}>{index + 1}</div>
+                        {product.image ? (
+                          <img
+                            src={product.image}
+                            alt={product.itemName || "product image"}
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).style.display = "none";
+                            }}
+                            style={{ width: 70, height: 70, objectFit: "contain", borderRadius: 8, background: "#fff" }}
+                          />
+                        ) : null}
+                      </td>
+                      <td style={{ padding: "10px", borderBottom: "1px solid #edf2f7", borderRight: "1px solid #eef2f7", fontFamily: "Consolas, monospace", fontSize: 14, color: "#0f172a", whiteSpace: "nowrap" }}>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyToClipboard(product.sku);
+                          }}
+                          sx={{ mr: 0.5 }}
+                        >
+                          <ContentCopy fontSize="small" />
+                        </IconButton>
+                        {product.sku}
+                      </td>
+                      <td style={{ padding: "10px", borderBottom: "1px solid #edf2f7", borderRight: "1px solid #eef2f7", color: "#0f172a", fontSize: 14 }}>{product.brand}</td>
+                      <td style={{ padding: "10px", borderBottom: "1px solid #edf2f7", borderRight: "1px solid #eef2f7", color: "#0f172a", fontSize: 14 }}>
+                        {product.itemName}
+                        {product.ProductDetail?.tester && (
+                          <Science sx={{ color: "#dc2626", fontSize: 18, ml: 1, verticalAlign: "middle" }} />
+                        )}
+                      </td>
+                      <td style={{ padding: "10px", borderBottom: "1px solid #edf2f7", borderRight: "1px solid #eef2f7", color: "#0f172a", fontSize: 14 }}>{product.sizeOz} Oz</td>
+                      <td style={{ padding: "10px", borderBottom: "1px solid #edf2f7", borderRight: "1px solid #eef2f7", color: "#0f172a", fontSize: 14 }}>{product.strength || "-"}</td>
+                      <td style={{ padding: "10px", borderBottom: "1px solid #edf2f7", borderRight: "1px solid #eef2f7", color: "#0f172a", fontSize: 14 }}>{product.shade || "-"}</td>
+                      <td style={{ padding: "10px", borderBottom: "1px solid #edf2f7", borderRight: "1px solid #eef2f7", color: "#0f172a", fontSize: 14 }}>{product.location || "-"}</td>
+                      <td style={{ padding: "10px", borderBottom: "1px solid #edf2f7" }}>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            minWidth: 54,
+                            textAlign: "center",
+                            borderRadius: 999,
+                            padding: "5px 10px",
+                            background: qtyBadge.bg,
+                            border: `1px solid ${qtyBadge.border}`,
+                            color: qtyBadge.color,
+                            fontWeight: 700,
+                            fontSize: 13,
+                          }}
+                        >
+                          {product.quantity}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Box>
+        </Box>
+        <Box sx={{ mt: 1, color: "#64748b", fontSize: 13, textAlign: "center" }}>
+          Showing {showingFrom}-{showingTo} of {totalProducts}
+        </Box>
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 1.5 }}>
+          <Pagination
+            productsPerPage={productsPerPage}
+            totalProducts={products.length}
+            paginate={paginate}
+            currentPage={currentPage}
+          />
+        </Box>
       </div>
     </>
   );

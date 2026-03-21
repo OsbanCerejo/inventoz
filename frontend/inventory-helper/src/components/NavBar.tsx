@@ -91,13 +91,51 @@ function NavBar() {
 
   const visibleAnalyticsItems = analyticsItems.filter((item) => hasMenuAccess(item.key));
   const visibleToolsItems = toolsItems.filter((item) => hasMenuAccess(item.key));
+  const isPathActive = (path: string) =>
+    location.pathname === path ||
+    (path !== "/" && location.pathname.startsWith(path));
+
+  const navLinkBase = {
+    cursor: "pointer",
+    background: "none",
+    border: "none",
+    color: "#334155",
+    padding: "0.9rem 0.75rem 0.8rem",
+    margin: "0 0.15rem",
+    fontSize: "15px",
+    fontWeight: 500,
+    borderBottom: "2px solid transparent",
+    lineHeight: 1.2,
+    textDecoration: "none",
+    transition: "color 0.15s ease, border-color 0.15s ease",
+  };
+  const dropdownCardStyle = {
+    position: "absolute",
+    top: "100%",
+    zIndex: 1300,
+    minWidth: "220px",
+    padding: "0.35rem 0",
+    border: "1px solid #e2e8f0",
+    borderRadius: "10px",
+    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.12)",
+    backgroundColor: "#fff",
+    opacity: 1,
+    pointerEvents: "auto",
+  };
 
   // If still loading permissions, show minimal navbar
   if (isLoading) {
     return (
       <div>
-        <nav className="navbar navbar-expand-lg navbar-light bg-light" style={{ position: "relative" }}>
-          <div className="navbar-brand" style={{ position: "relative", zIndex: 1 }}>
+        <nav
+          className="navbar navbar-expand-lg navbar-light"
+          style={{
+            position: "relative",
+            backgroundColor: "#ffffff",
+            borderBottom: "1px solid #e5e7eb",
+          }}
+        >
+          <div className="navbar-brand" style={{ position: "relative", zIndex: 1, fontWeight: 700, color: "#0f172a" }}>
             Inventoz
           </div>
           <div style={{ marginLeft: 'auto', padding: '0.5rem 1rem' }}>
@@ -111,30 +149,29 @@ function NavBar() {
   return (
     <div>
       <nav
-        className="navbar navbar-expand-lg navbar-light bg-light"
-        style={{ position: "relative", zIndex: 1200, isolation: "isolate" }}
+        className="navbar navbar-expand-lg navbar-light"
+        style={{
+          position: "relative",
+          zIndex: 1200,
+          isolation: "isolate",
+          backgroundColor: "#ffffff",
+          borderBottom: "1px solid #e5e7eb",
+          boxShadow: "0 1px 0 rgba(15,23,42,0.03)",
+          minHeight: "64px",
+        }}
       >
-        {/* Role Watermark */}
-        {user && (
-          <div style={{
-            position: "absolute",
-            top: "50%",
-            right: "120px",
-            transform: "translateY(-50%)",
-            fontSize: "16px",
-            color: "#fd7e14",
-            fontWeight: "700",
-            textTransform: "uppercase",
-            letterSpacing: "2px",
-            pointerEvents: "none",
-            zIndex: 0,
-            opacity: 0.7
-          }}>
-            {user.role}
-          </div>
-        )}
-        
-        <Link className="navbar-brand" to="/" style={{ position: "relative", zIndex: 1 }}>
+        <Link
+          className="navbar-brand"
+          to="/"
+          style={{
+            position: "relative",
+            zIndex: 1,
+            fontWeight: 700,
+            color: "#0f172a",
+            letterSpacing: "0.2px",
+            marginRight: "1.25rem",
+          }}
+        >
           Inventoz
         </Link>
         <button className="navbar-toggler" type="button" onClick={toggleNavbar}>
@@ -144,9 +181,17 @@ function NavBar() {
         <div
           className={`collapse navbar-collapse ${isOpen ? "show" : ""}`}
           id="navbarSupportedContent"
-          style={{ position: "relative", zIndex: 1201 }}
+          style={{ position: "relative", zIndex: 1201, flexGrow: 1 }}
         >
-          <ul className="navbar-nav mr-auto">
+          <ul
+            className="navbar-nav mr-auto"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              flexWrap: "wrap",
+              rowGap: "0.1rem",
+            }}
+          >
             {menuItems.map((item) => {
               // Check if user has access to this menu item
               if (!hasMenuAccess(item.key)) {
@@ -163,12 +208,24 @@ function NavBar() {
                     <button
                       className="nav-link btnk"
                       onClick={item.onClick}
-                      style={{ cursor: "pointer", background: "none", border: "none" }}
+                      style={{
+                        ...navLinkBase,
+                        color: isPathActive(item.path) ? "#0f172a" : "#334155",
+                        borderBottomColor: isPathActive(item.path) ? "#0f172a" : "transparent",
+                      }}
                     >
                       {item.label}
                     </button>
                   ) : (
-                    <Link className="nav-link" to={item.path}>
+                    <Link
+                      className="nav-link"
+                      to={item.path}
+                      style={{
+                        ...navLinkBase,
+                        color: isPathActive(item.path) ? "#0f172a" : "#334155",
+                        borderBottomColor: isPathActive(item.path) ? "#0f172a" : "transparent",
+                      }}
+                    >
                       {item.label}
                     </Link>
                   )}
@@ -181,10 +238,9 @@ function NavBar() {
                   className="btn btn-link nav-link dropdown-toggle"
                   onClick={() => toggleDropdown("analytics")}
                   style={{
-                    background: "none",
-                    border: "none",
-                    padding: "0.5rem 1rem",
-                    color: "#212529",
+                    ...navLinkBase,
+                    color: activeDropdown === "analytics" ? "#0f172a" : "#334155",
+                    borderBottomColor: activeDropdown === "analytics" ? "#0f172a" : "transparent",
                   }}
                 >
                   Analytics
@@ -193,18 +249,8 @@ function NavBar() {
                   <div
                     className="dropdown-menu show"
                     style={{
-                      position: "absolute",
                       left: "0",
-                      top: "100%",
-                      zIndex: 1300,
-                      minWidth: "220px",
-                      padding: "0.25rem 0",
-                      border: "1px solid #dee2e6",
-                      borderRadius: "6px",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                      backgroundColor: "#fff",
-                      opacity: 1,
-                      pointerEvents: "auto",
+                      ...dropdownCardStyle,
                     }}
                   >
                     {visibleAnalyticsItems.map((item) => (
@@ -214,11 +260,12 @@ function NavBar() {
                         to={item.path}
                         onClick={() => setActiveDropdown(null)}
                         style={{
-                          padding: "8px 12px",
+                          padding: "9px 14px",
                           textDecoration: "none",
-                          color: "#212529",
+                          color: "#334155",
                           display: "block",
                           fontSize: "14px",
+                          fontWeight: 500,
                         }}
                       >
                         {item.label}
@@ -234,10 +281,9 @@ function NavBar() {
                   className="btn btn-link nav-link dropdown-toggle"
                   onClick={() => toggleDropdown("tools")}
                   style={{
-                    background: "none",
-                    border: "none",
-                    padding: "0.5rem 1rem",
-                    color: "#212529",
+                    ...navLinkBase,
+                    color: activeDropdown === "tools" ? "#0f172a" : "#334155",
+                    borderBottomColor: activeDropdown === "tools" ? "#0f172a" : "transparent",
                   }}
                 >
                   Tools
@@ -246,18 +292,8 @@ function NavBar() {
                   <div
                     className="dropdown-menu show"
                     style={{
-                      position: "absolute",
                       right: "0",
-                      top: "100%",
-                      zIndex: 1300,
-                      minWidth: "220px",
-                      padding: "0.25rem 0",
-                      border: "1px solid #dee2e6",
-                      borderRadius: "6px",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                      backgroundColor: "#fff",
-                      opacity: 1,
-                      pointerEvents: "auto",
+                      ...dropdownCardStyle,
                     }}
                   >
                     {visibleToolsItems.map((item) => {
@@ -268,11 +304,12 @@ function NavBar() {
                           to={item.path}
                           onClick={() => setActiveDropdown(null)}
                           style={{
-                            padding: "8px 12px",
+                            padding: "9px 14px",
                             textDecoration: "none",
-                            color: "#212529",
+                            color: "#334155",
                             display: "block",
                             fontSize: "14px",
+                            fontWeight: 500,
                           }}
                         >
                           {item.label}
@@ -284,130 +321,146 @@ function NavBar() {
               </li>
             )}
           </ul>
-          {user && (
-            <div className="navbar-nav ml-auto" style={{ position: "relative", zIndex: 1202 }} ref={userRef}>
-              <div className="nav-item dropdown">
-                <button
-                  className="btn btn-link nav-link dropdown-toggle"
-                  onClick={() => toggleDropdown("user")}
-                  style={{ 
-                    background: "none", 
-                    border: "none", 
-                    padding: "0.5rem 1rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem"
+        </div>
+        {user && (
+          <div
+            className="navbar-nav ml-auto"
+            style={{
+              position: "relative",
+              zIndex: 1202,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.3rem",
+              marginLeft: "auto",
+            }}
+            ref={userRef}
+          >
+            <div
+              style={{
+                fontSize: "12px",
+                fontWeight: 700,
+                color: "#f59e0b",
+                letterSpacing: "1.5px",
+                textTransform: "uppercase",
+                padding: "0.25rem 0.4rem",
+                marginRight: "0.15rem",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {user.role}
+            </div>
+            <div className="nav-item dropdown">
+              <button
+                className="btn btn-link nav-link dropdown-toggle"
+                onClick={() => toggleDropdown("user")}
+                style={{ 
+                  ...navLinkBase,
+                  borderBottomColor: activeDropdown === "user" ? "#0f172a" : "transparent",
+                  padding: "0.6rem 0.75rem 0.55rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem"
+                }}
+              >
+                <svg 
+                  width="20" 
+                  height="20" 
+                  fill="currentColor" 
+                  viewBox="0 0 16 16"
+                >
+                  <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/>
+                </svg>
+              </button>
+              {activeDropdown === "user" && (
+                <div 
+                  className="dropdown-menu show" 
+                  style={{
+                    right: "0",
+                    ...dropdownCardStyle,
+                    minWidth: "240px",
+                    padding: "0",
                   }}
                 >
-                  <svg 
-                    width="20" 
-                    height="20" 
-                    fill="currentColor" 
-                    viewBox="0 0 16 16"
-                  >
-                    <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/>
-                  </svg>
-                </button>
-                {activeDropdown === "user" && (
-                  <div 
-                    className="dropdown-menu show" 
-                    style={{
-                      position: "absolute",
-                      right: "0",
-                      top: "100%",
-                      zIndex: 1300,
-                      minWidth: "220px",
-                      padding: "0",
-                      margin: "0",
-                      border: "1px solid #dee2e6",
-                      borderRadius: "6px",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                      backgroundColor: "#fff",
-                      opacity: 1,
-                      pointerEvents: "auto"
-                    }}
-                  >
-                    <div className="dropdown-item-text">
+                  <div className="dropdown-item-text">
+                    <div style={{ 
+                      padding: "12px 16px"
+                    }}>
                       <div style={{ 
-                        padding: "12px 16px"
+                        fontWeight: "600", 
+                        fontSize: "15px", 
+                        color: "#212529",
+                        marginBottom: "4px",
+                        lineHeight: "1.2"
                       }}>
-                        <div style={{ 
-                          fontWeight: "600", 
-                          fontSize: "15px", 
-                          color: "#212529",
-                          marginBottom: "4px",
-                          lineHeight: "1.2"
-                        }}>
-                          {user.name || user.username}
-                        </div>
-                        <div style={{ 
-                          fontSize: "13px", 
-                          color: "#6c757d",
-                          lineHeight: "1.2"
-                        }}>
-                          {user.name && (
-                            <div style={{ marginBottom: "2px" }}>
-                              {user.username}
-                            </div>
-                          )}
-                        </div>
+                        {user.name || user.username}
+                      </div>
+                      <div style={{ 
+                        fontSize: "13px", 
+                        color: "#6c757d",
+                        lineHeight: "1.2"
+                      }}>
+                        {user.name && (
+                          <div style={{ marginBottom: "2px" }}>
+                            {user.username}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className="dropdown-divider" style={{ margin: "0" }}></div>
-                    {hasMenuAccess('users') && (
-                      <>
-                        <Link
-                          className="dropdown-item"
-                          to="/users"
-                          onClick={() => setActiveDropdown(null)}
-                          style={{ 
-                            background: "none", 
-                            border: "none", 
-                            width: "100%", 
-                            textAlign: "left",
-                            padding: "12px 16px",
-                            textDecoration: "none",
-                            color: "#212529",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                            fontSize: "14px",
-                            transition: "background-color 0.15s ease-in-out"
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f8f9fa"}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                        >
-                          <PeopleIcon sx={{ fontSize: 16 }} />
-                          Users
-                        </Link>
-                        <div className="dropdown-divider" style={{ margin: "0" }}></div>
-                      </>
-                    )}
-                    <button
-                      className="dropdown-item"
-                      onClick={handleLogout}
-                      style={{ 
-                        background: "none", 
-                        border: "none", 
-                        width: "100%", 
-                        textAlign: "left",
-                        padding: "12px 16px",
-                        color: "#dc3545",
-                        fontSize: "14px",
-                        cursor: "pointer",
-                        transition: "background-color 0.15s ease-in-out"
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f8f9fa"}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                    >
-                      Logout
-                    </button>
                   </div>
-                )}
-              </div>
+                  <div className="dropdown-divider" style={{ margin: "0" }}></div>
+                  {hasMenuAccess('users') && (
+                    <>
+                      <Link
+                        className="dropdown-item"
+                        to="/users"
+                        onClick={() => setActiveDropdown(null)}
+                        style={{ 
+                          background: "none", 
+                          border: "none", 
+                          width: "100%", 
+                          textAlign: "left",
+                          padding: "12px 16px",
+                          textDecoration: "none",
+                          color: "#212529",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          fontSize: "14px",
+                          transition: "background-color 0.15s ease-in-out"
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f8fafc"}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                      >
+                        <PeopleIcon sx={{ fontSize: 16 }} />
+                        Users
+                      </Link>
+                      <div className="dropdown-divider" style={{ margin: "0" }}></div>
+                    </>
+                  )}
+                  <button
+                    className="dropdown-item"
+                    onClick={handleLogout}
+                    style={{ 
+                      background: "none", 
+                      border: "none", 
+                      width: "100%", 
+                      textAlign: "left",
+                      padding: "12px 16px",
+                      color: "#dc3545",
+                      fontSize: "14px",
+                      cursor: "pointer",
+                      transition: "background-color 0.15s ease-in-out"
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f8fafc"}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </nav>
     </div>
   );

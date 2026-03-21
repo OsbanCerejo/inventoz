@@ -255,9 +255,8 @@ function Products() {
     .filter((product) => {
       return filterConfig.every(({ key, value }) => {
         const productValue = product[key];
-        return productValue
-          ? productValue.toLowerCase().includes(value.toLowerCase())
-          : false;
+        if (productValue === null || productValue === undefined) return false;
+        return String(productValue).toLowerCase().includes(value.toLowerCase());
       });
     })
     .sort((a, b) => {
@@ -279,6 +278,16 @@ function Products() {
       }
       return 0;
     });
+
+  useEffect(() => {
+    const totalPages = Math.max(
+      1,
+      Math.ceil(sortedAndFilteredProducts.length / productsPerPage)
+    );
+    if (currentPage > totalPages) {
+      paginate(totalPages);
+    }
+  }, [sortedAndFilteredProducts.length, currentPage, productsPerPage]);
 
   const paginate = (pageNumber: number) => {
     setCurrentPage(pageNumber);
@@ -363,11 +372,11 @@ function Products() {
         currentPage={currentPage}
         productsPerPage={productsPerPage}
         paginate={paginate}
-        totalProducts={listOfProducts.length}
+        totalProducts={sortedAndFilteredProducts.length}
       ></ProductList>
       {isLoadingProducts && (
         <Typography variant="body2" sx={{ mt: 2 }}>
-          Refreshing inventory…
+                    Refreshing inventory...
         </Typography>
       )}
     </div>
