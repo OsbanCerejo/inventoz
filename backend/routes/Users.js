@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { User } = require('../models');
+const { User, UserSession } = require('../models');
 const { auth } = require('../middleware/auth');
 const { checkPermission } = require('../middleware/permissions');
 const { ValidationError, Op } = require('sequelize');
@@ -18,6 +18,83 @@ router.get('/', auth, checkPermission('users', 'view'), async (req, res) => {
     console.error('Get users error:', error);
     res.status(500).json({ 
       error: 'Failed to retrieve users. Please try again.' 
+    });
+  }
+});
+
+// Get active login sessions (users permission required)
+router.get('/sessions/active', auth, checkPermission('users', 'view'), async (req, res) => {
+  try {
+    const sessions = await UserSession.findAll({
+      where: { isActive: true },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'name', 'username', 'email', 'role', 'isActive'],
+        },
+      ],
+      order: [['lastSeenAt', 'DESC']],
+      limit: 200,
+    });
+
+    const payload = sessions.map((session) => ({
+      id: session.id,
+      sessionId: session.sessionId,
+      userId: session.userId,
+      ipAddress: session.ipAddress,
+      userAgent: session.userAgent,
+      deviceName: session.deviceName,
+      geoCountry: session.geoCountry,
+      geoRegion: session.geoRegion,
+      geoCity: session.geoCity,
+      geoLat: session.geoLat,
+      geoLng: session.geoLng,
+      geoSource: session.geoSource,
+      loginAt: session.loginAt,
+      lastSeenAt: session.lastSeenAt,
+      logoutAt: session.logoutAt,
+      isActive: session.isActive,
+      user: session.user
+        ? {
+            id: session.user.id,
+            name: session.user.name,
+            username: session.user.username,
+            email: session.user.email,
+            role: session.user.role,
+            isActive: session.user.isActive,
+          }
+        : null,
+    }));
+
+    res.json(payload);
+  } catch (error) {
+    console.error('Get active sessions error:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve active sessions. Please try again.',
+    });
+  }
+});
+
+// Get recent login sessions for a specific user (users permission required)
+router.get('/sessions/user/:id', auth, checkPermission('users', 'view'), async (req, res) => {
+  try {
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: 'Invalid user id' });
+    }
+
+    const sessions = await UserSession.findAll({
+      where: { userId },
+      order: [['createdAt', 'DESC']],
+      limit: 100,
+    });
+
+    res.json(sessions);
+  } catch (error) {
+    console.error('Get user sessions error:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve user sessions. Please try again.',
     });
   }
 });

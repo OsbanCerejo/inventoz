@@ -12,12 +12,47 @@ import {
   Button,
   Box,
   CircularProgress,
-  Alert
+  Alert,
+  Card,
+  CardHeader,
+  CardContent,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip
 } from '@mui/material';
+
+type ActiveSession = {
+  id: number;
+  sessionId: string;
+  userId: number;
+  ipAddress: string | null;
+  userAgent: string | null;
+  deviceName: string | null;
+  geoCountry: string | null;
+  geoRegion: string | null;
+  geoCity: string | null;
+  geoSource: string | null;
+  loginAt: string;
+  lastSeenAt: string;
+  isActive: boolean;
+  user: {
+    id: number;
+    name?: string;
+    username: string;
+    role: string;
+  } | null;
+};
 
 const Users: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
+  const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const { user: currentUser, token } = useAuth();
@@ -44,10 +79,43 @@ const Users: React.FC = () => {
     }
   };
 
+  const fetchActiveSessions = async (silent = false) => {
+    if (!token) {
+      setSessionsLoading(false);
+      return;
+    }
+
+    try {
+      if (!silent) setSessionsLoading(true);
+      const response = await axios.get(getApiUrl('api/users/sessions/active'), {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setActiveSessions(response.data || []);
+    } catch (error) {
+      console.error('Error fetching active sessions:', error);
+      if (!silent) {
+        toast.error('Failed to fetch active sessions');
+      }
+    } finally {
+      if (!silent) setSessionsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (token) {
       fetchUsers();
+      fetchActiveSessions();
     }
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    const id = window.setInterval(() => {
+      fetchActiveSessions(true);
+    }, 60000);
+    return () => window.clearInterval(id);
   }, [token]);
 
   const handleAddUser = async (userData: Partial<User>) => {
@@ -142,6 +210,16 @@ const Users: React.FC = () => {
     );
   }
 
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return 'N/A';
+    return new Date(value).toLocaleString();
+  };
+
+  const formatGeo = (session: ActiveSession) => {
+    const parts = [session.geoCity, session.geoRegion, session.geoCountry].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : 'Unknown';
+  };
+
   return (
     <Box sx={{ mt: 4, px: 3 }}>
       <Typography variant="h4" component="h1" sx={{ mb: 3 }}>
@@ -173,12 +251,74 @@ const Users: React.FC = () => {
           <CircularProgress />
         </Box>
       ) : (
-        <UserList
-          users={users}
-          onEdit={handleEditUser}
-          onDelete={handleDeleteUser}
-          currentUserId={currentUser?.id}
-        />
+        <>
+          <UserList
+            users={users}
+            onEdit={handleEditUser}
+            onDelete={handleDeleteUser}
+            currentUserId={currentUser?.id}
+          />
+
+          <Box mt={4}>
+            <Card>
+              <CardHeader
+                title={`Active Sessions (${activeSessions.length})`}
+                subheader="Tracks active user logins by device/computer, IP, and approximate geolocation."
+              />
+              <CardContent>
+                {sessionsLoading ? (
+                  <Box display="flex" justifyContent="center" py={2}>
+                    <CircularProgress size={24} />
+                  </Box>
+                ) : activeSessions.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    No active sessions found.
+                  </Typography>
+                ) : (
+                  <TableContainer component={Paper} elevation={0}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell><strong>User</strong></TableCell>
+                          <TableCell><strong>Role</strong></TableCell>
+                          <TableCell><strong>Computer / Device</strong></TableCell>
+                          <TableCell><strong>IP</strong></TableCell>
+                          <TableCell><strong>Location</strong></TableCell>
+                          <TableCell><strong>Login At</strong></TableCell>
+                          <TableCell><strong>Last Seen</strong></TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {activeSessions.map((session) => (
+                          <TableRow key={session.id} hover>
+                            <TableCell>
+                              <Typography variant="body2" fontWeight="medium">
+                                {session.user?.name || session.user?.username || `User #${session.userId}`}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Chip size="small" label={session.user?.role || 'N/A'} />
+                            </TableCell>
+                            <TableCell>{session.deviceName || 'Unknown device'}</TableCell>
+                            <TableCell>{session.ipAddress || 'N/A'}</TableCell>
+                            <TableCell>
+                              <Typography variant="body2">{formatGeo(session)}</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Source: {session.geoSource || 'unknown'}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>{formatDateTime(session.loginAt)}</TableCell>
+                            <TableCell>{formatDateTime(session.lastSeenAt)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </CardContent>
+            </Card>
+          </Box>
+        </>
       )}
     </Box>
   );

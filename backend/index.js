@@ -1,5 +1,6 @@
 const express = require("express");
 const app = express();
+app.set('trust proxy', true);
 const cors = require("cors");
 require("dotenv").config();
 const { Sequelize } = require("sequelize");

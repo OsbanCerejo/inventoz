@@ -31,16 +31,26 @@ const parseCookies = (cookieHeader = "") => {
     }, {});
 };
 
-const createAccessToken = (user) =>
+const createAccessToken = (user, sessionId = null) =>
   jwt.sign(
-    { id: user.id, tokenVersion: Number(user.tokenVersion || 0), type: "access" },
+    {
+      id: user.id,
+      tokenVersion: Number(user.tokenVersion || 0),
+      sessionId: sessionId || null,
+      type: "access",
+    },
     ACCESS_SECRET(),
     { expiresIn: ACCESS_EXPIRES_IN() }
   );
 
-const createRefreshToken = (user) =>
+const createRefreshToken = (user, sessionId = null) =>
   jwt.sign(
-    { id: user.id, tokenVersion: Number(user.tokenVersion || 0), type: "refresh" },
+    {
+      id: user.id,
+      tokenVersion: Number(user.tokenVersion || 0),
+      sessionId: sessionId || null,
+      type: "refresh",
+    },
     REFRESH_SECRET(),
     { expiresIn: REFRESH_EXPIRES_IN() }
   );

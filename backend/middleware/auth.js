@@ -1,5 +1,6 @@
 const { User } = require('../models');
 const { verifyAccessToken } = require('../utils/authTokens');
+const UserSessionService = require('../Services/UserSessionService');
 
 const auth = async (req, res, next) => {
   try {
@@ -21,6 +22,10 @@ const auth = async (req, res, next) => {
 
     req.token = token;
     req.user = user;
+    req.sessionId = decoded.sessionId || null;
+    if (decoded.sessionId) {
+      UserSessionService.touchSession(decoded.sessionId).catch(() => {});
+    }
     next();
   } catch (error) {
     res.status(401).json({ error: 'Please authenticate.' });
@@ -51,6 +56,10 @@ const adminAuth = async (req, res, next) => {
 
     req.token = token;
     req.user = user;
+    req.sessionId = decoded.sessionId || null;
+    if (decoded.sessionId) {
+      UserSessionService.touchSession(decoded.sessionId).catch(() => {});
+    }
     next();
   } catch (error) {
     res.status(401).json({ error: 'Please authenticate.' });

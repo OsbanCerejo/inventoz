@@ -3,6 +3,7 @@ const router = express.Router();
 const { User } = require('../models');
 const { auth, adminAuth } = require('../middleware/auth');
 const { getUserPermissions } = require('../middleware/permissions');
+const UserSessionService = require('../Services/UserSessionService');
 const { ValidationError, Op } = require('sequelize');
 const {
   createAccessToken,
@@ -98,8 +99,9 @@ router.post('/login', async (req, res) => {
     }
     clearFailedAttempts(rateKey);
 
-    const token = createAccessToken(user);
-    const refreshToken = createRefreshToken(user);
+    const sessionId = await UserSessionService.createSession(req, user.id);
+    const token = createAccessToken(user, sessionId);
+    const refreshToken = createRefreshToken(user, sessionId);
 
     res.cookie(refreshCookieName, refreshToken, refreshCookieOptions());
 
@@ -149,9 +151,12 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({ error: 'Refresh token expired.' });
     }
 
-    const newAccessToken = createAccessToken(user);
-    const rotatedRefreshToken = createRefreshToken(user);
+    const sessionId = decoded.sessionId || (await UserSessionService.createSession(req, user.id));
+    const newAccessToken = createAccessToken(user, sessionId);
+    const rotatedRefreshToken = createRefreshToken(user, sessionId);
     res.cookie(refreshCookieName, rotatedRefreshToken, refreshCookieOptions());
+
+    await UserSessionService.touchSession(sessionId);
 
     res.json({
       token: newAccessToken,
@@ -169,6 +174,18 @@ router.post('/refresh', async (req, res) => {
 });
 
 router.post('/logout', async (req, res) => {
+  try {
+    const cookies = parseCookies(req.headers.cookie);
+    const refreshToken = cookies[refreshCookieName];
+    if (refreshToken) {
+      const decoded = verifyRefreshToken(refreshToken);
+      if (decoded?.sessionId) {
+        await UserSessionService.closeSession(decoded.sessionId);
+      }
+    }
+  } catch (error) {
+    // Ignore invalid/expired refresh cookie during logout.
+  }
   clearRefreshCookie(res);
   return res.json({ success: true });
 });
@@ -179,6 +196,7 @@ router.post('/logout-all', auth, async (req, res) => {
       { tokenVersion: Number(req.user.tokenVersion || 0) + 1 },
       { where: { id: req.user.id } }
     );
+    await UserSessionService.closeAllSessionsForUser(req.user.id);
     clearRefreshCookie(res);
     return res.json({ success: true });
   } catch (error) {

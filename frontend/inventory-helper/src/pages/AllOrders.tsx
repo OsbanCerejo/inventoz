@@ -33,15 +33,28 @@ import './AllOrdersPrint.css';
 import { invalidateProductsCache } from "../utils/productCache";
 
 function AllOrders() {
+  type ApprovalPreviewRow = {
+    requestedSku: string;
+    deductedSku: string | null;
+    quantityToDeduct: number;
+    currentQuantity: number | null;
+    projectedQuantity: number | null;
+    status: "ready" | "missing_product";
+  };
+
   const [groupedOrders, setGroupedOrders] = useState<any>({});
   const [orderMetrics, setOrderMetrics] = useState({
     totalOrders: 0,
     totalItems: 0,
   });
   const [approveOrders, setApproveOrders] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [approvalPreviewRows, setApprovalPreviewRows] = useState<ApprovalPreviewRow[]>([]);
+  const [approvalPreviewSummary, setApprovalPreviewSummary] = useState<any>(null);
   const [productsData, setProductsData] = useState<any[]>([]);
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [approving, setApproving] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -54,6 +67,9 @@ function AllOrders() {
 
   // Fetch orders and products, then fetch listings for all SKUs
   useEffect(() => {
+    setApproveOrders(false);
+    setApprovalPreviewRows([]);
+    setApprovalPreviewSummary(null);
     fetchOrders(selectedStores);
     // eslint-disable-next-line
   }, [selectedStores]);
@@ -105,9 +121,6 @@ function AllOrders() {
     result.groupedOrders = orders.reduce((acc: any, order: any) => {
       result.totalOrders += 1;
       order.items.forEach((item: any) => {
-        if(item.options.length > 0){
-          console.log(JSON.stringify(order));
-        }
         const { sku } = item;
         const [actualSku, lotSize] = parseSku(sku);
 
@@ -160,171 +173,77 @@ function AllOrders() {
     return [sku, "1"];
   }
 
-  const handleOrdersApprove = () => {
-    setApproveOrders(true);
+  const buildApprovalItems = () =>
+    orderItems.map((item: any) => ({
+      orderId: item.orderId,
+      store: item.store,
+      sku: item.originalSku || item.sku,
+      finalSku: item.finalSku || item.sku,
+      quantity: item.quantity,
+      lotSize: item.lotSize || 1,
+    }));
+
+  const handleOrdersApprove = async () => {
+    const approvalItems = buildApprovalItems();
+    if (approvalItems.length === 0) {
+      toast.warning("No order items available to approve.");
+      return;
+    }
+
+    try {
+      setPreviewLoading(true);
+      const response = await axios.post(getApiUrl('orders/approve-preview'), {
+        items: approvalItems,
+        selectedStores,
+      });
+
+      setApprovalPreviewRows(response.data?.previewRows || []);
+      setApprovalPreviewSummary(response.data?.summary || null);
+      setApproveOrders(true);
+      toast.success("Approval preview generated. Please review before updating.");
+    } catch (error) {
+      console.error("Error generating approval preview:", error);
+      toast.error("Failed to build approval preview.");
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
   const handleOrdersApproveCancel = () => {
     setApproveOrders(false);
+    setApprovalPreviewRows([]);
+    setApprovalPreviewSummary(null);
   };
 
   const handleOrdersApproveFinal = async () => {
-    const skuStoreTotals = getSkuStoreTotals();
-    const skusToUpdate = Object.keys(skuStoreTotals).map((sku) => {
-      const totalQuantitySold = skuStoreTotals[sku].reduce(
-        (sum, { quantitySold }) => sum + quantitySold,
-        0
-      );
-      return {
-        sku,
-        totalQuantitySold,
-        stores: skuStoreTotals[sku],
-      };
-    });
-
+    const approvalItems = buildApprovalItems();
     try {
-      // Update product quantities in the products table
-      const response = await axios.post(
-        getApiUrl('products/updateQuantities'),
-        skusToUpdate.map(({ sku, totalQuantitySold }) => ({
-          sku,
-          quantitySold: totalQuantitySold,
-        }))
-      );
-
-      if (response.data.success) {
-        // Log the update quantities action
-        await logUpdateQuantities(skusToUpdate);
-
-        // Update quantities in the listings table for each store
-        await updateStoreQuantities(skusToUpdate);
+      setApproving(true);
+      const response = await axios.post(getApiUrl('orders/approve-batch'), {
+        items: approvalItems,
+        selectedStores,
+      });
+      if (response.data?.success) {
+        const summary = response.data.summary || {};
         invalidateProductsCache();
-        toast.success("Quantities Updated!", { position: "top-right" });
+        toast.success(
+          `Batch approved. Processed: ${summary.ordersProcessed || 0} | Skipped: ${summary.ordersSkippedAlreadyApproved || 0} | SKUs updated: ${summary.skusUpdated || 0}`,
+          { position: "top-right" }
+        );
+        setApproveOrders(false);
+        setApprovalPreviewRows([]);
+        setApprovalPreviewSummary(null);
         navigate("/", { state: { clearFilters: true } });
       }
-
-      setApproveOrders(true);
     } catch (error) {
       console.error("Error updating product quantities:", error);
+      toast.error("Failed to approve orders. Please check logs and retry.", {
+        position: "top-right",
+      });
+    } finally {
+      setApproving(false);
     }
   };
-
-  const logUpdateQuantities = async (skusToUpdate: any) => {
-    // Create a log entry for each SKU being updated
-    for (const skuData of skusToUpdate) {
-      const logData = {
-        timestamp: new Date().toISOString(),
-        type: "Sales Update",
-        action: "update",
-        entityType: "product",
-        entityId: skuData.sku, // Use the actual SKU
-        userId: user?.id?.toString(),
-        metaData: {
-          sku: skuData.sku,
-          totalQuantitySold: skuData.totalQuantitySold,
-          stores: skuData.stores
-        },
-      };
-
-      console.log("Attempting to log update quantities for SKU:", skuData.sku, logData);
-      try {
-        const response = await axios.post(getApiUrl('logs/addLog'), logData);
-        console.log("Log response for SKU", skuData.sku, ":", response.data);
-      } catch (error) {
-        console.error("Error logging update quantities for SKU", skuData.sku, ":", error);
-      }
-    }
-  };
-
-  const getSkuTotals = () => {
-    const skuTotals: { [sku: string]: { quantity: number; product?: any } } =
-      {};
-
-    Object.keys(groupedOrders).forEach((sku) => {
-      const totalQuantity = groupedOrders[sku].reduce(
-        (sum: number, item: any) => sum + item.quantity * item.lotSize,
-        0
-      );
-      const product = productsData.find((p: any) => p.sku === sku);
-      skuTotals[sku] = {
-        quantity: totalQuantity,
-        product: product || { quantity: 0, itemName: "Unknown Product" },
-      };
-    });
-    return skuTotals;
-  };
-
-  // Function to get the total quantities sold by SKU and store
-  const getSkuStoreTotals = () => {
-    const skuStoreTotals: {
-      [sku: string]: { storeId: string; quantitySold: number }[];
-    } = {};
-
-    Object.keys(groupedOrders).forEach((sku) => {
-      const storeQuantities = groupedOrders[sku].reduce(
-        (acc: any, item: any) => {
-          const { store, quantity, lotSize } = item;
-          const quantitySold = quantity * lotSize;
-
-          const existingStore = acc.find((s: any) => s.storeId === store);
-          if (existingStore) {
-            existingStore.quantitySold += quantitySold;
-          } else {
-            acc.push({ storeId: store, quantitySold });
-          }
-
-          return acc;
-        },
-        []
-      );
-
-      skuStoreTotals[sku] = storeQuantities;
-    });
-
-    return skuStoreTotals;
-  };
-
-  // Function to update quantities in the listings table for each store
-  const updateStoreQuantities = async (
-    skusToUpdate: {
-      sku: string;
-      totalQuantitySold: number;
-      stores: { storeId: string; quantitySold: number }[];
-    }[]
-  ) => {
-    try {
-      // Prepare the request payload to update the listings table
-      const listingsUpdate = skusToUpdate.flatMap(({ sku, stores }) =>
-        stores.map(
-          ({
-            storeId,
-            quantitySold,
-          }: {
-            storeId: string;
-            quantitySold: number;
-          }) => ({
-            sku,
-            quantitySold,
-            storeId,
-          })
-        )
-      );
-
-      // Send a POST request to update the listings table
-      await axios.post(
-        getApiUrl('listings/updateQuantities'),
-        listingsUpdate
-      );
-    } catch (error) {
-      console.error(
-        "Error updating store quantities in listings table:",
-        error
-      );
-    }
-  };
-
-  const skuTotals = getSkuTotals();
-  // console.log(groupedOrders);
 
   // Helper to flatten groupedOrders into a single array for table rendering, sorted by location
   const getOrderItemsForTable = () => {
@@ -442,9 +361,10 @@ function AllOrders() {
               color="success"
               startIcon={<AssignmentTurnedIn />}
               onClick={handleOrdersApprove}
+              disabled={loading || previewLoading}
               sx={{ mx: 1 }}
             >
-              Approve
+              {previewLoading ? "Preparing..." : "Approve"}
             </Button>
           )}
           {approveOrders && (
@@ -595,14 +515,53 @@ function AllOrders() {
           <Grid container spacing={0} p={4}>
             {approveOrders && (
               <Grid item xs={12}>
+                {approvalPreviewSummary && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="h6" sx={{ mb: 0.5 }}>
+                      Deduction Preview
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Orders to process: {approvalPreviewSummary.ordersToProcess || 0} | Already approved (skipped): {approvalPreviewSummary.ordersSkippedAlreadyApproved || 0} | SKUs ready: {approvalPreviewSummary.skusReadyToUpdate || 0} | Missing SKUs: {approvalPreviewSummary.skusMissing || 0}
+                    </Typography>
+                  </Box>
+                )}
+
+                <TableContainer component={Paper} sx={{ mb: 2 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell><strong>Requested SKU</strong></TableCell>
+                        <TableCell><strong>Deducted SKU</strong></TableCell>
+                        <TableCell><strong>Qty Deduct</strong></TableCell>
+                        <TableCell><strong>Current Qty</strong></TableCell>
+                        <TableCell><strong>Projected Qty</strong></TableCell>
+                        <TableCell><strong>Status</strong></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {approvalPreviewRows.map((row, idx) => (
+                        <TableRow key={`${row.requestedSku}-${idx}`}>
+                          <TableCell>{row.requestedSku}</TableCell>
+                          <TableCell>{row.deductedSku || "N/A"}</TableCell>
+                          <TableCell>{row.quantityToDeduct}</TableCell>
+                          <TableCell>{row.currentQuantity ?? "N/A"}</TableCell>
+                          <TableCell>{row.projectedQuantity ?? "N/A"}</TableCell>
+                          <TableCell>{row.status === "ready" ? "Ready" : "Missing product"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+
                 <Button
                   variant="contained"
                   color="success"
                   startIcon={<Check />}
                   onClick={handleOrdersApproveFinal}
+                  disabled={approving || loading || previewLoading}
                   sx={{ mx: 1 }}
                 >
-                  Update Quantity
+                  {approving ? "Updating..." : "Update Quantity"}
                 </Button>
               </Grid>
             )}

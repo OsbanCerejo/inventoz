@@ -62,5 +62,12 @@ module.exports = (sequelize, DataTypes) => {
     return await bcrypt.compare(password, this.password);
   };
 
+  User.associate = (models) => {
+    User.hasMany(models.UserSession, {
+      foreignKey: 'userId',
+      as: 'sessions'
+    });
+  };
+
   return User;
 }; 

@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ProductList from "../components/ProductList";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button, Box, Stack, Typography } from "@mui/material";
@@ -11,12 +11,14 @@ import {
 } from "../utils/productCache";
 
 const PRODUCTS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const PRODUCTS_AUTO_REFETCH_INTERVAL_MS = 60 * 1000; // 60 seconds
 
 function Products() {
   // State Variables
   const [listOfProducts, setListOfProducts] = useState<any[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const backgroundRefreshInFlightRef = useRef(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -93,6 +95,16 @@ function Products() {
     },
     []
   );
+
+  const triggerBackgroundRefresh = useCallback(async () => {
+    if (document.hidden || backgroundRefreshInFlightRef.current) return;
+    backgroundRefreshInFlightRef.current = true;
+    try {
+      await fetchProducts({ silent: true });
+    } finally {
+      backgroundRefreshInFlightRef.current = false;
+    }
+  }, [fetchProducts]);
 
   // Fetch initial product list on component mount
   useEffect(() => {
@@ -178,6 +190,33 @@ function Products() {
 
     return () => controller.abort();
   }, [location.state, fetchProducts, navigate, location.pathname]);
+
+  useEffect(() => {
+    const onWindowFocus = () => {
+      triggerBackgroundRefresh();
+    };
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        triggerBackgroundRefresh();
+      }
+    };
+
+    const intervalId = window.setInterval(() => {
+      if (!document.hidden) {
+        triggerBackgroundRefresh();
+      }
+    }, PRODUCTS_AUTO_REFETCH_INTERVAL_MS);
+
+    window.addEventListener("focus", onWindowFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", onWindowFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [triggerBackgroundRefresh]);
 
   // Function to handle sorting
   const handleSort = (columnKey: string) => {
