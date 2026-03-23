@@ -25,6 +25,7 @@ import {
   ListItemText
 } from '@mui/material';
 import ScienceIcon from "@mui/icons-material/Science";
+import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
 import { invalidateProductsCache } from "../utils/productCache";
 import { useAuth } from "../context/AuthContext";
 
@@ -90,6 +91,7 @@ const Whatnot: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
+  const [interventionAlert, setInterventionAlert] = useState<string | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [shows, setShows] = useState<WhatnotShow[]>([]);
   const [selectedShowId, setSelectedShowId] = useState<string>('');
@@ -97,6 +99,7 @@ const Whatnot: React.FC = () => {
   const [scanLogs, setScanLogs] = useState<WhatnotScanLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const showStorageKey = user?.id
     ? `whatnot:selectedShow:${user.id}`
     : 'whatnot:selectedShow';
@@ -184,10 +187,46 @@ const Whatnot: React.FC = () => {
     fetchScanLogs(selectedShowId);
   }, [selectedShowId]);
 
+  const playInterventionSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioCtx();
+      }
+      const context = audioContextRef.current;
+      if (!context) return;
+      if (context.state === 'suspended') {
+        context.resume().catch(() => {});
+      }
+      const now = context.currentTime;
+      const playTone = (startAt: number, frequency: number, duration: number) => {
+        const oscillator = context.createOscillator();
+        const gainNode = context.createGain();
+        oscillator.type = 'sawtooth';
+        oscillator.frequency.setValueAtTime(frequency, startAt);
+        gainNode.gain.setValueAtTime(0.0001, startAt);
+        gainNode.gain.exponentialRampToValueAtTime(0.42, startAt + 0.006);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+        oscillator.connect(gainNode);
+        gainNode.connect(context.destination);
+        oscillator.start(startAt);
+        oscillator.stop(startAt + duration + 0.01);
+      };
+      // Sharp 3-tone error pattern.
+      playTone(now, 980, 0.18);
+      playTone(now + 0.22, 740, 0.2);
+      playTone(now + 0.47, 980, 0.24);
+    } catch (error) {
+      console.warn('Unable to play intervention sound', error);
+    }
+  };
+
   const handleBarcodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
+    setInterventionAlert(null);
     setLoading(true);
     setSearchResult(null);
 
@@ -204,15 +243,20 @@ const Whatnot: React.FC = () => {
       });
       if (response.data.success) {
         if (response.data.multiple) {
+          setInterventionAlert('Multiple items matched this barcode. Please select the correct product before continuing.');
+          playInterventionSound();
           setOpenDialog(true);
         }
         setSearchResult(response.data);
         if (response.data.found && !response.data.multiple) {
+          setInterventionAlert(null);
           invalidateProductsCache();
           await fetchScanLogs(selectedShowId);
         }
         if (!response.data.found) {
           setError(response.data.message);
+          setInterventionAlert(response.data.message || 'No products found with this barcode. Please fix the scan before continuing.');
+          playInterventionSound();
         }
       }
     } catch {
@@ -230,6 +274,7 @@ const Whatnot: React.FC = () => {
     setLoading(true);
     setError('');
     setSuccess('');
+    setInterventionAlert(null);
     setOpenDialog(false);
     
     try {
@@ -405,6 +450,30 @@ const Whatnot: React.FC = () => {
             </Grid>
           </Grid>
         </form>
+        {interventionAlert && (
+          <Box
+            sx={{
+              mt: 2,
+              p: 2,
+              borderRadius: 1.5,
+              border: '2px solid #d32f2f',
+              bgcolor: '#ffebee',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5
+            }}
+          >
+            <ReportProblemOutlinedIcon color="error" sx={{ fontSize: 30 }} />
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#b71c1c', lineHeight: 1.1 }}>
+                Stop - Scanner Intervention Needed
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#7f1d1d' }}>
+                {interventionAlert}
+              </Typography>
+            </Box>
+          </Box>
+        )}
         {error && (
           <Alert severity="error" sx={{ mt: 2 }}>
             {error}
