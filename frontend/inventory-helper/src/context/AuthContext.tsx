@@ -217,7 +217,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (event.key === TOKEN_KEY || event.key === USER_KEY) {
         const hasToken = !!localStorage.getItem(TOKEN_KEY);
         const hasUser = !!localStorage.getItem(USER_KEY);
-        if (!hasToken || !hasUser) {
+
+        // Only force clear when both keys are removed (explicit logout/clear).
+        // During login, token/user are written sequentially and there is a brief
+        // intermediate state where one key exists without the other.
+        if (!hasToken && !hasUser) {
           clearSession();
         }
       }
@@ -370,4 +374,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
