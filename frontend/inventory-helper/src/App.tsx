@@ -15,11 +15,13 @@ import "./App.css";
 import PackingMode from "./pages/PackingMode";
 import EbayApi from "./pages/EbayApi";
 import Whatnot from "./pages/Whatnot";
+import WhatnotFulfillment from "./pages/WhatnotFulfillment";
 import WhatnotAnalytics from "./pages/WhatnotAnalytics";
 import PriceList from "./pages/PriceList";
 import Users from "./pages/Users";
 import BarcodeScan from "./pages/BarcodeScan";
 import PackingAnalytics from "./pages/PackingAnalytics";
+import LabelGenerator from "./pages/LabelGenerator";
 import Login from "./pages/Login";
 import LowStock from "./pages/LowStock";
 import { AuthProvider } from "./context/AuthContext";
@@ -159,6 +161,14 @@ function AppContent() {
               }
             />
             <Route
+              path="/whatnot-fulfillment"
+              element={
+                <ProtectedRoute resource="whatnot" action="view" menuItem="whatnot">
+                  <WhatnotFulfillment />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/whatnot-analytics"
               element={
                 <ProtectedRoute resource="whatnotAnalytics" action="view" menuItem="whatnotAnalytics">
@@ -203,6 +213,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="lowStock" action="view" menuItem="lowStock">
                   <LowStock />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/label-generator"
+              element={
+                <ProtectedRoute resource="whatnot" action="view" menuItem="whatnot">
+                  <LabelGenerator />
                 </ProtectedRoute>
               }
             />

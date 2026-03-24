@@ -82,15 +82,19 @@ function NavBar() {
   ];
 
   const toolsItems = [
-    { key: 'whatnot', label: 'Whatnot', path: '/whatnot' },
-    { key: 'packing', label: 'Packing', path: '/orders/packingMode' },
-    { key: 'pricelist', label: 'PriceList', path: '/price-list' },
-    { key: 'lowStock', label: 'Low Stock', path: '/low-stock' },
-    { key: 'barcodeScan', label: 'Barcode Scan', path: '/barcode-scan' },
+    { key: 'whatnot-tool', permissionKey: 'whatnot', label: 'Whatnot', path: '/whatnot' },
+    { key: 'whatnot-fulfillment-tool', permissionKey: 'whatnot', label: 'Whatnot Fulfillment', path: '/whatnot-fulfillment' },
+    { key: 'label-generator-tool', permissionKey: 'whatnot', label: 'Label Generator', path: '/label-generator' },
+    { key: 'packing-tool', permissionKey: 'packing', label: 'Packing', path: '/orders/packingMode' },
+    { key: 'pricelist-tool', permissionKey: 'pricelist', label: 'PriceList', path: '/price-list' },
+    { key: 'lowstock-tool', permissionKey: 'lowStock', label: 'Low Stock', path: '/low-stock' },
+    { key: 'barcode-tool', permissionKey: 'barcodeScan', label: 'Barcode Scan', path: '/barcode-scan' },
   ];
 
   const visibleAnalyticsItems = analyticsItems.filter((item) => hasMenuAccess(item.key));
-  const visibleToolsItems = toolsItems.filter((item) => hasMenuAccess(item.key));
+  const visibleToolsItems = toolsItems.filter((item) =>
+    hasMenuAccess((item as { permissionKey?: string }).permissionKey || item.key)
+  );
   const isPathActive = (path: string) =>
     location.pathname === path ||
     (path !== "/" && location.pathname.startsWith(path));
