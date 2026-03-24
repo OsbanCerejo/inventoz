@@ -23,6 +23,7 @@ const FLASH_SALE_TOKEN = FLASH_SALE_STICKER.replace(/[^A-Z0-9-]/g, '');
 const BUYERS_GIVEAWAY_TOKEN = BUYERS_GIVEAWAY_STICKER.replace(/[^A-Z0-9-]/g, '');
 const NON_AUCTION_ROW_STICKER = 'NON-AUCTION-ITEMS';
 const SPECIAL_NON_AUCTION_STICKERS = [FLASH_SALE_STICKER, BUYERS_GIVEAWAY_STICKER];
+const NON_AUCTION_INSTANCE_PREFIX = 'NON-AUCTION-CONTEXT:';
 const EDIT_PIN_SECRET = String(process.env.WHATNOT_FULFILLMENT_EDIT_PIN || '').trim();
 const EDIT_PIN_SECRET_HASH = String(process.env.WHATNOT_FULFILLMENT_EDIT_PIN_HASH || '').trim().toLowerCase();
 const LOCK_TTL_MS = 30 * 60 * 1000;
@@ -64,6 +65,16 @@ const getSpecialNonAuctionContext = (value) => {
   if (token.includes(BUYERS_GIVEAWAY_TOKEN)) return BUYERS_GIVEAWAY_STICKER;
   return null;
 };
+const buildNonAuctionInstanceKey = (scanId) => `${NON_AUCTION_INSTANCE_PREFIX}${Number(scanId)}`;
+const parseNonAuctionInstanceId = (value) => {
+  const raw = normalizeText(value);
+  if (!raw.startsWith(NON_AUCTION_INSTANCE_PREFIX)) return null;
+  const idPart = raw.slice(NON_AUCTION_INSTANCE_PREFIX.length);
+  const parsed = Number(idPart);
+  if (!Number.isInteger(parsed) || parsed <= 0) return null;
+  return parsed;
+};
+const isNonAuctionInstanceKey = (value) => Boolean(parseNonAuctionInstanceId(value));
 const hashPin = (pin) => crypto.createHash('sha256').update(String(pin)).digest('hex');
 const safeStringEqual = (left, right) => {
   const l = Buffer.from(String(left || ''));
@@ -253,32 +264,46 @@ const summarizeShipment = (
     };
   });
   if (nonAuctionExpectedItems > 0) {
-    const nonAuctionLinkedProductScans = SPECIAL_NON_AUCTION_STICKERS.reduce(
-      (sum, context) => sum + Number(productLinksBySticker[context] || 0),
-      0
+    const nonAuctionContexts = Array.isArray(options.nonAuctionContexts)
+      ? options.nonAuctionContexts
+      : [];
+    const sortedContexts = [...nonAuctionContexts].sort(
+      (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
     );
-    const nonAuctionPendingProductLinks =
-      Number(nonAuctionScannedItems || 0) > 0 && nonAuctionLinkedProductScans === 0 ? 1 : 0;
-    const nonAuctionLinkedProducts = SPECIAL_NON_AUCTION_STICKERS.flatMap(
-      (context) =>
-        (linkedProductsBySticker[context] || []).map((entry) => ({
+
+    sortedContexts.forEach((contextRow, index) => {
+      const instanceKey = normalizeText(contextRow.instanceKey);
+      if (!instanceKey) return;
+      const linkedCount = Number(productLinksBySticker[instanceKey] || 0);
+      checklistWithLinks.push({
+        stickerNumber: instanceKey,
+        expectedQty: 1,
+        scannedQty: 1,
+        linkedProductScans: linkedCount,
+        pendingProductLinks: linkedCount < 1 ? 1 : 0,
+        linkedProducts: (linkedProductsBySticker[instanceKey] || []).map((entry) => ({
           ...entry,
-          contextSticker: context,
-        }))
-    );
-    const inferredNonAuctionContext =
-      SPECIAL_NON_AUCTION_STICKERS.find(
-        (context) => Number(productLinksBySticker[context] || 0) > 0
-      ) || (SPECIAL_NON_AUCTION_STICKERS.includes(lastNonAuctionContext) ? lastNonAuctionContext : null);
-    checklistWithLinks.push({
-      stickerNumber: NON_AUCTION_ROW_STICKER,
-      expectedQty: nonAuctionExpectedItems,
-      scannedQty: nonAuctionScannedItems,
-      linkedProductScans: nonAuctionLinkedProductScans,
-      pendingProductLinks: nonAuctionPendingProductLinks,
-      linkedProducts: nonAuctionLinkedProducts,
-      nonAuctionContext: inferredNonAuctionContext,
+          contextSticker: instanceKey,
+        })),
+        nonAuctionContext: contextRow.contextType || null,
+        nonAuctionContextIndex: index + 1,
+      });
     });
+
+    const unresolvedCount = Math.max(0, nonAuctionExpectedItems - sortedContexts.length);
+    if (unresolvedCount > 0) {
+      checklistWithLinks.push({
+        stickerNumber: NON_AUCTION_ROW_STICKER,
+        expectedQty: unresolvedCount,
+        scannedQty: 0,
+        linkedProductScans: 0,
+        pendingProductLinks: 0,
+        linkedProducts: [],
+        nonAuctionContext: SPECIAL_NON_AUCTION_STICKERS.includes(lastNonAuctionContext)
+          ? lastNonAuctionContext
+          : null,
+      });
+    }
   }
 
   const auctionExpectedItems = auctionChecklist.reduce((sum, item) => sum + item.expectedQty, 0);
@@ -326,6 +351,26 @@ const getLinkedProductSummaryBySticker = async ({
       auctionStickerNumber: { [Op.not]: null, [Op.ne]: '' },
     },
     order: [['createdAt', 'ASC']],
+    raw: true,
+    transaction,
+  });
+  const nonAuctionContextRows = await WhatnotShipmentScan.findAll({
+    attributes: ['id', 'auctionStickerNumber', 'createdAt'],
+    where: {
+      whatnotShowId: showId,
+      importId,
+      shipmentId,
+      result: 'matched',
+      scanType: 'item',
+      productSku: { [Op.or]: [{ [Op.is]: null }, { [Op.eq]: '' }] },
+      auctionStickerNumber: {
+        [Op.in]: SPECIAL_NON_AUCTION_STICKERS,
+      },
+    },
+    order: [
+      ['createdAt', 'ASC'],
+      ['id', 'ASC'],
+    ],
     raw: true,
     transaction,
   });
@@ -390,29 +435,19 @@ const getLinkedProductSummaryBySticker = async ({
     });
   }
 
-  const lastSpecialContextScan = await WhatnotShipmentScan.findOne({
-    attributes: ['auctionStickerNumber'],
-    where: {
-      whatnotShowId: showId,
-      importId,
-      shipmentId,
-      result: 'matched',
-      scanType: 'item',
-      auctionStickerNumber: {
-        [Op.in]: SPECIAL_NON_AUCTION_STICKERS,
-      },
-    },
-    order: [
-      ['createdAt', 'DESC'],
-      ['id', 'DESC'],
-    ],
-    raw: true,
-    transaction,
-  });
+  const nonAuctionContexts = nonAuctionContextRows.map((row) => ({
+    instanceKey: buildNonAuctionInstanceKey(row.id),
+    contextType: normalizeText(row.auctionStickerNumber) || null,
+    createdAt: row.createdAt,
+  }));
+  const lastSpecialContextScan = nonAuctionContextRows.length
+    ? nonAuctionContextRows[nonAuctionContextRows.length - 1]
+    : null;
 
   return {
     countsBySticker,
     productsBySticker: bySticker,
+    nonAuctionContexts,
     lastNonAuctionContext: normalizeText(lastSpecialContextScan?.auctionStickerNumber) || null,
   };
 };
@@ -729,7 +764,10 @@ router.get('/shipment-details', auth, checkPermission('whatnot', 'view'), async 
       rows,
       linkedSummary.countsBySticker,
       linkedSummary.productsBySticker,
-      { lastNonAuctionContext: linkedSummary.lastNonAuctionContext }
+      {
+        nonAuctionContexts: linkedSummary.nonAuctionContexts,
+        lastNonAuctionContext: linkedSummary.lastNonAuctionContext,
+      }
     );
 
     const tracking = normalizeText(rows[0].tracking) || 'N/A';
@@ -1083,7 +1121,10 @@ router.post('/shipment', auth, checkPermission('whatnot', 'view'), async (req, r
       resolved.shipmentRows,
       linkedSummary.countsBySticker,
       linkedSummary.productsBySticker,
-      { lastNonAuctionContext: linkedSummary.lastNonAuctionContext }
+      {
+        nonAuctionContexts: linkedSummary.nonAuctionContexts,
+        lastNonAuctionContext: linkedSummary.lastNonAuctionContext,
+      }
     );
     await WhatnotShipmentScan.create({
       whatnotShowId: showId,
@@ -1222,6 +1263,7 @@ router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, 
     let message = 'Scanned value is not expected for this shipment.';
     let rowToIncrement = null;
     let matchedAuctionSticker = null;
+    let matchedContextType = null;
 
     if (matchingAuctionRows.length > 0) {
       const fillableAuctionRow =
@@ -1252,6 +1294,7 @@ router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, 
           result = 'matched';
           message = `${specialNonAuctionContext} verified. Now scan UPC/SKU item(s) for this context.`;
           matchedAuctionSticker = specialNonAuctionContext;
+          matchedContextType = specialNonAuctionContext;
         }
       }
     } else {
@@ -1270,6 +1313,27 @@ router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, 
         { transaction }
       );
     }
+
+    const createdScan = await WhatnotShipmentScan.create(
+      {
+        whatnotShowId: showId,
+        importId: activeImport.id,
+        shipmentId: resolved.shipmentId,
+        tracking,
+        scannedValue,
+        auctionStickerNumber: matchedAuctionSticker,
+        scanType: 'item',
+        result,
+        message,
+        userId: req.user ? String(req.user.id) : null,
+      },
+      { transaction }
+    );
+
+    const contextInstanceKey =
+      result === 'matched' && matchedContextType
+        ? buildNonAuctionInstanceKey(createdScan.id)
+        : matchedAuctionSticker;
 
     const refreshedRows = await WhatnotShipmentItem.findAll({
       where: {
@@ -1292,7 +1356,10 @@ router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, 
       refreshedRows,
       linkedSummary.countsBySticker,
       linkedSummary.productsBySticker,
-      { lastNonAuctionContext: linkedSummary.lastNonAuctionContext }
+      {
+        nonAuctionContexts: linkedSummary.nonAuctionContexts,
+        lastNonAuctionContext: linkedSummary.lastNonAuctionContext,
+      }
     );
     const shipmentStatus = summary.completed ? 'completed' : summary.scannedItems > 0 ? 'in_progress' : 'ready';
 
@@ -1312,22 +1379,6 @@ router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, 
       );
     }
 
-    await WhatnotShipmentScan.create(
-      {
-        whatnotShowId: showId,
-        importId: activeImport.id,
-        shipmentId: resolved.shipmentId,
-        tracking,
-        scannedValue,
-        auctionStickerNumber: matchedAuctionSticker,
-        scanType: 'item',
-        result,
-        message,
-        userId: req.user ? String(req.user.id) : null,
-      },
-      { transaction }
-    );
-
     await transaction.commit();
     return res.json({
       showId,
@@ -1336,7 +1387,8 @@ router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, 
       tracking,
       shipmentStatus,
       scanResult: result,
-      matchedAuctionSticker,
+      matchedAuctionSticker: contextInstanceKey,
+      matchedContextType,
       message,
       ...summary,
     });
@@ -1409,9 +1461,30 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
         error: `Shipment is currently being processed by user ${lockResult.lockedBy}.`,
       });
     }
-    const specialNonAuctionContext = getSpecialNonAuctionContext(auctionStickerNumber);
+    const nonAuctionContextScanId = parseNonAuctionInstanceId(auctionStickerNumber);
+    const contextScanRow = nonAuctionContextScanId
+      ? await WhatnotShipmentScan.findOne({
+          where: {
+            id: nonAuctionContextScanId,
+            whatnotShowId: showId,
+            importId: activeImport.id,
+            shipmentId: resolved.shipmentId,
+            scanType: 'item',
+            result: 'matched',
+            productSku: { [Op.or]: [{ [Op.is]: null }, { [Op.eq]: '' }] },
+            auctionStickerNumber: { [Op.in]: SPECIAL_NON_AUCTION_STICKERS },
+          },
+        })
+      : null;
+    const specialNonAuctionContext =
+      (contextScanRow && normalizeText(contextScanRow.auctionStickerNumber)) ||
+      getSpecialNonAuctionContext(auctionStickerNumber);
     const isSpecialNonAuctionContext = Boolean(specialNonAuctionContext);
-    const contextForLink = isSpecialNonAuctionContext ? specialNonAuctionContext : auctionStickerNumber;
+    const contextForLink = isNonAuctionInstanceKey(auctionStickerNumber)
+      ? auctionStickerNumber
+      : isSpecialNonAuctionContext
+      ? null
+      : auctionStickerNumber;
     const auctionRow = isSpecialNonAuctionContext
       ? null
       : shipmentRows.find(
@@ -1444,6 +1517,11 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
         error: `This shipment has no non-auction items for ${specialNonAuctionContext}.`,
       });
     }
+    if (isSpecialNonAuctionContext && !contextScanRow) {
+      return res.status(400).json({
+        error: `Scan ${specialNonAuctionContext} in Auction Number box first before linking products.`,
+      });
+    }
     if (isSpecialNonAuctionContext && !hasScannedNonAuctionRow) {
       return res.status(400).json({
         error: `Scan ${specialNonAuctionContext} in Auction Number box first before linking products.`,
@@ -1470,7 +1548,7 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
         shipmentId: resolved.shipmentId,
         tracking,
         scannedValue: barcode,
-        auctionStickerNumber: contextForLink,
+        auctionStickerNumber: contextForLink || auctionStickerNumber,
         scanType: 'item',
         result: 'unexpected',
         message: 'No product found for scanned UPC/SKU.',
@@ -1518,7 +1596,7 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
         shipmentId: resolved.shipmentId,
         tracking,
         scannedValue: barcode,
-        auctionStickerNumber: contextForLink,
+        auctionStickerNumber: contextForLink || auctionStickerNumber,
         scanType: 'item',
         result: 'unexpected',
         message: 'Multiple products matched UPC/SKU. User selection required.',
@@ -1545,7 +1623,7 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
       shipmentId: resolved.shipmentId,
       tracking,
       scannedValue: barcode,
-      auctionStickerNumber: contextForLink,
+      auctionStickerNumber: contextForLink || auctionStickerNumber,
       productSku: product.sku,
       soldPrice: isSpecialNonAuctionContext
         ? nonAuctionReferenceRow?.soldPrice || null
@@ -1553,7 +1631,7 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
       scanType: 'item',
       result: 'matched',
       message: isSpecialNonAuctionContext
-        ? `Linked product ${product.sku} to ${contextForLink}.`
+        ? `Linked product ${product.sku} to ${specialNonAuctionContext}.`
         : `Linked product ${product.sku} to auction #${auctionStickerNumber}.`,
       userId: req.user ? String(req.user.id) : null,
     });
@@ -1575,7 +1653,10 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
       refreshedRows,
       linkedSummary.countsBySticker,
       linkedSummary.productsBySticker,
-      { lastNonAuctionContext: linkedSummary.lastNonAuctionContext }
+      {
+        nonAuctionContexts: linkedSummary.nonAuctionContexts,
+        lastNonAuctionContext: linkedSummary.lastNonAuctionContext,
+      }
     );
     const shipmentStatus = summary.completed ? 'completed' : summary.scannedItems > 0 ? 'in_progress' : 'ready';
 
@@ -1583,7 +1664,7 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
       success: true,
       shipmentId: resolved.shipmentId,
       tracking,
-      auctionStickerNumber: contextForLink,
+      auctionStickerNumber: contextForLink || auctionStickerNumber,
       product: {
         sku: product.sku,
         upc: product.upc,
@@ -1597,7 +1678,7 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
         ? nonAuctionReferenceRow?.soldPrice || null
         : auctionRow.soldPrice || null,
       message: isSpecialNonAuctionContext
-        ? `Product linked to ${contextForLink}. Inventory will update when shipment is closed.`
+        ? `Product linked to ${specialNonAuctionContext}. Inventory will update when shipment is closed.`
         : `Product linked to auction #${auctionStickerNumber}. Inventory will update when shipment is closed.`,
       shipmentStatus,
       ...summary,
@@ -1675,7 +1756,10 @@ router.post('/close-shipment', auth, checkPermission('whatnot', 'view'), async (
       resolved.shipmentRows,
       linkedSummary.countsBySticker,
       linkedSummary.productsBySticker,
-      { lastNonAuctionContext: linkedSummary.lastNonAuctionContext }
+      {
+        nonAuctionContexts: linkedSummary.nonAuctionContexts,
+        lastNonAuctionContext: linkedSummary.lastNonAuctionContext,
+      }
     );
     const missingAuctionProductLinks = summary.checklist
       .filter((item) => Number(item.scannedQty || 0) > 0 && Number(item.linkedProductScans || 0) < 1)
@@ -1974,7 +2058,10 @@ router.post('/delete-link', auth, checkPermission('whatnot', 'view'), async (req
       refreshedRows,
       linkedSummary.countsBySticker,
       linkedSummary.productsBySticker,
-      { lastNonAuctionContext: linkedSummary.lastNonAuctionContext }
+      {
+        nonAuctionContexts: linkedSummary.nonAuctionContexts,
+        lastNonAuctionContext: linkedSummary.lastNonAuctionContext,
+      }
     );
 
     await transaction.commit();
@@ -2067,7 +2154,10 @@ router.post('/reset-unlinked-auction-scans', auth, checkPermission('whatnot', 'v
     const specialLinkedCount = SPECIAL_NON_AUCTION_STICKERS.reduce(
       (sum, context) => sum + Number(linkedSummary.countsBySticker[context] || 0),
       0
-    );
+    ) + Object.entries(linkedSummary.countsBySticker || {}).reduce((sum, [sticker, count]) => {
+      if (!isNonAuctionInstanceKey(sticker)) return sum;
+      return sum + Number(count || 0);
+    }, 0);
     const nonAuctionRowsToReset =
       specialLinkedCount < 1
         ? resolved.shipmentRows.filter(

@@ -99,6 +99,7 @@ interface ShipmentChecklistItem {
   linkedProductScans?: number;
   pendingProductLinks?: number;
   nonAuctionContext?: string | null;
+  nonAuctionContextIndex?: number;
   linkedProducts?: Array<{
     sku: string;
     count: number;
@@ -156,6 +157,7 @@ interface ProductLookupResult {
 const FLASH_SALE_STICKER = "WHATNOT-FLASH-SALE";
 const BUYERS_GIVEAWAY_STICKER = "BUYERS-GIVEAWAY";
 const NON_AUCTION_ROW_STICKER = "NON-AUCTION-ITEMS";
+const NON_AUCTION_INSTANCE_PREFIX = "NON-AUCTION-CONTEXT:";
 const SPECIAL_NON_AUCTION_CONTEXTS = [FLASH_SALE_STICKER, BUYERS_GIVEAWAY_STICKER];
 
 const WhatnotFulfillment = () => {
@@ -208,12 +210,42 @@ const WhatnotFulfillment = () => {
   };
   const formatChecklistRowLabel = (item: ShipmentChecklistItem) => {
     const raw = String(item.stickerNumber || "").trim();
+    if (
+      item.nonAuctionContext &&
+      raw.startsWith(NON_AUCTION_INSTANCE_PREFIX)
+    ) {
+      return item.nonAuctionContext;
+    }
     if (raw !== NON_AUCTION_ROW_STICKER) return raw;
     const contextActivated =
       Number(item.scannedQty || 0) > 0 || Number(item.linkedProductScans || 0) > 0;
     if (!contextActivated) return "Non Auction Items";
     const activeContext = getSpecialNonAuctionContext(item.nonAuctionContext);
     return activeContext || "Non Auction Items";
+  };
+  const getChecklistItemBySticker = (sticker?: string | null) => {
+    if (!activeShipment || !sticker) return null;
+    return (
+      activeShipment.checklist.find((entry) => String(entry.stickerNumber || "") === String(sticker)) ||
+      null
+    );
+  };
+  const formatActiveContextLabel = (sticker?: string | null) => {
+    const token = String(sticker || "").trim();
+    if (!token) return "None";
+    const checklistItem = getChecklistItemBySticker(token);
+    if (checklistItem) {
+      const rowLabel = formatChecklistRowLabel(checklistItem);
+      if (
+        checklistItem.nonAuctionContext &&
+        token.startsWith(NON_AUCTION_INSTANCE_PREFIX) &&
+        checklistItem.nonAuctionContextIndex
+      ) {
+        return `${rowLabel} #${checklistItem.nonAuctionContextIndex}`;
+      }
+      return rowLabel;
+    }
+    return formatStickerContext(token);
   };
   const normalizeTrackingForSearch = (value?: string | null) => {
     const digits = String(value || "").replace(/\D/g, "");
@@ -451,9 +483,11 @@ const WhatnotFulfillment = () => {
       );
       const linkedForActive = Number(activeChecklistItem?.linkedProductScans || 0);
       if (linkedForActive < 1) {
-        const blockMessage = `Link at least one product to ${formatStickerContext(
-          currentActiveSticker
-        )} before scanning another auction number.`;
+        const activeLabel =
+          getChecklistItemBySticker(currentActiveSticker)
+            ? formatActiveContextLabel(currentActiveSticker)
+            : formatStickerContext(currentActiveSticker);
+        const blockMessage = `Link at least one product to ${activeLabel} before scanning another auction number.`;
         setError(blockMessage);
         setInterventionAlert(blockMessage);
         playInterventionSound();
@@ -496,10 +530,13 @@ const WhatnotFulfillment = () => {
       if (payload.scanResult === "matched") {
         if (payload.matchedAuctionSticker) {
           const matchedContext = String(payload.matchedAuctionSticker);
+          const matchedContextLabel = payload.matchedContextType
+            ? String(payload.matchedContextType)
+            : formatStickerContext(matchedContext);
           setSuccess(
             payload.completed
-              ? `Shipment complete. ${formatStickerContext(matchedContext)} verified.`
-              : `${formatStickerContext(matchedContext)} verified. Now scan UPC/SKU product(s) for this order.`
+              ? `Shipment complete. ${matchedContextLabel} verified.`
+              : `${matchedContextLabel} verified. Now scan UPC/SKU product(s) for this order.`
           );
           setTimeout(() => productInputRef.current?.focus(), 80);
         } else {
@@ -657,7 +694,7 @@ const WhatnotFulfillment = () => {
         });
       }
       if (product?.sku) {
-        const contextLabel = formatStickerContext(activeAuctionSticker);
+        const contextLabel = formatActiveContextLabel(activeAuctionSticker);
         setSuccess(
           `Linked ${product.sku} (${product.brand || ""} ${product.itemName || ""}) to ${contextLabel}. Inventory will update when shipment is closed.`
         );
@@ -1096,7 +1133,7 @@ const WhatnotFulfillment = () => {
 
           <Paper variant="outlined" sx={{ p: 2, mt: 2, bgcolor: "#f8fafc" }}>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              Active Order Context: {formatStickerContext(activeAuctionSticker)}
+              Active Order Context: {formatActiveContextLabel(activeAuctionSticker)}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Scan an order context first. Then scan UPC/SKU for the product(s) in that order.
@@ -1280,7 +1317,11 @@ const WhatnotFulfillment = () => {
             <TableBody>
               {activeShipment.checklist.map((item) => (
                 <TableRow key={item.stickerNumber}>
-                  <TableCell>{formatChecklistRowLabel(item)}</TableCell>
+                  <TableCell>
+                    {item.nonAuctionContext && item.nonAuctionContextIndex
+                      ? `${formatChecklistRowLabel(item)} #${item.nonAuctionContextIndex}`
+                      : formatChecklistRowLabel(item)}
+                  </TableCell>
                   <TableCell align="right">
                     {Number(item.scannedQty || 0) > 0 ? (
                       <CheckCircleIcon sx={{ color: "success.main", fontSize: 18 }} />
@@ -1559,7 +1600,11 @@ const WhatnotFulfillment = () => {
                 <TableBody>
                   {shipmentView.checklist.map((item) => (
                     <TableRow key={`view-${item.stickerNumber}`}>
-                      <TableCell>{formatChecklistRowLabel(item)}</TableCell>
+                      <TableCell>
+                        {item.nonAuctionContext && item.nonAuctionContextIndex
+                          ? `${formatChecklistRowLabel(item)} #${item.nonAuctionContextIndex}`
+                          : formatChecklistRowLabel(item)}
+                      </TableCell>
                       <TableCell align="right">
                         {Number(item.scannedQty || 0) > 0 ? (
                           <CheckCircleIcon sx={{ color: "success.main", fontSize: 18 }} />
