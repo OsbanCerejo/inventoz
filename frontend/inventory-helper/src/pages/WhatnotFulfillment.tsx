@@ -98,10 +98,12 @@ interface ShipmentChecklistItem {
   scannedQty: number;
   linkedProductScans?: number;
   pendingProductLinks?: number;
+  nonAuctionContext?: string | null;
   linkedProducts?: Array<{
     sku: string;
     count: number;
     latestScanId?: number | null;
+    contextSticker?: string | null;
     brand?: string;
     itemName?: string;
     strength?: string;
@@ -152,6 +154,9 @@ interface ProductLookupResult {
 }
 
 const FLASH_SALE_STICKER = "WHATNOT-FLASH-SALE";
+const BUYERS_GIVEAWAY_STICKER = "BUYERS-GIVEAWAY";
+const NON_AUCTION_ROW_STICKER = "NON-AUCTION-ITEMS";
+const SPECIAL_NON_AUCTION_CONTEXTS = [FLASH_SALE_STICKER, BUYERS_GIVEAWAY_STICKER];
 
 const WhatnotFulfillment = () => {
   const { user } = useAuth();
@@ -190,19 +195,25 @@ const WhatnotFulfillment = () => {
   const productInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = user?.role === "admin";
-  const isFlashSaleSticker = (value?: string | null) =>
-    String(value || "").trim().toUpperCase() === FLASH_SALE_STICKER;
+  const getSpecialNonAuctionContext = (value?: string | null) => {
+    const token = String(value || "").trim().toUpperCase();
+    if (!token) return null;
+    return SPECIAL_NON_AUCTION_CONTEXTS.find((entry) => entry === token) || null;
+  };
   const formatStickerContext = (value?: string | null) => {
     const normalized = String(value || "").trim().replace(/^#/, "");
     if (!normalized) return "None";
-    return isFlashSaleSticker(normalized) ? FLASH_SALE_STICKER : `#${normalized}`;
+    const specialContext = getSpecialNonAuctionContext(normalized);
+    return specialContext ? specialContext : `#${normalized}`;
   };
   const formatChecklistRowLabel = (item: ShipmentChecklistItem) => {
     const raw = String(item.stickerNumber || "").trim();
-    if (!isFlashSaleSticker(raw)) return raw;
+    if (raw !== NON_AUCTION_ROW_STICKER) return raw;
     const contextActivated =
       Number(item.scannedQty || 0) > 0 || Number(item.linkedProductScans || 0) > 0;
-    return contextActivated ? FLASH_SALE_STICKER : "Non Auction Items";
+    if (!contextActivated) return "Non Auction Items";
+    const activeContext = getSpecialNonAuctionContext(item.nonAuctionContext);
+    return activeContext || "Non Auction Items";
   };
   const normalizeTrackingForSearch = (value?: string | null) => {
     const digits = String(value || "").replace(/\D/g, "");
@@ -480,7 +491,7 @@ const WhatnotFulfillment = () => {
         const matchedContext = String(payload.matchedAuctionSticker);
         setActiveAuctionSticker(matchedContext);
         // Flash-sale behaves like a sticky mode: stay in product scan until user changes context.
-        setAutoReturnToAuction(!isFlashSaleSticker(matchedContext));
+        setAutoReturnToAuction(!Boolean(getSpecialNonAuctionContext(matchedContext)));
       }
       if (payload.scanResult === "matched") {
         if (payload.matchedAuctionSticker) {
@@ -653,7 +664,7 @@ const WhatnotFulfillment = () => {
       } else {
         setSuccess(response.data?.message || "Product linked to selected order.");
       }
-      if (isFlashSaleSticker(activeAuctionSticker)) {
+      if (Boolean(getSpecialNonAuctionContext(activeAuctionSticker))) {
         setTimeout(() => productInputRef.current?.focus(), 80);
       } else if (autoReturnToAuction) {
         setTimeout(() => itemScanRef.current?.focus(), 80);
@@ -1024,7 +1035,8 @@ const WhatnotFulfillment = () => {
                     required
                   />
                   <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
-                    For non-auction items, scan special code in this box: {FLASH_SALE_STICKER}
+                    For non-auction items, scan special code in this box: {FLASH_SALE_STICKER} or{" "}
+                    {BUYERS_GIVEAWAY_STICKER}
                   </Typography>
                 </Grid>
                 <Grid item>
@@ -1039,9 +1051,9 @@ const WhatnotFulfillment = () => {
                 </Grid>
               </Grid>
             </form>
-            {isFlashSaleSticker(activeAuctionSticker) && (
+            {Boolean(getSpecialNonAuctionContext(activeAuctionSticker)) && (
               <Chip
-                label="FLASH SALE MODE ACTIVE"
+                label={`${getSpecialNonAuctionContext(activeAuctionSticker)} MODE ACTIVE`}
                 color="warning"
                 size="small"
                 sx={{ mt: 1.5, fontWeight: 700 }}
@@ -1087,7 +1099,10 @@ const WhatnotFulfillment = () => {
               Active Order Context: {formatStickerContext(activeAuctionSticker)}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Scan an order context first. Then scan UPC/SKU for the product(s) in that order. For non-auction shipment orders, scan the special code WHATNOT-FLASH-SALE and then scan UPC/SKU. Bundles are supported by scanning multiple products under the same context.
+              Scan an order context first. Then scan UPC/SKU for the product(s) in that order.
+              For non-auction shipment orders, scan either {FLASH_SALE_STICKER} or{" "}
+              {BUYERS_GIVEAWAY_STICKER} and then scan UPC/SKU. Bundles are supported by
+              scanning multiple products under the same context.
             </Typography>
             <form
               onSubmit={(e) => {
@@ -1304,7 +1319,7 @@ const WhatnotFulfillment = () => {
                                 startIcon={<DeleteOutlineIcon sx={{ fontSize: 14 }} />}
                                 onClick={() =>
                                   handleDeleteLinkedProduct(
-                                    item.stickerNumber,
+                                    product.contextSticker || item.stickerNumber,
                                     product.sku,
                                     product.latestScanId
                                   )

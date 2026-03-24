@@ -183,11 +183,17 @@ function AddProduct() {
       if (!formik.values.inbound) {
         data.batch = "NA";
       }
+      const enteredQuantity = data.quantity;
+      const productCreatePayload = {
+        ...data,
+        // When inbound is enabled, inbound should be the only stock increment source.
+        quantity: formik.values.inbound ? "0" : data.quantity,
+      };
 
       try {
         const addProductresponse = await axios.post(
           getApiUrl('products'),
-          data
+          productCreatePayload
         );
 
         if (addProductresponse.data === "Created New") {
@@ -203,7 +209,7 @@ function AddProduct() {
               sku: data.sku,
               changes: []
             }],
-            newState: data,
+            newState: productCreatePayload,
             metaData: {
               message: "New product created",
               inbound: data.inbound,
@@ -254,7 +260,7 @@ function AddProduct() {
             const inboundObject = {
               sku: data.sku,
               vendor: data.vendor,
-              quantity: data.quantity,
+              quantity: enteredQuantity,
               date: newDate,
               batch: data.batch,
               compositeSku: compositeInboundKey,

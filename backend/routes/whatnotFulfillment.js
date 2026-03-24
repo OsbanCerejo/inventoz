@@ -18,7 +18,11 @@ const { checkPermission } = require('../middleware/permissions');
 
 const router = express.Router();
 const FLASH_SALE_STICKER = 'WHATNOT-FLASH-SALE';
+const BUYERS_GIVEAWAY_STICKER = 'BUYERS-GIVEAWAY';
 const FLASH_SALE_TOKEN = FLASH_SALE_STICKER.replace(/[^A-Z0-9-]/g, '');
+const BUYERS_GIVEAWAY_TOKEN = BUYERS_GIVEAWAY_STICKER.replace(/[^A-Z0-9-]/g, '');
+const NON_AUCTION_ROW_STICKER = 'NON-AUCTION-ITEMS';
+const SPECIAL_NON_AUCTION_STICKERS = [FLASH_SALE_STICKER, BUYERS_GIVEAWAY_STICKER];
 const EDIT_PIN_SECRET = String(process.env.WHATNOT_FULFILLMENT_EDIT_PIN || '').trim();
 const EDIT_PIN_SECRET_HASH = String(process.env.WHATNOT_FULFILLMENT_EDIT_PIN_HASH || '').trim().toLowerCase();
 const LOCK_TTL_MS = 30 * 60 * 1000;
@@ -53,8 +57,13 @@ const looksLikeAuctionSticker = (value) => {
   const token = normalizeSticker(value);
   return token.length > 0 && token.length <= 4;
 };
-const isFlashSaleSticker = (value) =>
-  normalizeScanToken(value).includes(FLASH_SALE_TOKEN);
+const getSpecialNonAuctionContext = (value) => {
+  const token = normalizeScanToken(value);
+  if (!token) return null;
+  if (token.includes(FLASH_SALE_TOKEN)) return FLASH_SALE_STICKER;
+  if (token.includes(BUYERS_GIVEAWAY_TOKEN)) return BUYERS_GIVEAWAY_STICKER;
+  return null;
+};
 const hashPin = (pin) => crypto.createHash('sha256').update(String(pin)).digest('hex');
 const safeStringEqual = (left, right) => {
   const l = Buffer.from(String(left || ''));
@@ -219,12 +228,18 @@ const buildAuctionChecklist = (rows) => {
     .sort((a, b) => a.stickerNumber.localeCompare(b.stickerNumber, undefined, { numeric: true }));
 };
 
-const summarizeShipment = (rows, productLinksBySticker = {}, linkedProductsBySticker = {}) => {
+const summarizeShipment = (
+  rows,
+  productLinksBySticker = {},
+  linkedProductsBySticker = {},
+  options = {}
+) => {
   const auctionChecklist = buildAuctionChecklist(rows);
   const nonAuctionRows = getNonAuctionRows(rows);
   const nonAuctionExpectedItems = nonAuctionRows.reduce((sum, row) => sum + Number(row.expectedQty || 0), 0);
   const nonAuctionScannedItems = nonAuctionRows.reduce((sum, row) => sum + Number(row.scannedQty || 0), 0);
   const nonAuctionRemainingItems = Math.max(0, nonAuctionExpectedItems - nonAuctionScannedItems);
+  const lastNonAuctionContext = normalizeText(options.lastNonAuctionContext);
 
   const checklistWithLinks = auctionChecklist.map((item) => {
     const stickerKey = normalizeSticker(item.stickerNumber);
@@ -238,16 +253,31 @@ const summarizeShipment = (rows, productLinksBySticker = {}, linkedProductsBySti
     };
   });
   if (nonAuctionExpectedItems > 0) {
-    const flashLinkedProductScans = Number(productLinksBySticker[FLASH_SALE_STICKER] || 0);
-    const flashPendingProductLinks =
-      Number(nonAuctionScannedItems || 0) > 0 && flashLinkedProductScans === 0 ? 1 : 0;
+    const nonAuctionLinkedProductScans = SPECIAL_NON_AUCTION_STICKERS.reduce(
+      (sum, context) => sum + Number(productLinksBySticker[context] || 0),
+      0
+    );
+    const nonAuctionPendingProductLinks =
+      Number(nonAuctionScannedItems || 0) > 0 && nonAuctionLinkedProductScans === 0 ? 1 : 0;
+    const nonAuctionLinkedProducts = SPECIAL_NON_AUCTION_STICKERS.flatMap(
+      (context) =>
+        (linkedProductsBySticker[context] || []).map((entry) => ({
+          ...entry,
+          contextSticker: context,
+        }))
+    );
+    const inferredNonAuctionContext =
+      SPECIAL_NON_AUCTION_STICKERS.find(
+        (context) => Number(productLinksBySticker[context] || 0) > 0
+      ) || (SPECIAL_NON_AUCTION_STICKERS.includes(lastNonAuctionContext) ? lastNonAuctionContext : null);
     checklistWithLinks.push({
-      stickerNumber: FLASH_SALE_STICKER,
+      stickerNumber: NON_AUCTION_ROW_STICKER,
       expectedQty: nonAuctionExpectedItems,
       scannedQty: nonAuctionScannedItems,
-      linkedProductScans: flashLinkedProductScans,
-      pendingProductLinks: flashPendingProductLinks,
-      linkedProducts: linkedProductsBySticker[FLASH_SALE_STICKER] || [],
+      linkedProductScans: nonAuctionLinkedProductScans,
+      pendingProductLinks: nonAuctionPendingProductLinks,
+      linkedProducts: nonAuctionLinkedProducts,
+      nonAuctionContext: inferredNonAuctionContext,
     });
   }
 
@@ -360,7 +390,31 @@ const getLinkedProductSummaryBySticker = async ({
     });
   }
 
-  return { countsBySticker, productsBySticker: bySticker };
+  const lastSpecialContextScan = await WhatnotShipmentScan.findOne({
+    attributes: ['auctionStickerNumber'],
+    where: {
+      whatnotShowId: showId,
+      importId,
+      shipmentId,
+      result: 'matched',
+      scanType: 'item',
+      auctionStickerNumber: {
+        [Op.in]: SPECIAL_NON_AUCTION_STICKERS,
+      },
+    },
+    order: [
+      ['createdAt', 'DESC'],
+      ['id', 'DESC'],
+    ],
+    raw: true,
+    transaction,
+  });
+
+  return {
+    countsBySticker,
+    productsBySticker: bySticker,
+    lastNonAuctionContext: normalizeText(lastSpecialContextScan?.auctionStickerNumber) || null,
+  };
 };
 
 const getActiveImport = async (showId) => {
@@ -674,7 +728,8 @@ router.get('/shipment-details', auth, checkPermission('whatnot', 'view'), async 
     const summary = summarizeShipment(
       rows,
       linkedSummary.countsBySticker,
-      linkedSummary.productsBySticker
+      linkedSummary.productsBySticker,
+      { lastNonAuctionContext: linkedSummary.lastNonAuctionContext }
     );
 
     const tracking = normalizeText(rows[0].tracking) || 'N/A';
@@ -1027,7 +1082,8 @@ router.post('/shipment', auth, checkPermission('whatnot', 'view'), async (req, r
     const summary = summarizeShipment(
       resolved.shipmentRows,
       linkedSummary.countsBySticker,
-      linkedSummary.productsBySticker
+      linkedSummary.productsBySticker,
+      { lastNonAuctionContext: linkedSummary.lastNonAuctionContext }
     );
     await WhatnotShipmentScan.create({
       whatnotShowId: showId,
@@ -1061,7 +1117,7 @@ router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, 
     const tracking = normalizeTracking(req.body.tracking);
     const rawStickerInput = normalizeText(req.body.stickerNumber);
     const scannedValue = normalizeSticker(rawStickerInput);
-    const flashSaleScanned = isFlashSaleSticker(rawStickerInput);
+    const specialNonAuctionContext = getSpecialNonAuctionContext(rawStickerInput);
 
     if (!showId || !tracking || !scannedValue) {
       await transaction.rollback();
@@ -1180,11 +1236,11 @@ router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, 
         message = `Auction sticker #${scannedValue} verified.`;
         matchedAuctionSticker = scannedValue;
       }
-    } else if (flashSaleScanned) {
+    } else if (specialNonAuctionContext) {
       const nonAuctionRows = getNonAuctionRows(shipmentRows);
       if (!nonAuctionRows.length) {
         result = 'unexpected';
-        message = 'This shipment has no non-auction items to scan with WHATNOT-FLASH-SALE.';
+        message = `This shipment has no non-auction items to scan with ${specialNonAuctionContext}.`;
       } else {
         const fillableNonAuctionRow =
           nonAuctionRows.find((row) => Number(row.scannedQty) < Number(row.expectedQty)) || null;
@@ -1194,8 +1250,8 @@ router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, 
         } else {
           rowToIncrement = fillableNonAuctionRow;
           result = 'matched';
-          message = `${FLASH_SALE_STICKER} verified. Now scan UPC/SKU item(s) for this context.`;
-          matchedAuctionSticker = FLASH_SALE_STICKER;
+          message = `${specialNonAuctionContext} verified. Now scan UPC/SKU item(s) for this context.`;
+          matchedAuctionSticker = specialNonAuctionContext;
         }
       }
     } else {
@@ -1235,7 +1291,8 @@ router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, 
     const summary = summarizeShipment(
       refreshedRows,
       linkedSummary.countsBySticker,
-      linkedSummary.productsBySticker
+      linkedSummary.productsBySticker,
+      { lastNonAuctionContext: linkedSummary.lastNonAuctionContext }
     );
     const shipmentStatus = summary.completed ? 'completed' : summary.scannedItems > 0 ? 'in_progress' : 'ready';
 
@@ -1352,42 +1409,44 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
         error: `Shipment is currently being processed by user ${lockResult.lockedBy}.`,
       });
     }
-    const flashSaleContext = isFlashSaleSticker(auctionStickerNumber);
-    const auctionRow = flashSaleContext
+    const specialNonAuctionContext = getSpecialNonAuctionContext(auctionStickerNumber);
+    const isSpecialNonAuctionContext = Boolean(specialNonAuctionContext);
+    const contextForLink = isSpecialNonAuctionContext ? specialNonAuctionContext : auctionStickerNumber;
+    const auctionRow = isSpecialNonAuctionContext
       ? null
       : shipmentRows.find(
           (row) =>
             Boolean(row.isAuctionItem) &&
             normalizeSticker(row.stickerNumber) === auctionStickerNumber
         );
-    const nonAuctionRows = flashSaleContext ? getNonAuctionRows(shipmentRows) : [];
-    const hasScannedNonAuctionRow = flashSaleContext
+    const nonAuctionRows = isSpecialNonAuctionContext ? getNonAuctionRows(shipmentRows) : [];
+    const hasScannedNonAuctionRow = isSpecialNonAuctionContext
       ? nonAuctionRows.some((row) => Number(row.scannedQty || 0) > 0)
       : false;
-    const flashSaleReferenceRow = flashSaleContext
+    const nonAuctionReferenceRow = isSpecialNonAuctionContext
       ? nonAuctionRows.find((row) => Number(row.scannedQty || 0) > 0) || nonAuctionRows[0] || null
       : null;
 
-    if (!flashSaleContext && !auctionRow) {
+    if (!isSpecialNonAuctionContext && !auctionRow) {
       return res.status(400).json({
         error: `Auction sticker #${auctionStickerNumber} is not part of this shipment.`,
       });
     }
 
-    if (!flashSaleContext && Number(auctionRow.scannedQty) <= 0) {
+    if (!isSpecialNonAuctionContext && Number(auctionRow.scannedQty) <= 0) {
       return res.status(400).json({
         error: `Scan auction sticker #${auctionStickerNumber} first before linking products.`,
       });
     }
 
-    if (flashSaleContext && !nonAuctionRows.length) {
+    if (isSpecialNonAuctionContext && !nonAuctionRows.length) {
       return res.status(400).json({
-        error: 'This shipment has no non-auction items for WHATNOT-FLASH-SALE.',
+        error: `This shipment has no non-auction items for ${specialNonAuctionContext}.`,
       });
     }
-    if (flashSaleContext && !hasScannedNonAuctionRow) {
+    if (isSpecialNonAuctionContext && !hasScannedNonAuctionRow) {
       return res.status(400).json({
-        error: `Scan ${FLASH_SALE_STICKER} in Auction Number box first before linking products.`,
+        error: `Scan ${specialNonAuctionContext} in Auction Number box first before linking products.`,
       });
     }
 
@@ -1411,11 +1470,13 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
         shipmentId: resolved.shipmentId,
         tracking,
         scannedValue: barcode,
-        auctionStickerNumber,
+        auctionStickerNumber: contextForLink,
         scanType: 'item',
         result: 'unexpected',
         message: 'No product found for scanned UPC/SKU.',
-        soldPrice: flashSaleContext ? flashSaleReferenceRow?.soldPrice || null : auctionRow.soldPrice || null,
+        soldPrice: isSpecialNonAuctionContext
+          ? nonAuctionReferenceRow?.soldPrice || null
+          : auctionRow.soldPrice || null,
         userId: req.user ? String(req.user.id) : null,
       });
       return res.status(404).json({ error: 'No product found for scanned UPC/SKU' });
@@ -1457,11 +1518,13 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
         shipmentId: resolved.shipmentId,
         tracking,
         scannedValue: barcode,
-        auctionStickerNumber,
+        auctionStickerNumber: contextForLink,
         scanType: 'item',
         result: 'unexpected',
         message: 'Multiple products matched UPC/SKU. User selection required.',
-        soldPrice: flashSaleContext ? flashSaleReferenceRow?.soldPrice || null : auctionRow.soldPrice || null,
+        soldPrice: isSpecialNonAuctionContext
+          ? nonAuctionReferenceRow?.soldPrice || null
+          : auctionRow.soldPrice || null,
         userId: req.user ? String(req.user.id) : null,
       });
       return res.status(409).json({
@@ -1482,13 +1545,15 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
       shipmentId: resolved.shipmentId,
       tracking,
       scannedValue: barcode,
-      auctionStickerNumber,
+      auctionStickerNumber: contextForLink,
       productSku: product.sku,
-      soldPrice: flashSaleContext ? flashSaleReferenceRow?.soldPrice || null : auctionRow.soldPrice || null,
+      soldPrice: isSpecialNonAuctionContext
+        ? nonAuctionReferenceRow?.soldPrice || null
+        : auctionRow.soldPrice || null,
       scanType: 'item',
       result: 'matched',
-      message: flashSaleContext
-        ? `Linked product ${product.sku} to ${FLASH_SALE_STICKER}.`
+      message: isSpecialNonAuctionContext
+        ? `Linked product ${product.sku} to ${contextForLink}.`
         : `Linked product ${product.sku} to auction #${auctionStickerNumber}.`,
       userId: req.user ? String(req.user.id) : null,
     });
@@ -1509,7 +1574,8 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
     const summary = summarizeShipment(
       refreshedRows,
       linkedSummary.countsBySticker,
-      linkedSummary.productsBySticker
+      linkedSummary.productsBySticker,
+      { lastNonAuctionContext: linkedSummary.lastNonAuctionContext }
     );
     const shipmentStatus = summary.completed ? 'completed' : summary.scannedItems > 0 ? 'in_progress' : 'ready';
 
@@ -1517,7 +1583,7 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
       success: true,
       shipmentId: resolved.shipmentId,
       tracking,
-      auctionStickerNumber,
+      auctionStickerNumber: contextForLink,
       product: {
         sku: product.sku,
         upc: product.upc,
@@ -1527,9 +1593,11 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
         image: product.image || null,
         tester: Boolean(product?.ProductDetail?.tester),
       },
-      soldPrice: flashSaleContext ? flashSaleReferenceRow?.soldPrice || null : auctionRow.soldPrice || null,
-      message: flashSaleContext
-        ? `Product linked to ${FLASH_SALE_STICKER}. Inventory will update when shipment is closed.`
+      soldPrice: isSpecialNonAuctionContext
+        ? nonAuctionReferenceRow?.soldPrice || null
+        : auctionRow.soldPrice || null,
+      message: isSpecialNonAuctionContext
+        ? `Product linked to ${contextForLink}. Inventory will update when shipment is closed.`
         : `Product linked to auction #${auctionStickerNumber}. Inventory will update when shipment is closed.`,
       shipmentStatus,
       ...summary,
@@ -1606,7 +1674,8 @@ router.post('/close-shipment', auth, checkPermission('whatnot', 'view'), async (
     const summary = summarizeShipment(
       resolved.shipmentRows,
       linkedSummary.countsBySticker,
-      linkedSummary.productsBySticker
+      linkedSummary.productsBySticker,
+      { lastNonAuctionContext: linkedSummary.lastNonAuctionContext }
     );
     const missingAuctionProductLinks = summary.checklist
       .filter((item) => Number(item.scannedQty || 0) > 0 && Number(item.linkedProductScans || 0) < 1)
@@ -1904,7 +1973,8 @@ router.post('/delete-link', auth, checkPermission('whatnot', 'view'), async (req
     const summary = summarizeShipment(
       refreshedRows,
       linkedSummary.countsBySticker,
-      linkedSummary.productsBySticker
+      linkedSummary.productsBySticker,
+      { lastNonAuctionContext: linkedSummary.lastNonAuctionContext }
     );
 
     await transaction.commit();
@@ -1994,9 +2064,12 @@ router.post('/reset-unlinked-auction-scans', auth, checkPermission('whatnot', 'v
       const linkedCount = Number(linkedSummary.countsBySticker[sticker] || 0);
       return scannedQty > 0 && linkedCount < 1;
     });
-    const flashLinkedCount = Number(linkedSummary.countsBySticker[FLASH_SALE_STICKER] || 0);
+    const specialLinkedCount = SPECIAL_NON_AUCTION_STICKERS.reduce(
+      (sum, context) => sum + Number(linkedSummary.countsBySticker[context] || 0),
+      0
+    );
     const nonAuctionRowsToReset =
-      flashLinkedCount < 1
+      specialLinkedCount < 1
         ? resolved.shipmentRows.filter(
             (row) => !row.isAuctionItem && Number(row.scannedQty || 0) > 0
           )
@@ -2024,7 +2097,7 @@ router.post('/reset-unlinked-auction-scans', auth, checkPermission('whatnot', 'v
       rowsToReset.map((row) => normalizeSticker(row.stickerNumber)).filter(Boolean)
     );
     if (nonAuctionRowsToReset.length > 0) {
-      resetStickerSet.add(FLASH_SALE_STICKER);
+      resetStickerSet.add(NON_AUCTION_ROW_STICKER);
     }
 
     await transaction.commit();
