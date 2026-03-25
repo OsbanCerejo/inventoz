@@ -37,6 +37,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const TOKEN_KEY = "token";
 const USER_KEY = "user";
+const LAST_ACTIVITY_KEY = "lastActivityAt";
 const IDLE_TIMEOUT_MINUTES = Number(import.meta.env.VITE_IDLE_TIMEOUT_MINUTES || 30);
 const IDLE_TIMEOUT_MS = Math.max(IDLE_TIMEOUT_MINUTES, 1) * 60 * 1000;
 
@@ -50,9 +51,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
   const idleTimerRef = useRef<number | null>(null);
 
+  const clearIdleTimer = () => {
+    if (idleTimerRef.current) {
+      window.clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
+  };
+
+  const scheduleIdleLogout = (lastActivityAt: number) => {
+    clearIdleTimer();
+    const elapsed = Date.now() - lastActivityAt;
+    const remaining = Math.max(IDLE_TIMEOUT_MS - elapsed, 0);
+    idleTimerRef.current = window.setTimeout(() => {
+      clearSession();
+      window.location.assign("/login");
+    }, remaining);
+  };
+
+  const getLastActivityAt = () => {
+    const raw = Number(localStorage.getItem(LAST_ACTIVITY_KEY) || 0);
+    return Number.isFinite(raw) && raw > 0 ? raw : Date.now();
+  };
+
+  const touchLastActivity = () => {
+    const now = Date.now();
+    localStorage.setItem(LAST_ACTIVITY_KEY, String(now));
+    scheduleIdleLogout(now);
+  };
+
   const applySession = (newToken: string, newUser: User) => {
     localStorage.setItem(TOKEN_KEY, newToken);
     localStorage.setItem(USER_KEY, JSON.stringify(newUser));
+    localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
     setToken(newToken);
     setUser(newUser);
     setIsAuthenticated(true);
@@ -62,10 +92,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const clearSession = () => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(LAST_ACTIVITY_KEY);
     setToken(null);
     setUser(null);
     setPermissions(null);
     setIsAuthenticated(false);
+    clearIdleTimer();
     delete axios.defaults.headers.common["Authorization"];
   };
 
@@ -195,25 +227,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (!isAuthenticated) return;
 
     const events: Array<keyof WindowEventMap> = ["mousemove", "keydown", "click", "scroll", "touchstart"];
-    const resetIdleTimer = () => {
-      if (idleTimerRef.current) window.clearTimeout(idleTimerRef.current);
-      idleTimerRef.current = window.setTimeout(() => {
-        clearSession();
-        window.location.assign("/login");
-      }, IDLE_TIMEOUT_MS);
-    };
+    const resetIdleTimer = () => touchLastActivity();
 
     events.forEach((eventName) => window.addEventListener(eventName, resetIdleTimer));
-    resetIdleTimer();
+    scheduleIdleLogout(getLastActivityAt());
 
     return () => {
       events.forEach((eventName) => window.removeEventListener(eventName, resetIdleTimer));
-      if (idleTimerRef.current) window.clearTimeout(idleTimerRef.current);
+      clearIdleTimer();
     };
   }, [isAuthenticated]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
+      if (event.key === LAST_ACTIVITY_KEY && isAuthenticated) {
+        scheduleIdleLogout(getLastActivityAt());
+        return;
+      }
       if (event.key === TOKEN_KEY || event.key === USER_KEY) {
         const hasToken = !!localStorage.getItem(TOKEN_KEY);
         const hasUser = !!localStorage.getItem(USER_KEY);
@@ -228,7 +258,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [isAuthenticated]);
 
   const login = async (newToken: string, newUser: User) => {
     setIsLoading(true);
