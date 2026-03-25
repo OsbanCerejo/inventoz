@@ -527,6 +527,7 @@ const WhatnotFulfillment = () => {
         // Flash-sale behaves like a sticky mode: stay in product scan until user changes context.
         setAutoReturnToAuction(!Boolean(getSpecialNonAuctionContext(matchedContext)));
       }
+      let shouldFocusItemScan = false;
       if (payload.scanResult === "matched") {
         if (payload.matchedAuctionSticker) {
           const matchedContext = String(payload.matchedAuctionSticker);
@@ -541,15 +542,19 @@ const WhatnotFulfillment = () => {
           setTimeout(() => productInputRef.current?.focus(), 80);
         } else {
           setSuccess(payload.completed ? "Shipment complete and verified." : "Order scan verified.");
+          shouldFocusItemScan = true;
           setTimeout(() => itemScanRef.current?.focus(), 80);
         }
       } else {
         setInterventionAlert(payload.message || "Scan requires intervention.");
         playInterventionSound();
+        shouldFocusItemScan = true;
       }
       setItemScanInput("");
       await fetchSummary(selectedShowId);
-      itemScanRef.current?.focus();
+      if (shouldFocusItemScan) {
+        itemScanRef.current?.focus();
+      }
     } catch (scanError: any) {
       const message = scanError?.response?.data?.error || "Failed to scan order context";
       setError(message);
