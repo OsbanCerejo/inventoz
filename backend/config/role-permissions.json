@@ -11,7 +11,8 @@
     "users": ["view", "create", "edit", "delete"],
     "sales": ["view", "create", "edit", "delete"],
     "barcodeScan": ["view", "create", "edit", "delete"],
-    "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "users", "addProduct", "barcodeScan", "sales" ]
+    "invoiceTracker": ["view", "create", "edit", "delete"],
+    "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "users", "addProduct", "barcodeScan", "sales", "invoiceTracker" ]
   },
   "listing": {
     "addProduct": ["view", "create", "edit"],

@@ -119,6 +119,9 @@ app.use("/product-vendor-prices", productVendorPricesRouter);
 const ticketsRouter = require("./routes/Tickets");
 app.use("/tickets", ticketsRouter);
 
+const invoiceTrackerRouter = require("./routes/InvoiceTracker");
+app.use("/invoice-tracker", invoiceTrackerRouter);
+
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -127,7 +130,16 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    buildId: process.env.APP_BUILD_ID || process.env.SOURCE_VERSION || process.env.npm_package_version || "development",
+  });
+});
+
+app.get('/meta/version', (req, res) => {
+  res.json({
+    buildId: process.env.APP_BUILD_ID || process.env.SOURCE_VERSION || process.env.npm_package_version || "development",
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString(),
   });
 });
 

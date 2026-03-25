@@ -1,4 +1,6 @@
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import Home from "./pages/Home";
 import Products from "./pages/Products";
 import AddProduct from "./pages/AddProduct";
@@ -23,13 +25,103 @@ import BarcodeScan from "./pages/BarcodeScan";
 import PackingAnalytics from "./pages/PackingAnalytics";
 import LabelGenerator from "./pages/LabelGenerator";
 import Tickets from "./pages/Tickets";
+import InvoiceTracker from "./pages/InvoiceTracker";
 import Login from "./pages/Login";
 import LowStock from "./pages/LowStock";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleBasedHome from "./components/RoleBasedHome";
 import { useAuth } from "./context/AuthContext";
-import { CircularProgress, Box } from "@mui/material";
+import { CircularProgress, Box, Alert, Button, Collapse, Stack } from "@mui/material";
+import { getServerUrl } from "./config/api";
+
+const FRONTEND_BUILD_ID = import.meta.env.VITE_APP_BUILD_ID || "development";
+const UPDATE_DISMISS_KEY = "dismissed_update_build_id";
+
+function BuildUpdateBanner() {
+  const { isAuthenticated } = useAuth();
+  const [availableBuildId, setAvailableBuildId] = useState<string | null>(null);
+
+  const dismissedBuildId = useMemo(
+    () => window.sessionStorage.getItem(UPDATE_DISMISS_KEY),
+    [availableBuildId]
+  );
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setAvailableBuildId(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const checkForUpdates = async () => {
+      try {
+        const response = await axios.get(`${getServerUrl()}/meta/version`, {
+          timeout: 5000,
+        });
+        const remoteBuildId = String(response.data?.buildId || "").trim();
+        if (!remoteBuildId || cancelled) return;
+
+        if (remoteBuildId !== FRONTEND_BUILD_ID && remoteBuildId !== dismissedBuildId) {
+          setAvailableBuildId(remoteBuildId);
+        } else if (remoteBuildId === FRONTEND_BUILD_ID) {
+          setAvailableBuildId(null);
+        }
+      } catch (error) {
+        console.error("Failed to check for build updates:", error);
+      }
+    };
+
+    checkForUpdates();
+    const intervalId = window.setInterval(checkForUpdates, 60000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [isAuthenticated, dismissedBuildId]);
+
+  if (!isAuthenticated || !availableBuildId) {
+    return null;
+  }
+
+  return (
+    <Collapse in={!!availableBuildId}>
+      <Box sx={{ px: 2, pt: 2 }}>
+        <Alert
+          severity="info"
+          sx={{ alignItems: "center" }}
+          action={
+            <Stack direction="row" spacing={1}>
+              <Button
+                color="inherit"
+                size="small"
+                variant="outlined"
+                onClick={() => {
+                  window.sessionStorage.setItem(UPDATE_DISMISS_KEY, availableBuildId);
+                  setAvailableBuildId(null);
+                }}
+              >
+                Dismiss
+              </Button>
+              <Button
+                color="inherit"
+                size="small"
+                variant="contained"
+                onClick={() => window.location.reload()}
+              >
+                Refresh Now
+              </Button>
+            </Stack>
+          }
+        >
+          A new update has been installed. Finish your current task, save your work, then refresh to load the latest version.
+        </Alert>
+      </Box>
+    </Collapse>
+  );
+}
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -52,6 +144,7 @@ function AppContent() {
     <div className="app-container">
       <Router>
         {isAuthenticated && <NavBar />}
+        <BuildUpdateBanner />
         <div className="main-content">
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -230,6 +323,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="tickets" action="view" menuItem="tickets">
                   <Tickets />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/invoice-tracker"
+              element={
+                <ProtectedRoute resource="invoiceTracker" action="view" menuItem="invoiceTracker">
+                  <InvoiceTracker />
                 </ProtectedRoute>
               }
             />

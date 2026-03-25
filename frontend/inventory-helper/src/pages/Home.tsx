@@ -15,6 +15,7 @@ import {
   WarningAmber as LowStockIcon,
   PointOfSale as SalesIcon,
   ConfirmationNumber as TicketsIcon,
+  ReceiptLong as InvoiceTrackerIcon,
 } from '@mui/icons-material';
 import { useAuth } from "../context/AuthContext";
 
@@ -126,6 +127,13 @@ function Home() {
       icon: <TicketsIcon sx={{ fontSize: 40, color: '#0d47a1' }} />,
       path: "/tickets",
       color: "#e8f0ff"
+    },
+    invoiceTracker: {
+      title: "Invoice Tracker",
+      description: "Track vendor invoices and received shipment lines",
+      icon: <InvoiceTrackerIcon sx={{ fontSize: 40, color: '#5d4037' }} />,
+      path: "/invoice-tracker",
+      color: "#efebe9"
     }
   };
 
