@@ -82,6 +82,7 @@ function NavBar() {
   ];
 
   const toolsItems = [
+    { key: 'tickets-tool', permissionKey: 'tickets', label: 'Tickets', path: '/tickets' },
     { key: 'whatnot-tool', permissionKey: 'whatnot', label: 'Whatnot', path: '/whatnot' },
     { key: 'whatnot-fulfillment-tool', permissionKey: 'whatnot', label: 'Whatnot Fulfillment', path: '/whatnot-fulfillment' },
     { key: 'label-generator-tool', permissionKey: 'whatnot', label: 'Label Generator', path: '/label-generator' },

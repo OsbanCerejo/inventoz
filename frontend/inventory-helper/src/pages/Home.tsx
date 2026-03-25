@@ -13,7 +13,8 @@ import {
   Insights as WhatnotAnalyticsIcon,
   QueryStats as PackingAnalyticsIcon,
   WarningAmber as LowStockIcon,
-  PointOfSale as SalesIcon
+  PointOfSale as SalesIcon,
+  ConfirmationNumber as TicketsIcon,
 } from '@mui/icons-material';
 import { useAuth } from "../context/AuthContext";
 
@@ -118,6 +119,13 @@ function Home() {
       icon: <LowStockIcon sx={{ fontSize: 40, color: '#ef6c00' }} />,
       path: "/low-stock",
       color: "#fff3e0"
+    },
+    tickets: {
+      title: "Tickets",
+      description: "Customer care reshipment ticket workflow",
+      icon: <TicketsIcon sx={{ fontSize: 40, color: '#0d47a1' }} />,
+      path: "/tickets",
+      color: "#e8f0ff"
     }
   };
 
