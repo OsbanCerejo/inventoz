@@ -2,17 +2,33 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.addColumn("reshipmentTickets", "trackingNumber", {
-      type: Sequelize.STRING,
-      allowNull: true,
-    });
-    await queryInterface.addIndex("reshipmentTickets", ["trackingNumber"], {
-      name: "idx_reship_ticket_tracking_number",
-    });
+    const table = await queryInterface.describeTable("reshipmentTickets");
+    const indexes = await queryInterface.showIndex("reshipmentTickets");
+    const hasTrackingIndex = indexes.some((index) => index.name === "idx_reship_ticket_tracking_number");
+
+    if (!table.trackingNumber) {
+      await queryInterface.addColumn("reshipmentTickets", "trackingNumber", {
+        type: Sequelize.STRING,
+        allowNull: true,
+      });
+    }
+    if (!hasTrackingIndex) {
+      await queryInterface.addIndex("reshipmentTickets", ["trackingNumber"], {
+        name: "idx_reship_ticket_tracking_number",
+      });
+    }
   },
 
   async down(queryInterface) {
-    await queryInterface.removeIndex("reshipmentTickets", "idx_reship_ticket_tracking_number");
-    await queryInterface.removeColumn("reshipmentTickets", "trackingNumber");
+    const table = await queryInterface.describeTable("reshipmentTickets");
+    const indexes = await queryInterface.showIndex("reshipmentTickets");
+    const hasTrackingIndex = indexes.some((index) => index.name === "idx_reship_ticket_tracking_number");
+
+    if (hasTrackingIndex) {
+      await queryInterface.removeIndex("reshipmentTickets", "idx_reship_ticket_tracking_number");
+    }
+    if (table.trackingNumber) {
+      await queryInterface.removeColumn("reshipmentTickets", "trackingNumber");
+    }
   },
 };
