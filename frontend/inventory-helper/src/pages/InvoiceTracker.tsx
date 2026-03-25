@@ -122,7 +122,7 @@ const emptyForm = {
   miscellaneousAmount: 0,
   shippingAmount: 0,
   notes: "",
-  items: [{ sku: "", itemName: "", unitPrice: 0, quantity: 1 }] as InvoiceItem[],
+  items: [] as InvoiceItem[],
 };
 
 function InvoiceTracker() {
@@ -340,7 +340,14 @@ function InvoiceTracker() {
       toast.error("Vendor Name, Invoice Number, and Order Date are required");
       return;
     }
-    if (form.items.some((item) => !item.sku.trim() || !item.itemName.trim())) {
+    const enteredItems = form.items.filter(
+      (item) =>
+        item.sku.trim() ||
+        item.itemName.trim() ||
+        Number(item.unitPrice || 0) > 0 ||
+        Number(item.quantity || 0) > 0
+    );
+    if (enteredItems.some((item) => !item.sku.trim() || !item.itemName.trim())) {
       toast.error("Every invoice line needs a valid SKU and resolved item name");
       return;
     }
@@ -362,7 +369,7 @@ function InvoiceTracker() {
         miscellaneousAmount: Number(form.miscellaneousAmount || 0),
         shippingAmount: Number(form.shippingAmount || 0),
         notes: form.notes.trim(),
-        items: form.items.map((item) => ({
+        items: enteredItems.map((item) => ({
           sku: item.sku.trim(),
           unitPrice: Number(item.unitPrice || 0),
           quantity: Number(item.quantity || 0),

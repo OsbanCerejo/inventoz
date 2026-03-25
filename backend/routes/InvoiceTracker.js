@@ -413,11 +413,6 @@ router.post("/", auth, checkPermission("invoiceTracker", "create"), async (req, 
       await transaction.rollback();
       return res.status(400).json({ error: validationError });
     }
-    if (items.length === 0) {
-      await transaction.rollback();
-      return res.status(400).json({ error: "At least one invoice item is required" });
-    }
-
     const existingDuplicate = await findDuplicateInvoice({
       vendorName,
       invoiceNumber,
@@ -534,11 +529,6 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
       await transaction.rollback();
       return res.status(400).json({ error: validationError });
     }
-    if (items.length === 0) {
-      await transaction.rollback();
-      return res.status(400).json({ error: "At least one invoice item is required" });
-    }
-
     const existingDuplicate = await findDuplicateInvoice({
       vendorName,
       invoiceNumber,
