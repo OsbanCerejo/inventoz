@@ -180,6 +180,42 @@ const parseMoney = (rawValue) => {
   return parsed;
 };
 
+const normalizeCsvHeader = (value) =>
+  normalizeText(value)
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const getCsvValue = (row, ...candidateHeaders) => {
+  if (!row || typeof row !== 'object') return '';
+
+  for (const header of candidateHeaders) {
+    if (
+      Object.prototype.hasOwnProperty.call(row, header) &&
+      row[header] !== undefined &&
+      row[header] !== null &&
+      normalizeText(row[header]) !== ''
+    ) {
+      return row[header];
+    }
+  }
+
+  const normalizedCandidates = candidateHeaders.map(normalizeCsvHeader);
+  for (const [key, value] of Object.entries(row)) {
+    if (
+      normalizedCandidates.includes(normalizeCsvHeader(key)) &&
+      value !== undefined &&
+      value !== null &&
+      normalizeText(value) !== ''
+    ) {
+      return value;
+    }
+  }
+
+  return '';
+};
+
 const isRonnieAuctionItem = (productName) => {
   const name = normalizeText(productName).toLowerCase();
   return name.includes('$1 starts w/ronnie');
@@ -848,20 +884,20 @@ router.post(
       let parsedRows = 0;
 
       for (const row of records) {
-        const shipmentId = normalizeText(row['shipment id']);
+        const shipmentId = normalizeText(getCsvValue(row, 'shipment id', 'shipment_id'));
         if (!shipmentId) continue;
 
-        const tracking = normalizeTracking(row.tracking);
-        const productName = normalizeText(row['product name']);
+        const tracking = normalizeTracking(getCsvValue(row, 'tracking', 'tracking code', 'tracking_code'));
+        const productName = normalizeText(getCsvValue(row, 'product name', 'product_name'));
         const isAuctionItem = isRonnieAuctionItem(productName);
         const stickerNumber = isAuctionItem ? extractStickerNumber(productName) : null;
-        const expectedQty = parseQuantity(row['product quantity']);
-        const soldPrice = parseMoney(row['sold price']);
-        const costPerItem = parseMoney(row['cost per item']);
-        const totalCost = parseMoney(row['total cost']);
-        const buyer = normalizeText(row.buyer);
-        const orderId = normalizeText(row['order id']);
-        const orderNumericId = normalizeText(row['order numeric id']);
+        const expectedQty = parseQuantity(getCsvValue(row, 'product quantity', 'product_quantity'));
+        const soldPrice = parseMoney(getCsvValue(row, 'sold price', 'sold_price', 'original item price', 'original_item_price'));
+        const costPerItem = parseMoney(getCsvValue(row, 'cost per item', 'cost_per_item'));
+        const totalCost = parseMoney(getCsvValue(row, 'total cost', 'total_cost'));
+        const buyer = normalizeText(getCsvValue(row, 'buyer', 'buyer username', 'buyer_username'));
+        const orderId = normalizeText(getCsvValue(row, 'order id', 'order_id'));
+        const orderNumericId = normalizeText(getCsvValue(row, 'order numeric id', 'order_numeric_id'));
 
         if (!grouped.has(shipmentId)) {
           grouped.set(shipmentId, {
