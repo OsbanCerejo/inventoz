@@ -3,7 +3,16 @@ const Sequelize = require("sequelize");
 const router = express.Router();
 const { auth } = require("../middleware/auth");
 const { checkPermission } = require("../middleware/permissions");
-const { sequelize, WhatnotLog, Products, ProductDetails, WhatnotShow } = require("../models");
+const {
+  sequelize,
+  WhatnotLog,
+  Products,
+  ProductDetails,
+  WhatnotShow,
+  WhatnotShipmentItem,
+  WhatnotShipmentScan,
+  WhatnotShipmentImport,
+} = require("../models");
 
 const toTableName = (model) => {
   const table = model.getTableName();
@@ -16,6 +25,9 @@ const TABLES = {
   products: `\`${toTableName(Products)}\``,
   details: `\`${toTableName(ProductDetails)}\``,
   shows: `\`${toTableName(WhatnotShow)}\``,
+  shipmentItems: `\`${toTableName(WhatnotShipmentItem)}\``,
+  shipmentScans: `\`${toTableName(WhatnotShipmentScan)}\``,
+  shipmentImports: `\`${toTableName(WhatnotShipmentImport)}\``,
 };
 
 const skuJoinCondition = (leftExpr, rightExpr) =>
@@ -26,6 +38,29 @@ const isSaleCondition = `
   AND wl.sku IS NOT NULL
   AND wl.previousQuantity IS NOT NULL
   AND wl.newQuantity = wl.previousQuantity - 1
+`;
+
+const fulfilledSaleCondition = (alias = "wss") => `
+  ${alias}.result = 'matched'
+  AND ${alias}.productSku IS NOT NULL
+  AND ${alias}.productSku <> ''
+  AND ${alias}.previousQuantity IS NOT NULL
+  AND ${alias}.newQuantity = ${alias}.previousQuantity - 1
+`;
+
+const SHIPMENT_CLOSE_SUMMARY_SUBQUERY = `
+  (
+    SELECT
+      whatnotShowId,
+      importId,
+      shipmentId,
+      MAX(closedAt) AS closedAt,
+      MAX(closedBy) AS closedBy,
+      MAX(CASE WHEN status = 'pending_review' THEN 1 ELSE 0 END) AS hasPendingReview,
+      MAX(createdAt) AS importedAt
+    FROM ${TABLES.shipmentItems}
+    GROUP BY whatnotShowId, importId, shipmentId
+  )
 `;
 
 const isDateOnly = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
@@ -50,6 +85,379 @@ const parseDateRange = (query) => {
 
   return { from, to };
 };
+
+router.get("/fulfillment-overview", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+
+  try {
+    const [[salesRows], [pipelineRows]] = await Promise.all([
+      sequelize.query(
+        `
+        SELECT
+          COUNT(*) AS unitsSold,
+          COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue,
+          COUNT(DISTINCT CONCAT(wss.whatnotShowId, ':', wss.importId, ':', wss.shipmentId)) AS completedShipments,
+          COUNT(DISTINCT wss.productSku) AS uniqueSkusSold,
+          COUNT(DISTINCT wss.whatnotShowId) AS uniqueShows
+        FROM ${TABLES.shipmentScans} wss
+        JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+          ON sc.whatnotShowId = wss.whatnotShowId
+         AND sc.importId = wss.importId
+         AND sc.shipmentId = wss.shipmentId
+        WHERE ${fulfilledSaleCondition("wss")}
+          AND sc.closedAt >= :from
+          AND sc.closedAt < :to
+          AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+        `,
+        {
+          replacements: {
+            from: range.from,
+            to: range.to,
+            showId,
+          },
+        }
+      ),
+      sequelize.query(
+        `
+        SELECT
+          COUNT(DISTINCT CASE WHEN itemStatus = 'ready' OR itemStatus = 'in_progress' THEN shipmentKey END) AS pendingShipments,
+          COALESCE(SUM(CASE WHEN itemStatus = 'ready' OR itemStatus = 'in_progress' THEN rowRevenue ELSE 0 END), 0) AS pendingRevenue,
+          COUNT(DISTINCT CASE WHEN itemStatus = 'pending_review' THEN shipmentKey END) AS reviewShipments,
+          COALESCE(SUM(CASE WHEN itemStatus = 'pending_review' THEN rowRevenue ELSE 0 END), 0) AS reviewRevenue
+        FROM (
+          SELECT
+            CONCAT(wsi.whatnotShowId, ':', wsi.importId, ':', wsi.shipmentId) AS shipmentKey,
+            wsi.status AS itemStatus,
+            COALESCE(
+              wsi.totalCost,
+              CASE
+                WHEN wsi.soldPrice IS NOT NULL THEN COALESCE(wsi.soldPrice, 0) * COALESCE(wsi.expectedQty, 0)
+                ELSE 0
+              END
+            ) AS rowRevenue
+          FROM ${TABLES.shipmentItems} wsi
+          WHERE wsi.closedAt IS NULL
+            AND (:showId IS NULL OR wsi.whatnotShowId = :showId)
+        ) pendingRows
+        `,
+        {
+          replacements: {
+            showId,
+          },
+        }
+      ),
+    ]);
+
+    const salesRow = Array.isArray(salesRows) ? salesRows[0] || {} : salesRows || {};
+    const pipelineRow = Array.isArray(pipelineRows) ? pipelineRows[0] || {} : pipelineRows || {};
+
+    const unitsSold = Number(salesRow?.unitsSold || 0);
+    const revenue = Number(salesRow?.revenue || 0);
+
+    return res.json({
+      unitsSold,
+      revenue: Number(revenue.toFixed(2)),
+      avgSoldPrice: unitsSold > 0 ? Number((revenue / unitsSold).toFixed(2)) : 0,
+      completedShipments: Number(salesRow?.completedShipments || 0),
+      uniqueSkusSold: Number(salesRow?.uniqueSkusSold || 0),
+      uniqueShows: Number(salesRow?.uniqueShows || 0),
+      pendingShipments: Number(pipelineRow?.pendingShipments || 0),
+      pendingRevenue: Number(Number(pipelineRow?.pendingRevenue || 0).toFixed(2)),
+      reviewShipments: Number(pipelineRow?.reviewShipments || 0),
+      reviewRevenue: Number(Number(pipelineRow?.reviewRevenue || 0).toFixed(2)),
+    });
+  } catch (error) {
+    console.error("Error fetching fulfillment overview analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment overview analytics" });
+  }
+});
+
+router.get("/fulfillment-trend", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const { granularity = "day" } = req.query;
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+
+  const bucketExpr =
+    granularity === "month"
+      ? "DATE_FORMAT(sc.closedAt, '%Y-%m-01')"
+      : granularity === "week"
+      ? "DATE_FORMAT(DATE_SUB(sc.closedAt, INTERVAL WEEKDAY(sc.closedAt) DAY), '%Y-%m-%d')"
+      : "DATE_FORMAT(sc.closedAt, '%Y-%m-%d')";
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        ${bucketExpr} AS bucket,
+        COUNT(*) AS unitsSold,
+        COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue,
+        COUNT(DISTINCT CONCAT(wss.whatnotShowId, ':', wss.importId, ':', wss.shipmentId)) AS completedShipments
+      FROM ${TABLES.shipmentScans} wss
+      JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+        ON sc.whatnotShowId = wss.whatnotShowId
+       AND sc.importId = wss.importId
+       AND sc.shipmentId = wss.shipmentId
+      WHERE ${fulfilledSaleCondition("wss")}
+        AND sc.closedAt >= :from
+        AND sc.closedAt < :to
+        AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+      GROUP BY bucket
+      ORDER BY bucket ASC
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+        },
+      }
+    );
+
+    return res.json(
+      rows.map((row) => ({
+        ...row,
+        unitsSold: Number(row.unitsSold || 0),
+        revenue: Number(Number(row.revenue || 0).toFixed(2)),
+        completedShipments: Number(row.completedShipments || 0),
+      }))
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment trend analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment trend analytics" });
+  }
+});
+
+router.get("/fulfillment-shows", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        ws.id AS showId,
+        ws.name AS showName,
+        COUNT(*) AS unitsSold,
+        COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue,
+        COUNT(DISTINCT CONCAT(wss.whatnotShowId, ':', wss.importId, ':', wss.shipmentId)) AS completedShipments,
+        COUNT(DISTINCT wss.productSku) AS uniqueSkusSold
+      FROM ${TABLES.shipmentScans} wss
+      JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+        ON sc.whatnotShowId = wss.whatnotShowId
+       AND sc.importId = wss.importId
+       AND sc.shipmentId = wss.shipmentId
+      JOIN ${TABLES.shows} ws ON ws.id = wss.whatnotShowId
+      WHERE ${fulfilledSaleCondition("wss")}
+        AND sc.closedAt >= :from
+        AND sc.closedAt < :to
+      GROUP BY ws.id, ws.name
+      ORDER BY revenue DESC, unitsSold DESC
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+        },
+      }
+    );
+
+    return res.json(
+      rows.map((row) => ({
+        ...row,
+        unitsSold: Number(row.unitsSold || 0),
+        revenue: Number(Number(row.revenue || 0).toFixed(2)),
+        completedShipments: Number(row.completedShipments || 0),
+        uniqueSkusSold: Number(row.uniqueSkusSold || 0),
+      }))
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment show analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment show analytics" });
+  }
+});
+
+router.get("/fulfillment-products-top", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        wss.productSku AS sku,
+        p.brand,
+        p.itemName,
+        p.strength,
+        p.sizeOz,
+        p.sizeMl,
+        p.\`condition\`,
+        pd.tester,
+        COUNT(*) AS unitsSold,
+        COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue,
+        AVG(wss.soldPrice) AS avgSoldPrice
+      FROM ${TABLES.shipmentScans} wss
+      LEFT JOIN ${TABLES.products} p ON ${skuJoinCondition("p.sku", "wss.productSku")}
+      LEFT JOIN ${TABLES.details} pd ON ${skuJoinCondition("pd.sku", "wss.productSku")}
+      JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+        ON sc.whatnotShowId = wss.whatnotShowId
+       AND sc.importId = wss.importId
+       AND sc.shipmentId = wss.shipmentId
+      WHERE ${fulfilledSaleCondition("wss")}
+        AND sc.closedAt >= :from
+        AND sc.closedAt < :to
+        AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+      GROUP BY wss.productSku, p.brand, p.itemName, p.strength, p.sizeOz, p.sizeMl, p.\`condition\`, pd.tester
+      ORDER BY revenue DESC, unitsSold DESC
+      LIMIT :limit
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          limit,
+        },
+      }
+    );
+
+    return res.json(
+      rows.map((row) => ({
+        ...row,
+        unitsSold: Number(row.unitsSold || 0),
+        revenue: Number(Number(row.revenue || 0).toFixed(2)),
+        avgSoldPrice: Number(Number(row.avgSoldPrice || 0).toFixed(2)),
+      }))
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment top products analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment top products analytics" });
+  }
+});
+
+router.get("/fulfillment-brand-mix", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 30);
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        COALESCE(NULLIF(TRIM(p.brand), ''), 'Unknown') AS brand,
+        COUNT(*) AS unitsSold,
+        COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue
+      FROM ${TABLES.shipmentScans} wss
+      LEFT JOIN ${TABLES.products} p ON ${skuJoinCondition("p.sku", "wss.productSku")}
+      JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+        ON sc.whatnotShowId = wss.whatnotShowId
+       AND sc.importId = wss.importId
+       AND sc.shipmentId = wss.shipmentId
+      WHERE ${fulfilledSaleCondition("wss")}
+        AND sc.closedAt >= :from
+        AND sc.closedAt < :to
+        AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+      GROUP BY COALESCE(NULLIF(TRIM(p.brand), ''), 'Unknown')
+      ORDER BY revenue DESC, unitsSold DESC
+      LIMIT :limit
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          limit,
+        },
+      }
+    );
+
+    const totalRevenue = rows.reduce((sum, row) => sum + Number(row.revenue || 0), 0);
+    return res.json({
+      totalRevenue: Number(totalRevenue.toFixed(2)),
+      rows: rows.map((row) => ({
+        ...row,
+        unitsSold: Number(row.unitsSold || 0),
+        revenue: Number(Number(row.revenue || 0).toFixed(2)),
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching fulfillment brand mix analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment brand mix analytics" });
+  }
+});
+
+router.get("/fulfillment-sales-mix", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        CASE
+          WHEN wss.auctionStickerNumber LIKE 'NON-AUCTION-CONTEXT:%' THEN COALESCE(contextScan.auctionStickerNumber, 'NON-AUCTION')
+          ELSE 'AUCTION'
+        END AS contextType,
+        COUNT(*) AS unitsSold,
+        COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue
+      FROM ${TABLES.shipmentScans} wss
+      LEFT JOIN ${TABLES.shipmentScans} contextScan
+        ON contextScan.id = CAST(SUBSTRING_INDEX(wss.auctionStickerNumber, ':', -1) AS UNSIGNED)
+      JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+        ON sc.whatnotShowId = wss.whatnotShowId
+       AND sc.importId = wss.importId
+       AND sc.shipmentId = wss.shipmentId
+      WHERE ${fulfilledSaleCondition("wss")}
+        AND sc.closedAt >= :from
+        AND sc.closedAt < :to
+        AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+      GROUP BY contextType
+      ORDER BY revenue DESC, unitsSold DESC
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+        },
+      }
+    );
+
+    return res.json(
+      rows.map((row) => ({
+        ...row,
+        unitsSold: Number(row.unitsSold || 0),
+        revenue: Number(Number(row.revenue || 0).toFixed(2)),
+      }))
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment sales mix analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment sales mix analytics" });
+  }
+});
 
 router.get("/overview", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);

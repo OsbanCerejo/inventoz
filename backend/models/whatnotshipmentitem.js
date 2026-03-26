@@ -56,6 +56,10 @@ module.exports = (sequelize) => {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
       },
+      placedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
       scannedQty: {
         type: DataTypes.INTEGER,
         allowNull: false,

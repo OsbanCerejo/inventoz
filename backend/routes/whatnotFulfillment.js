@@ -180,6 +180,14 @@ const parseMoney = (rawValue) => {
   return parsed;
 };
 
+const parseDateTime = (rawValue) => {
+  const normalized = normalizeText(rawValue);
+  if (!normalized) return null;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+};
+
 const normalizeCsvHeader = (value) =>
   normalizeText(value)
     .toLowerCase()
@@ -898,6 +906,7 @@ router.post(
         const buyer = normalizeText(getCsvValue(row, 'buyer', 'buyer username', 'buyer_username'));
         const orderId = normalizeText(getCsvValue(row, 'order id', 'order_id'));
         const orderNumericId = normalizeText(getCsvValue(row, 'order numeric id', 'order_numeric_id'));
+        const placedAt = parseDateTime(getCsvValue(row, 'placed at', 'placed_at'));
 
         if (!grouped.has(shipmentId)) {
           grouped.set(shipmentId, {
@@ -940,6 +949,7 @@ router.post(
             soldPrice: soldPrice,
             costPerItem: costPerItem,
             totalCost: totalCost,
+            placedAt: placedAt,
           });
         }
         bucket.rows.get(rowKey).expectedQty += expectedQty;
@@ -951,6 +961,9 @@ router.post(
         }
         if (bucket.rows.get(rowKey).totalCost === null && totalCost !== null) {
           bucket.rows.get(rowKey).totalCost = totalCost;
+        }
+        if (bucket.rows.get(rowKey).placedAt === null && placedAt !== null) {
+          bucket.rows.get(rowKey).placedAt = placedAt;
         }
         parsedRows += 1;
       }
@@ -1025,6 +1038,7 @@ router.post(
             soldPrice: aggregated.soldPrice,
             costPerItem: aggregated.costPerItem,
             totalCost: aggregated.totalCost,
+            placedAt: aggregated.placedAt,
             scannedQty: 0,
             status,
             mismatchReason: reasonText || null,
