@@ -163,6 +163,23 @@ const getDisplayUser = (user) => {
   return user.name || user.username || `User ${user.id}`;
 };
 
+const buildInvoiceItemDisplayName = (product) => {
+  if (!product) return "";
+
+  const parts = [];
+  const brand = sanitizeString(product.brand);
+  const itemName = sanitizeString(product.itemName);
+  const sizeOz = Number(product.sizeOz || 0);
+
+  if (brand) parts.push(brand);
+  if (itemName) parts.push(itemName);
+  if (Number.isFinite(sizeOz) && sizeOz > 0) {
+    parts.push(`${sizeOz} oz`);
+  }
+
+  return parts.join(" ").trim();
+};
+
 const getInboundGroupingKey = (sku, unitPrice) => `${sku}__${Number(unitPrice || 0).toFixed(2)}`;
 
 const serializeInboundRow = (row) => {
@@ -258,7 +275,7 @@ const resolveProductBySku = async (rawSku) => {
     where: {
       [Op.or]: [{ sku }, { alternativeSku: sku }],
     },
-    attributes: ["sku", "alternativeSku", "itemName", "brand"],
+    attributes: ["sku", "alternativeSku", "itemName", "brand", "sizeOz"],
   });
 };
 
@@ -301,7 +318,9 @@ const buildItems = async (items) => {
       error.status = 400;
       throw error;
     }
-    if ((product.itemName || "").length > MAX_ITEM_NAME_LENGTH) {
+    const displayItemName = buildInvoiceItemDisplayName(product);
+
+    if (displayItemName.length > MAX_ITEM_NAME_LENGTH) {
       const error = new Error(`Resolved item name is too long for SKU ${skuInput}`);
       error.status = 400;
       throw error;
@@ -309,7 +328,7 @@ const buildItems = async (items) => {
 
     builtItems.push({
       sku: product.sku,
-      itemName: product.itemName,
+      itemName: displayItemName,
       quantity,
       unitPrice,
     });
@@ -688,8 +707,9 @@ router.get("/lookup-product", auth, checkPermission("invoiceTracker", "view"), a
     return res.json({
       sku: product.sku,
       alternativeSku: product.alternativeSku,
-      itemName: product.itemName,
+      itemName: buildInvoiceItemDisplayName(product),
       brand: product.brand,
+      sizeOz: product.sizeOz,
     });
   } catch (error) {
     console.error("Error looking up invoice tracker SKU:", error);
