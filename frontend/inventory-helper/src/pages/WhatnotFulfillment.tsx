@@ -180,6 +180,7 @@ const WhatnotFulfillment = () => {
   const [activeShipment, setActiveShipment] = useState<ActiveShipment | null>(null);
   const [activeAuctionSticker, setActiveAuctionSticker] = useState<string>("");
   const [autoReturnToAuction, setAutoReturnToAuction] = useState(false);
+  const [productFocusPinned, setProductFocusPinned] = useState(false);
   const [productInput, setProductInput] = useState("");
   const [productCandidates, setProductCandidates] = useState<ProductLookupResult[]>([]);
   const [deletingLinkKey, setDeletingLinkKey] = useState<string>("");
@@ -195,6 +196,7 @@ const WhatnotFulfillment = () => {
   const trackingRef = useRef<HTMLInputElement>(null);
   const itemScanRef = useRef<HTMLInputElement>(null);
   const productInputRef = useRef<HTMLInputElement>(null);
+  const suppressNextProductFocusPinRef = useRef(false);
 
   const isAdmin = user?.role === "admin";
   const getSpecialNonAuctionContext = (value?: string | null) => {
@@ -378,6 +380,7 @@ const WhatnotFulfillment = () => {
     setProductCandidates([]);
     setActiveAuctionSticker("");
     setAutoReturnToAuction(false);
+    setProductFocusPinned(false);
     setInterventionAlert(null);
     setCompletedSearch("");
     setShipmentView(null);
@@ -451,6 +454,7 @@ const WhatnotFulfillment = () => {
       });
       setActiveAuctionSticker("");
       setAutoReturnToAuction(false);
+      setProductFocusPinned(false);
       setProductCandidates([]);
       setProductInput("");
       setSuccess(`Shipment ${response.data.shipmentId} loaded. Start scanning order contexts.`);
@@ -539,6 +543,7 @@ const WhatnotFulfillment = () => {
               ? `Shipment complete. ${matchedContextLabel} verified.`
               : `${matchedContextLabel} verified. Now scan UPC/SKU product(s) for this order.`
           );
+          suppressNextProductFocusPinRef.current = true;
           setTimeout(() => productInputRef.current?.focus(), 80);
         } else {
           setSuccess(payload.completed ? "Shipment complete and verified." : "Order scan verified.");
@@ -551,7 +556,6 @@ const WhatnotFulfillment = () => {
         shouldFocusItemScan = true;
       }
       setItemScanInput("");
-      await fetchSummary(selectedShowId);
       if (shouldFocusItemScan) {
         itemScanRef.current?.focus();
       }
@@ -591,6 +595,7 @@ const WhatnotFulfillment = () => {
       setActiveShipment(null);
       setActiveAuctionSticker("");
       setAutoReturnToAuction(false);
+      setProductFocusPinned(false);
       setProductInput("");
       setProductCandidates([]);
       setItemScanInput("");
@@ -643,6 +648,7 @@ const WhatnotFulfillment = () => {
     setActiveShipment(null);
     setActiveAuctionSticker("");
     setAutoReturnToAuction(false);
+    setProductFocusPinned(false);
     setProductCandidates([]);
     setProductInput("");
     setItemScanInput("");
@@ -706,7 +712,8 @@ const WhatnotFulfillment = () => {
       } else {
         setSuccess(response.data?.message || "Product linked to selected order.");
       }
-      if (Boolean(getSpecialNonAuctionContext(activeAuctionSticker))) {
+      if (Boolean(getSpecialNonAuctionContext(activeAuctionSticker)) || productFocusPinned) {
+        suppressNextProductFocusPinRef.current = true;
         setTimeout(() => productInputRef.current?.focus(), 80);
       } else if (autoReturnToAuction) {
         setTimeout(() => itemScanRef.current?.focus(), 80);
@@ -784,7 +791,6 @@ const WhatnotFulfillment = () => {
         };
       });
       setSuccess(payload.message || `Removed one linked scan for ${sku}.`);
-      await fetchSummary(selectedShowId);
     } catch (deleteError: any) {
       const message =
         deleteError?.response?.data?.error || "Failed to remove linked product from order context";
@@ -1074,6 +1080,9 @@ const WhatnotFulfillment = () => {
                     label="Scan Auction Number (#)"
                     value={itemScanInput}
                     onChange={(e) => setItemScanInput(e.target.value)}
+                    onFocus={() => {
+                      setProductFocusPinned(false);
+                    }}
                     required
                   />
                   <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
@@ -1161,8 +1170,15 @@ const WhatnotFulfillment = () => {
                     value={productInput}
                     onChange={(e) => setProductInput(e.target.value)}
                     onFocus={() => {
+                      if (suppressNextProductFocusPinRef.current) {
+                        suppressNextProductFocusPinRef.current = false;
+                        return;
+                      }
                       if (!productLoading) {
                         setAutoReturnToAuction(false);
+                      }
+                      if (activeShipment && activeAuctionSticker) {
+                        setProductFocusPinned(true);
                       }
                     }}
                     disabled={!activeAuctionSticker}
