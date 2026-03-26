@@ -3,10 +3,12 @@ import axios from "axios";
 import { toast } from "react-toastify";
 import {
   Add as AddIcon,
+  Close as CloseIcon,
   RestoreFromTrash as RestoreIcon,
   Delete as DeleteIcon,
   Refresh as RefreshIcon,
   Save as SaveIcon,
+  Inventory2 as InventoryIcon,
 } from "@mui/icons-material";
 import {
   Alert,
@@ -75,11 +77,51 @@ type Invoice = {
   createdAt: string;
   updatedAt: string;
   isArchived?: boolean;
+  inboundCompletedAt?: string | null;
+  inboundCompletedBy?: number | null;
+  inboundCompleterDisplay?: string | null;
   totalAmount: number;
   itemCount: number;
   items: InvoiceItem[];
+  inboundRows?: InboundRow[];
+  inboundSummary?: InboundSummary;
   creator?: UserMini | null;
   updater?: UserMini | null;
+};
+
+type InboundRow = {
+  id: number;
+  sku: string;
+  itemName: string;
+  unitPrice: number;
+  expectedQty: number;
+  actualQty: number | null;
+  deltaQty: number | null;
+  resolutionStatus: "pending" | "resolved" | "inbounded";
+  resolutionType?: "match" | "mismatch" | null;
+  mismatchReason?: string | null;
+  inboundedQty?: number | null;
+  inboundCompositeSku?: string | null;
+  resolvedAt?: string | null;
+  inboundedAt?: string | null;
+};
+
+type InboundSummary = {
+  totalRows: number;
+  pendingRows: number;
+  resolvedRows: number;
+  inboundedRows: number;
+  mismatchRows: number;
+  totalExpectedQty: number;
+  totalResolvedQty: number;
+  totalInboundedQty: number;
+};
+
+type InboundReviewResponse = {
+  invoice: Invoice;
+  rows: InboundRow[];
+  summary: InboundSummary;
+  message?: string;
 };
 
 const SHIPMENT_STATUS_OPTIONS = [
@@ -97,6 +139,7 @@ const ITEM_CHECK_STATUS_OPTIONS = [
 
 const INBOUND_STATUS_OPTIONS = [
   { value: "pending", label: "Pending" },
+  { value: "partial", label: "Partial" },
   { value: "done", label: "Done" },
 ];
 
@@ -106,9 +149,19 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: "credit", label: "Credit" },
 ];
 
+const MISMATCH_REASON_OPTIONS = [
+  { value: "short_shipped", label: "Short Shipped" },
+  { value: "damaged", label: "Damaged" },
+  { value: "backordered", label: "Backordered" },
+  { value: "not_in_carton", label: "Not In Carton" },
+  { value: "counting_error", label: "Counting Error" },
+  { value: "overage", label: "Overage" },
+];
+
 const emptyForm = {
   id: null as number | null,
   updatedAt: "",
+  isArchived: false,
   vendorName: "",
   invoiceNumber: "",
   orderDate: new Date().toISOString().slice(0, 10),
@@ -122,6 +175,9 @@ const emptyForm = {
   miscellaneousAmount: 0,
   shippingAmount: 0,
   notes: "",
+  inboundCompletedAt: "",
+  inboundCompletedBy: null,
+  inboundCompleterDisplay: "",
   items: [] as InvoiceItem[],
 };
 
@@ -142,7 +198,15 @@ function InvoiceTracker() {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [savedFormSnapshot, setSavedFormSnapshot] = useState("");
   const [skuLookupLoading, setSkuLookupLoading] = useState<Record<number, boolean>>({});
+  const [inboundDialogOpen, setInboundDialogOpen] = useState(false);
+  const [startInboundConfirmOpen, setStartInboundConfirmOpen] = useState(false);
+  const [inboundLoading, setInboundLoading] = useState(false);
+  const [inboundSubmitting, setInboundSubmitting] = useState(false);
+  const [inboundRows, setInboundRows] = useState<InboundRow[]>([]);
+  const [inboundSummary, setInboundSummary] = useState<InboundSummary | null>(null);
+  const [selectedInboundRowIds, setSelectedInboundRowIds] = useState<number[]>([]);
 
   const canCreate = hasPermission("invoiceTracker", "create");
   const canEdit = hasPermission("invoiceTracker", "edit");
@@ -163,11 +227,40 @@ function InvoiceTracker() {
     [invoiceTotal, form.miscellaneousAmount, form.shippingAmount]
   );
 
+  const buildFormSnapshot = (target: typeof emptyForm) =>
+    JSON.stringify({
+      id: target.id,
+      vendorName: target.vendorName,
+      invoiceNumber: target.invoiceNumber,
+      orderDate: target.orderDate,
+      shipmentStatus: target.shipmentStatus,
+      itemCheckStatus: target.itemCheckStatus,
+      inboundStatus: target.inboundStatus,
+      paymentStatus: target.paymentStatus,
+      paymentDueBy: target.paymentDueBy,
+      paymentDate: target.paymentDate,
+      receivedDate: target.receivedDate,
+      miscellaneousAmount: Number(target.miscellaneousAmount || 0),
+      shippingAmount: Number(target.shippingAmount || 0),
+      notes: target.notes,
+      items: target.items.map((item) => ({
+        sku: item.sku,
+        itemName: item.itemName,
+        unitPrice: Number(item.unitPrice || 0),
+        quantity: Number(item.quantity || 0),
+      })),
+    });
+
+  const hasUnsavedChanges = useMemo(
+    () => buildFormSnapshot(form) !== savedFormSnapshot,
+    [form, savedFormSnapshot]
+  );
+
   const metrics = useMemo(() => {
     const totalAmount = invoices.reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0);
     const dueInvoices = invoices.filter((invoice) => invoice.paymentStatus === "credit").length;
     const receivedInvoices = invoices.filter((invoice) => invoice.shipmentStatus === "received").length;
-    const pendingInbound = invoices.filter((invoice) => invoice.inboundStatus === "pending").length;
+    const pendingInbound = invoices.filter((invoice) => invoice.inboundStatus !== "done").length;
 
     return {
       totalInvoices: invoices.length,
@@ -230,6 +323,7 @@ function InvoiceTracker() {
   const openCreateDialog = () => {
     setDialogMode("create");
     setForm(emptyForm);
+    setSavedFormSnapshot(buildFormSnapshot(emptyForm));
     setDialogOpen(true);
   };
 
@@ -238,10 +332,11 @@ function InvoiceTracker() {
     if (!detail) return;
 
     setSelectedInvoiceId(invoiceId);
-    setDialogMode(canEdit ? "edit" : "view");
-    setForm({
+    setDialogMode(canEdit && detail.inboundStatus === "pending" ? "edit" : "view");
+    const normalizedForm = {
       id: detail.id,
       updatedAt: detail.updatedAt,
+      isArchived: !!detail.isArchived,
       vendorName: detail.vendorName,
       invoiceNumber: detail.invoiceNumber,
       orderDate: detail.orderDate,
@@ -252,6 +347,9 @@ function InvoiceTracker() {
       paymentDueBy: detail.paymentDueBy || "",
       paymentDate: detail.paymentDate || "",
       receivedDate: detail.receivedDate || "",
+      inboundCompletedAt: detail.inboundCompletedAt || "",
+      inboundCompletedBy: detail.inboundCompletedBy || null,
+      inboundCompleterDisplay: detail.inboundCompleterDisplay || "",
       miscellaneousAmount: Number(detail.miscellaneousAmount || 0),
       shippingAmount: Number(detail.shippingAmount || 0),
       notes: detail.notes || "",
@@ -264,8 +362,10 @@ function InvoiceTracker() {
               unitPrice: Number(item.unitPrice || 0),
               quantity: Number(item.quantity || 0),
             }))
-          : [{ sku: "", itemName: "", unitPrice: 0, quantity: 1 }],
-    });
+          : [],
+    };
+    setForm(normalizedForm);
+    setSavedFormSnapshot(buildFormSnapshot(normalizedForm));
     setDialogOpen(true);
   };
 
@@ -274,6 +374,72 @@ function InvoiceTracker() {
     setDialogOpen(false);
     setDialogMode("create");
     setForm(emptyForm);
+    setSavedFormSnapshot(buildFormSnapshot(emptyForm));
+    setInboundDialogOpen(false);
+    setInboundRows([]);
+    setInboundSummary(null);
+    setSelectedInboundRowIds([]);
+  };
+
+  const applyInboundReviewPayload = (payload: InboundReviewResponse) => {
+    setInboundRows(payload.rows || []);
+    setInboundSummary(payload.summary || null);
+    setSelectedInboundRowIds((prev) =>
+      prev.filter((rowId) => (payload.rows || []).some((row) => row.id === rowId && row.resolutionStatus === "resolved"))
+    );
+    if (payload.invoice) {
+      setForm((prev) => ({
+        ...prev,
+        id: payload.invoice.id,
+        updatedAt: payload.invoice.updatedAt,
+        inboundStatus: payload.invoice.inboundStatus,
+        inboundCompletedAt: payload.invoice.inboundCompletedAt || "",
+        inboundCompletedBy: payload.invoice.inboundCompletedBy || null,
+        inboundCompleterDisplay: payload.invoice.inboundCompleterDisplay || "",
+      }));
+    }
+  };
+
+  const openInboundDialog = async () => {
+    if (!token || !form.id) return;
+    try {
+      setInboundLoading(true);
+      const response = await axios.get<InboundReviewResponse>(getApiUrl(`invoice-tracker/${form.id}/inbound-review`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      applyInboundReviewPayload(response.data);
+      setInboundDialogOpen(true);
+    } catch (error: any) {
+      console.error("Failed to load inbound review:", error);
+      toast.error(error?.response?.data?.error || "Failed to load invoice inbound review");
+    } finally {
+      setInboundLoading(false);
+    }
+  };
+
+  const handleInboundButtonClick = () => {
+    if (form.inboundStatus === "pending") {
+      setStartInboundConfirmOpen(true);
+      return;
+    }
+    openInboundDialog();
+  };
+
+  const updateInboundRowDraft = (rowId: number, updates: Partial<InboundRow>) => {
+    setInboundRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== rowId) return row;
+        const nextActualQty =
+          updates.actualQty !== undefined ? Number(updates.actualQty) : Number(row.actualQty ?? row.expectedQty);
+        const nextDelta = Number.isFinite(nextActualQty) ? nextActualQty - Number(row.expectedQty || 0) : row.deltaQty;
+        return {
+          ...row,
+          ...updates,
+          actualQty: Number.isFinite(nextActualQty) ? nextActualQty : row.actualQty,
+          deltaQty: nextDelta,
+        };
+      })
+    );
   };
 
   const lookupSku = async (index: number, skuValue: string) => {
@@ -352,8 +518,7 @@ function InvoiceTracker() {
       return;
     }
 
-    try {
-      setSaving(true);
+    const runSave = async () => {
       const payload = {
         expectedUpdatedAt: form.id ? form.updatedAt : undefined,
         vendorName: form.vendorName.trim(),
@@ -361,7 +526,6 @@ function InvoiceTracker() {
         orderDate: form.orderDate,
         shipmentStatus: form.shipmentStatus,
         itemCheckStatus: form.itemCheckStatus,
-        inboundStatus: form.inboundStatus,
         paymentStatus: form.paymentStatus,
         paymentDueBy: form.paymentStatus === "credit" ? form.paymentDueBy : null,
         paymentDate: form.paymentStatus === "paid" ? form.paymentDate : null,
@@ -388,8 +552,14 @@ function InvoiceTracker() {
         toast.success("Invoice created");
       }
 
+      setSavedFormSnapshot(buildFormSnapshot(form));
       closeDialog();
       await loadInvoices();
+    };
+
+    try {
+      setSaving(true);
+      await runSave();
     } catch (error: any) {
       console.error("Failed to save invoice:", error);
       if (error?.response?.status === 409) {
@@ -467,11 +637,113 @@ function InvoiceTracker() {
     return "warning";
   };
 
-  const getInboundChipColor = (value: string) => (value === "done" ? "success" : "warning");
+  const getInboundChipColor = (value: string) => {
+    if (value === "done") return "success";
+    if (value === "partial") return "info";
+    return "warning";
+  };
   const getPaymentChipColor = (value: string) => {
     if (value === "paid") return "success";
     if (value === "credit") return "info";
     return "default";
+  };
+
+  const canStartInbound =
+    !!form.id &&
+    form.paymentStatus === "paid" &&
+    form.shipmentStatus === "received" &&
+    form.itemCheckStatus === "verified" &&
+    !!form.receivedDate &&
+    form.items.length > 0 &&
+    !hasUnsavedChanges &&
+    !form.isArchived;
+
+  const wouldBeInboundEligibleAfterSave =
+    form.paymentStatus === "paid" &&
+    form.shipmentStatus === "received" &&
+    form.itemCheckStatus === "verified" &&
+    !!form.receivedDate &&
+    form.items.length > 0 &&
+    !form.isArchived;
+
+  const canSelectInboundRow = (row: InboundRow) => row.resolutionStatus === "resolved";
+
+  const resolveInboundRow = async (row: InboundRow) => {
+    if (!token || !form.id) return;
+    const actualQty = Number(row.actualQty ?? row.expectedQty);
+    if (Number.isNaN(actualQty) || actualQty < 0) {
+      toast.error("Actual quantity must be 0 or greater");
+      return;
+    }
+
+    const mismatchReason =
+      actualQty === Number(row.expectedQty)
+        ? null
+        : row.mismatchReason || (actualQty > Number(row.expectedQty) ? "overage" : "");
+
+    if (actualQty !== Number(row.expectedQty) && !mismatchReason) {
+      toast.error("Choose a mismatch reason before resolving this row");
+      return;
+    }
+
+    try {
+      setInboundSubmitting(true);
+      const response = await axios.post<InboundReviewResponse>(
+        getApiUrl(`invoice-tracker/${form.id}/inbound-rows/resolve`),
+        {
+          rowId: row.id,
+          actualQty,
+          mismatchReason,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      applyInboundReviewPayload(response.data);
+      toast.success(`Row ${row.sku} resolved`);
+    } catch (error: any) {
+      console.error("Failed to resolve inbound row:", error);
+      toast.error(error?.response?.data?.error || "Failed to resolve row");
+    } finally {
+      setInboundSubmitting(false);
+    }
+  };
+
+  const resolveAllInboundRows = async () => {
+    if (!token || !form.id) return;
+    try {
+      setInboundSubmitting(true);
+      const response = await axios.post<InboundReviewResponse>(
+        getApiUrl(`invoice-tracker/${form.id}/inbound-rows/resolve-all`),
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      applyInboundReviewPayload(response.data);
+      toast.success("All remaining rows marked as resolved");
+    } catch (error: any) {
+      console.error("Failed to resolve all inbound rows:", error);
+      toast.error(error?.response?.data?.error || "Failed to resolve rows");
+    } finally {
+      setInboundSubmitting(false);
+    }
+  };
+
+  const inboundSelectedRows = async (rowIds: number[]) => {
+    if (!token || !form.id || rowIds.length === 0) return;
+    try {
+      setInboundSubmitting(true);
+      const response = await axios.post<InboundReviewResponse>(
+        getApiUrl(`invoice-tracker/${form.id}/inbound-submit`),
+        { rowIds },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      applyInboundReviewPayload(response.data);
+      toast.success(response.data.message || "Inbound completed");
+      await loadInvoices();
+    } catch (error: any) {
+      console.error("Failed to inbound selected rows:", error);
+      toast.error(error?.response?.data?.error || "Failed to inbound selected rows");
+    } finally {
+      setInboundSubmitting(false);
+    }
   };
 
   return (
@@ -817,12 +1089,17 @@ function InvoiceTracker() {
       </Card>
 
       <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="lg">
-        <DialogTitle>
-          {dialogMode === "create"
-            ? "Create Invoice"
-            : dialogMode === "edit"
-              ? "Edit Invoice"
-              : "Invoice Details"}
+        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Box component="span">
+            {dialogMode === "create"
+              ? "Create Invoice"
+              : dialogMode === "edit"
+                ? "Edit Invoice"
+                : "Invoice Details"}
+          </Box>
+          <IconButton onClick={closeDialog} size="small" disabled={saving}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
         </DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
@@ -964,7 +1241,7 @@ function InvoiceTracker() {
                       <Select
                         value={form.inboundStatus}
                         label="Inbound Status"
-                        onChange={(e) => setForm((prev) => ({ ...prev, inboundStatus: String(e.target.value) }))}
+                        disabled
                       >
                         {INBOUND_STATUS_OPTIONS.map((option) => (
                           <MenuItem key={option.value} value={option.value}>
@@ -975,6 +1252,47 @@ function InvoiceTracker() {
                     </FormControl>
                   </Grid>
                 </Grid>
+              </Paper>
+            </Grid>
+
+            <Grid item xs={12}>
+              <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#f8fafc" }}>
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  spacing={2}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", md: "center" }}
+                >
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      Invoice Inbound
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {form.inboundStatus === "done"
+                        ? `Fully inbounded${form.inboundCompletedAt ? ` on ${new Date(form.inboundCompletedAt).toLocaleString()}` : ""}${form.inboundCompleterDisplay ? ` by ${form.inboundCompleterDisplay}` : ""}.`
+                        : form.inboundStatus === "partial"
+                          ? "Partially inbounded. You can reopen the inbound review and continue with the remaining rows."
+                          : "Not inbounded yet. Start inbound only after Payment is Paid, Shipment is Received with a date, and Items Check is Verified."}
+                    </Typography>
+                  </Box>
+                    <Button
+                      variant="contained"
+                      color="secondary"
+                      startIcon={<InventoryIcon />}
+                      onClick={handleInboundButtonClick}
+                      disabled={!canStartInbound || inboundLoading}
+                    >
+                      {inboundLoading
+                        ? "Loading..."
+                        : !canStartInbound && wouldBeInboundEligibleAfterSave && hasUnsavedChanges
+                          ? "Save to Enable"
+                          : form.inboundStatus === "done"
+                            ? "View Inbound"
+                          : form.inboundStatus === "pending"
+                            ? "Start Inbound"
+                            : "Continue Inbound"}
+                    </Button>
+                </Stack>
               </Paper>
             </Grid>
 
@@ -1023,9 +1341,22 @@ function InvoiceTracker() {
             </Grid>
 
             <Grid item xs={12}>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Invoice Items
-              </Typography>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1.5}
+                justifyContent="space-between"
+                alignItems={{ xs: "flex-start", sm: "center" }}
+                sx={{ mb: 1 }}
+              >
+                <Typography variant="subtitle1" fontWeight={700}>
+                  Invoice Items
+                </Typography>
+                {form.inboundStatus !== "pending" && (
+                  <Typography variant="body2" color="text.secondary">
+                    Inbound has already started for this invoice. This document is view-only now. If something else needs to be received, create a new invoice.
+                  </Typography>
+                )}
+              </Stack>
               <Stack spacing={1.5}>
                 {form.items.map((item, index) => {
                   const lineTotal = Number(item.unitPrice || 0) * Number(item.quantity || 0);
@@ -1157,7 +1488,7 @@ function InvoiceTracker() {
         </DialogContent>
         <DialogActions>
           <Button onClick={closeDialog}>{isReadOnly ? "Close" : "Cancel"}</Button>
-          {!isReadOnly && (
+          {!isReadOnly && hasUnsavedChanges && (
             <Button
               variant="contained"
               startIcon={<SaveIcon />}
@@ -1167,6 +1498,287 @@ function InvoiceTracker() {
               {saving ? "Saving..." : form.id ? "Save Changes" : "Create Invoice"}
             </Button>
           )}
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={inboundDialogOpen}
+        onClose={() => {
+          if (!inboundSubmitting) setInboundDialogOpen(false);
+        }}
+        fullWidth
+        maxWidth="xl"
+      >
+        <DialogTitle>
+          Invoice Inbound Review
+          {form.invoiceNumber ? ` - ${form.invoiceNumber}` : ""}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#fcfcfd" }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Vendor
+                  </Typography>
+                  <Typography fontWeight={600}>{form.vendorName || "N/A"}</Typography>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Received Date
+                  </Typography>
+                  <Typography fontWeight={600}>
+                    {form.receivedDate ? new Date(`${form.receivedDate}T00:00:00`).toLocaleDateString() : "N/A"}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Inbound Status
+                  </Typography>
+                  <Chip
+                    size="small"
+                    color={getInboundChipColor(form.inboundStatus) as any}
+                    label={INBOUND_STATUS_OPTIONS.find((option) => option.value === form.inboundStatus)?.label || form.inboundStatus}
+                  />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Completed By
+                  </Typography>
+                  <Typography fontWeight={600}>{form.inboundCompleterDisplay || "-"}</Typography>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            <Grid container spacing={2}>
+              <Grid item xs={6} md={2}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="caption" color="text.secondary">Rows</Typography>
+                  <Typography variant="h5" fontWeight={700}>{inboundSummary?.totalRows || 0}</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={6} md={2}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="caption" color="text.secondary">Pending</Typography>
+                  <Typography variant="h5" fontWeight={700}>{inboundSummary?.pendingRows || 0}</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={6} md={2}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="caption" color="text.secondary">Verified</Typography>
+                  <Typography variant="h5" fontWeight={700}>{inboundSummary?.resolvedRows || 0}</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={6} md={2}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="caption" color="text.secondary">Inbounded</Typography>
+                  <Typography variant="h5" fontWeight={700}>{inboundSummary?.inboundedRows || 0}</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={6} md={2}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="caption" color="text.secondary">Mismatch Rows</Typography>
+                  <Typography variant="h5" fontWeight={700}>{inboundSummary?.mismatchRows || 0}</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={6} md={2}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="caption" color="text.secondary">Qty To Inbound</Typography>
+                  <Typography variant="h5" fontWeight={700}>{inboundSummary?.totalResolvedQty || 0}</Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} justifyContent="space-between">
+              <Alert severity="info" sx={{ flex: 1 }}>
+                Verify each SKU + price row first. Then inbound rows individually or in bulk. A row can only be inbounded once.
+              </Alert>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <Button variant="outlined" onClick={resolveAllInboundRows} disabled={inboundSubmitting || !inboundRows.some((row) => row.resolutionStatus !== "inbounded")}>
+                  Verify All
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={() => inboundSelectedRows(selectedInboundRowIds)}
+                  disabled={inboundSubmitting || selectedInboundRowIds.length === 0}
+                >
+                  Inbound Selected ({selectedInboundRowIds.length})
+                </Button>
+              </Stack>
+            </Stack>
+
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={
+                          inboundRows.length > 0 &&
+                          inboundRows.filter(canSelectInboundRow).length > 0 &&
+                          inboundRows.filter(canSelectInboundRow).every((row) => selectedInboundRowIds.includes(row.id))
+                        }
+                        indeterminate={
+                          selectedInboundRowIds.length > 0 &&
+                          selectedInboundRowIds.length <
+                            inboundRows.filter(canSelectInboundRow).length
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedInboundRowIds(inboundRows.filter(canSelectInboundRow).map((row) => row.id));
+                          } else {
+                            setSelectedInboundRowIds([]);
+                          }
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>SKU</TableCell>
+                    <TableCell>Item Name</TableCell>
+                    <TableCell>Unit Price</TableCell>
+                    <TableCell>Expected Qty</TableCell>
+                    <TableCell>Actual Qty</TableCell>
+                    <TableCell>Delta</TableCell>
+                    <TableCell>Reason</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="right">Action</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {inboundRows.map((row) => (
+                    <TableRow key={row.id} hover>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selectedInboundRowIds.includes(row.id)}
+                          disabled={!canSelectInboundRow(row)}
+                          onChange={(e) => {
+                            setSelectedInboundRowIds((prev) =>
+                              e.target.checked ? [...prev, row.id] : prev.filter((id) => id !== row.id)
+                            );
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>{row.sku}</TableCell>
+                      <TableCell>{row.itemName}</TableCell>
+                      <TableCell>${Number(row.unitPrice || 0).toFixed(2)}</TableCell>
+                      <TableCell>{row.expectedQty}</TableCell>
+                      <TableCell sx={{ minWidth: 130 }}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="number"
+                          inputProps={{ min: 0, step: 1 }}
+                          value={row.actualQty ?? row.expectedQty}
+                          disabled={row.resolutionStatus === "inbounded"}
+                          onChange={(e) => updateInboundRowDraft(row.id, { actualQty: Number(e.target.value) })}
+                        />
+                      </TableCell>
+                      <TableCell>{(Number(row.actualQty ?? row.expectedQty) - Number(row.expectedQty || 0)).toString()}</TableCell>
+                      <TableCell sx={{ minWidth: 170 }}>
+                        <FormControl fullWidth size="small" disabled={row.resolutionStatus === "inbounded"}>
+                          <Select
+                            displayEmpty
+                            value={
+                              Number(row.actualQty ?? row.expectedQty) === Number(row.expectedQty)
+                                ? ""
+                                : row.mismatchReason || (Number(row.actualQty ?? row.expectedQty) > Number(row.expectedQty) ? "overage" : "")
+                            }
+                            onChange={(e) => updateInboundRowDraft(row.id, { mismatchReason: String(e.target.value) })}
+                          >
+                            <MenuItem value="">No mismatch</MenuItem>
+                            {MISMATCH_REASON_OPTIONS.map((option) => (
+                              <MenuItem key={option.value} value={option.value}>
+                                {option.label}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          color={
+                            row.resolutionStatus === "inbounded"
+                              ? "success"
+                              : row.resolutionStatus === "resolved"
+                                ? "info"
+                                : "default"
+                          }
+                          label={
+                            row.resolutionStatus === "pending"
+                              ? "Pending"
+                              : row.resolutionStatus === "resolved"
+                                ? "Verified"
+                                : "Inbounded"
+                          }
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          {row.resolutionStatus !== "inbounded" && (
+                            <Button size="small" variant="outlined" onClick={() => resolveInboundRow(row)} disabled={inboundSubmitting}>
+                              Verify
+                            </Button>
+                          )}
+                          <Button
+                            size="small"
+                            variant="contained"
+                            onClick={() => inboundSelectedRows([row.id])}
+                            disabled={inboundSubmitting || row.resolutionStatus !== "resolved"}
+                          >
+                            Inbound Row
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {inboundRows.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={10}>
+                        <Typography color="text.secondary">No inbound rows available for this invoice yet.</Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setInboundDialogOpen(false)} disabled={inboundSubmitting}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={startInboundConfirmOpen}
+        onClose={() => {
+          if (!inboundLoading) setStartInboundConfirmOpen(false);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Start Inbound?</DialogTitle>
+        <DialogContent dividers>
+          <Typography>
+            Once you start the inbounding process, you cannot edit the invoice. Are you sure you want to proceed?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStartInboundConfirmOpen(false)} disabled={inboundLoading}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={async () => {
+              setStartInboundConfirmOpen(false);
+              await openInboundDialog();
+            }}
+            disabled={inboundLoading}
+          >
+            Proceed
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

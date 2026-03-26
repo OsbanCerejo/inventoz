@@ -30,7 +30,7 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: "not_checked",
       },
       inboundStatus: {
-        type: DataTypes.ENUM("pending", "done"),
+        type: DataTypes.ENUM("pending", "partial", "done"),
         allowNull: false,
         defaultValue: "pending",
       },
@@ -74,6 +74,14 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: true,
       },
+      inboundCompletedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      inboundCompletedBy: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
       notes: {
         type: DataTypes.TEXT,
         allowNull: true,
@@ -99,6 +107,16 @@ module.exports = (sequelize, DataTypes) => {
       as: "items",
       onDelete: "CASCADE",
     });
+    InvoiceTrackerInvoice.hasMany(models.InvoiceTrackerInboundRow, {
+      foreignKey: "invoiceId",
+      as: "inboundRows",
+      onDelete: "CASCADE",
+    });
+    InvoiceTrackerInvoice.hasMany(models.InvoiceTrackerInboundBatch, {
+      foreignKey: "invoiceId",
+      as: "inboundBatches",
+      onDelete: "CASCADE",
+    });
     InvoiceTrackerInvoice.belongsTo(models.User, {
       foreignKey: "createdBy",
       as: "creator",
@@ -110,6 +128,10 @@ module.exports = (sequelize, DataTypes) => {
     InvoiceTrackerInvoice.belongsTo(models.User, {
       foreignKey: "archivedBy",
       as: "archiver",
+    });
+    InvoiceTrackerInvoice.belongsTo(models.User, {
+      foreignKey: "inboundCompletedBy",
+      as: "inboundCompleter",
     });
   };
 
