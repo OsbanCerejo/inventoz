@@ -1398,11 +1398,11 @@ function InvoiceTracker() {
                           <TextField
                             fullWidth
                             size="small"
-                            label="Price"
+                            label="Quantity"
                             type="number"
-                            inputProps={{ min: 0, step: "0.01" }}
-                            value={item.unitPrice}
-                            onChange={(e) => updateItemRow(index, "unitPrice", Number(e.target.value) || 0)}
+                            inputProps={{ min: 1, step: 1 }}
+                            value={item.quantity}
+                            onChange={(e) => updateItemRow(index, "quantity", Number(e.target.value) || 1)}
                             disabled={isReadOnly}
                           />
                         </Box>
@@ -1410,11 +1410,11 @@ function InvoiceTracker() {
                           <TextField
                             fullWidth
                             size="small"
-                            label="Quantity"
+                            label="Price"
                             type="number"
-                            inputProps={{ min: 1, step: 1 }}
-                            value={item.quantity}
-                            onChange={(e) => updateItemRow(index, "quantity", Number(e.target.value) || 1)}
+                            inputProps={{ min: 0, step: "0.01" }}
+                            value={item.unitPrice}
+                            onChange={(e) => updateItemRow(index, "unitPrice", Number(e.target.value) || 0)}
                             disabled={isReadOnly}
                           />
                         </Box>
