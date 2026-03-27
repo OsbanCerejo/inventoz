@@ -72,6 +72,15 @@ interface UnderReviewShipmentRow {
   scannedItems: number;
 }
 
+interface FailedOrderRow {
+  id: number;
+  buyer: string;
+  stickerNumber: string;
+  soldPrice?: string | number | null;
+  failureStatus?: string;
+  attemptCount?: number;
+}
+
 interface FulfillmentSummary {
   readyToBegin: boolean;
   activeImport: null | {
@@ -86,10 +95,19 @@ interface FulfillmentSummary {
     uploadedBy?: string | null;
     uploadedAt?: string;
   };
+  categoryCounts?: Record<
+    string,
+    {
+      rows: number;
+      expectedQty: number;
+      scannedQty: number;
+    }
+  >;
   pendingReview: PendingReviewRow[];
   underReviewShipments?: UnderReviewShipmentRow[];
   pendingShipments?: PendingShipmentRow[];
   completedShipments?: CompletedShipmentRow[];
+  failedOrders?: FailedOrderRow[];
 }
 
 interface ShipmentChecklistItem {
@@ -189,7 +207,7 @@ const WhatnotFulfillment = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [interventionAlert, setInterventionAlert] = useState<string | null>(null);
   const [completedSearch, setCompletedSearch] = useState("");
-  const [shipmentTab, setShipmentTab] = useState<"completed" | "pending" | "underReview">("completed");
+  const [shipmentTab, setShipmentTab] = useState<"completed" | "pending" | "underReview" | "failed">("completed");
   const [shipmentView, setShipmentView] = useState<ShipmentViewDetails | null>(null);
   const [shipmentViewLoading, setShipmentViewLoading] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -306,16 +324,26 @@ const WhatnotFulfillment = () => {
     const completedRows = summary?.completedShipments || [];
     const pendingRows = summary?.pendingShipments || [];
     const underReviewRows = summary?.underReviewShipments || summary?.pendingReview || [];
+    const failedRows = summary?.failedOrders || [];
     const rows =
       shipmentTab === "completed"
         ? completedRows
         : shipmentTab === "pending"
         ? pendingRows
-        : underReviewRows;
+        : shipmentTab === "underReview"
+        ? underReviewRows
+        : failedRows;
     const token = completedSearch.trim().toLowerCase();
     if (!token) return rows;
     const trackingToken = normalizeTrackingForSearch(token);
     return rows.filter((row) => {
+      if (shipmentTab === "failed") {
+        const failedRow = row as FailedOrderRow;
+        return (
+          String(failedRow.buyer || "").toLowerCase().includes(token) ||
+          String(failedRow.stickerNumber || "").toLowerCase().includes(token)
+        );
+      }
       const shipmentMatch = String(row.shipmentId || "").toLowerCase().includes(token);
       const trackingMatch = trackingToken
         ? normalizeTrackingForSearch(row.tracking).includes(trackingToken)
@@ -327,9 +355,15 @@ const WhatnotFulfillment = () => {
     summary?.pendingShipments,
     summary?.underReviewShipments,
     summary?.pendingReview,
+    summary?.failedOrders,
     completedSearch,
     shipmentTab,
   ]);
+  const categoryCounts = summary?.categoryCounts || {};
+  const randomGiveawayCount = Number(categoryCounts.giveaway?.expectedQty || 0);
+  const coffeeCount = Number(categoryCounts.coffee?.expectedQty || 0);
+  const raidGiveawayCount = Number(categoryCounts.raid_giveaway?.expectedQty || 0);
+  const failedOrderCount = Number(summary?.failedOrders?.length || 0);
 
   const fetchShows = async () => {
     setShowsLoading(true);
@@ -919,6 +953,40 @@ const WhatnotFulfillment = () => {
                   </Typography>
                 </Paper>
               </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper variant="outlined" sx={{ p: 1.25 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Random Giveaways
+                  </Typography>
+                  <Typography variant="h6">{randomGiveawayCount}</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper variant="outlined" sx={{ p: 1.25 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Coffee Items
+                  </Typography>
+                  <Typography variant="h6">{coffeeCount}</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper variant="outlined" sx={{ p: 1.25 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Raid Giveaways
+                  </Typography>
+                  <Typography variant="h6">{raidGiveawayCount}</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper variant="outlined" sx={{ p: 1.25 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Failed Orders
+                  </Typography>
+                  <Typography variant="h6" color="error.main">
+                    {failedOrderCount}
+                  </Typography>
+                </Paper>
+              </Grid>
             </Grid>
           </Grid>
         </Grid>
@@ -1484,10 +1552,15 @@ const WhatnotFulfillment = () => {
               label={`Under Review Shipments (${summary?.underReviewShipments?.length || summary?.pendingReview?.length || 0})`}
               sx={{ minHeight: 36, textTransform: "none" }}
             />
+            <Tab
+              value="failed"
+              label={`Failed Orders (${summary?.failedOrders?.length || 0})`}
+              sx={{ minHeight: 36, textTransform: "none" }}
+            />
           </Tabs>
           <TextField
             size="small"
-            label="Search Shipment / Tracking"
+            label={shipmentTab === "failed" ? "Search User / Auction #" : "Search Shipment / Tracking"}
             value={completedSearch}
             onChange={(e) => setCompletedSearch(e.target.value)}
             sx={{ width: { xs: "100%", md: 280 } }}
@@ -1496,66 +1569,94 @@ const WhatnotFulfillment = () => {
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Shipment ID</TableCell>
-              <TableCell>Tracking</TableCell>
-              <TableCell align="right">Orders</TableCell>
-              <TableCell>{shipmentTab === "completed" ? "Closed" : "Status"}</TableCell>
-              <TableCell align="right">Action</TableCell>
+              {shipmentTab === "failed" ? (
+                <>
+                  <TableCell>Username</TableCell>
+                  <TableCell>Auction #</TableCell>
+                  <TableCell align="right">Price</TableCell>
+                </>
+              ) : (
+                <>
+                  <TableCell>Shipment ID</TableCell>
+                  <TableCell>Tracking</TableCell>
+                  <TableCell align="right">Orders</TableCell>
+                  <TableCell>{shipmentTab === "completed" ? "Closed" : "Status"}</TableCell>
+                  <TableCell align="right">Action</TableCell>
+                </>
+              )}
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredCompletedShipments.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={shipmentTab === "failed" ? 3 : 5}>
                   <Typography variant="body2" color="text.secondary">
                     {shipmentTab === "completed"
                       ? "No completed shipments found."
                       : shipmentTab === "pending"
                       ? "No pending shipments found."
-                      : "No under-review shipments found."}
+                      : shipmentTab === "underReview"
+                      ? "No under-review shipments found."
+                      : "No failed orders found."}
                   </Typography>
                 </TableCell>
               </TableRow>
             ) : (
-              filteredCompletedShipments.map((row) => (
-                <TableRow
-                  key={row.shipmentId}
-                  hover
-                  sx={{ cursor: "pointer" }}
-                  onClick={() => handleOpenShipmentView(row.shipmentId)}
-                >
-                  <TableCell>{row.shipmentId}</TableCell>
-                  <TableCell>{row.tracking}</TableCell>
-                  <TableCell align="right">
-                    {Number(row.scannedItems || 0)} / {Number(row.expectedItems || 0)}
-                  </TableCell>
-                  <TableCell>
-                    {shipmentTab === "completed" ? (
-                      (row as CompletedShipmentRow).closedAt ? (
-                        new Date((row as CompletedShipmentRow).closedAt || "").toLocaleString()
-                      ) : (
-                        "N/A"
-                      )
-                    ) : shipmentTab === "underReview" ? (
-                      (row as UnderReviewShipmentRow).mismatchReason || "Requires review"
-                    ) : (
-                      (row as PendingShipmentRow).status || "ready"
-                    )}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleOpenShipmentView(row.shipmentId);
-                      }}
+              shipmentTab === "failed"
+                ? filteredCompletedShipments.map((row) => {
+                    const failedRow = row as FailedOrderRow;
+                    return (
+                      <TableRow key={`failed-${failedRow.id}`}>
+                        <TableCell>{failedRow.buyer}</TableCell>
+                        <TableCell>#{failedRow.stickerNumber}</TableCell>
+                        <TableCell align="right">
+                          {Number(failedRow.soldPrice || 0).toLocaleString(undefined, {
+                            style: "currency",
+                            currency: "USD",
+                          })}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                : filteredCompletedShipments.map((row) => (
+                    <TableRow
+                      key={row.shipmentId}
+                      hover
+                      sx={{ cursor: "pointer" }}
+                      onClick={() => handleOpenShipmentView(row.shipmentId)}
                     >
-                      View
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
+                      <TableCell>{row.shipmentId}</TableCell>
+                      <TableCell>{row.tracking}</TableCell>
+                      <TableCell align="right">
+                        {Number(row.scannedItems || 0)} / {Number(row.expectedItems || 0)}
+                      </TableCell>
+                      <TableCell>
+                        {shipmentTab === "completed" ? (
+                          (row as CompletedShipmentRow).closedAt ? (
+                            new Date((row as CompletedShipmentRow).closedAt || "").toLocaleString()
+                          ) : (
+                            "N/A"
+                          )
+                        ) : shipmentTab === "underReview" ? (
+                          (row as UnderReviewShipmentRow).mismatchReason || "Requires review"
+                        ) : (
+                          (row as PendingShipmentRow).status || "ready"
+                        )}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleOpenShipmentView(row.shipmentId);
+                          }}
+                        >
+                          View
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
             )}
           </TableBody>
         </Table>

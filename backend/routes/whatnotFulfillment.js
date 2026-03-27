@@ -8,6 +8,7 @@ const {
   WhatnotShow,
   WhatnotShipmentImport,
   WhatnotShipmentItem,
+  WhatnotFailedOrder,
   WhatnotShipmentScan,
   Products,
   ProductDetails,
@@ -19,6 +20,17 @@ const { checkPermission } = require('../middleware/permissions');
 const router = express.Router();
 const FLASH_SALE_STICKER = 'WHATNOT-FLASH-SALE';
 const BUYERS_GIVEAWAY_STICKER = 'BUYERS-GIVEAWAY';
+const ITEM_CATEGORY_AUCTION = 'auction';
+const ITEM_CATEGORY_GIVEAWAY = 'giveaway';
+const ITEM_CATEGORY_BUYERS_GIVEAWAY = 'buyers_giveaway';
+const ITEM_CATEGORY_COFFEE = 'coffee';
+const ITEM_CATEGORY_RAID_GIVEAWAY = 'raid_giveaway';
+const ITEM_CATEGORY_FLASH_SALE_OTHER = 'flash_sale_other';
+const EXCLUDED_PENDING_SHIPMENT_CATEGORIES = new Set([
+  ITEM_CATEGORY_GIVEAWAY,
+  ITEM_CATEGORY_COFFEE,
+  ITEM_CATEGORY_RAID_GIVEAWAY,
+]);
 const FLASH_SALE_TOKEN = FLASH_SALE_STICKER.replace(/[^A-Z0-9-]/g, '');
 const BUYERS_GIVEAWAY_TOKEN = BUYERS_GIVEAWAY_STICKER.replace(/[^A-Z0-9-]/g, '');
 const NON_AUCTION_ROW_STICKER = 'NON-AUCTION-ITEMS';
@@ -180,6 +192,24 @@ const parseMoney = (rawValue) => {
   return parsed;
 };
 
+const parseShowElapsedSeconds = (rawValue) => {
+  const normalized = normalizeText(rawValue);
+  if (!normalized) return null;
+  const match = normalized.match(/^(?:(\d+):)?(\d{1,2})(?::(\d{1,2}))?(?:\.(\d+))?$/);
+  if (!match) return null;
+  const first = match[1] ? Number(match[1]) : null;
+  const second = Number(match[2] || 0);
+  const third = match[3] ? Number(match[3]) : null;
+  const fractional = match[4] ? Number(`0.${match[4]}`) : 0;
+  if (first !== null && third !== null) {
+    return first * 3600 + second * 60 + third + fractional;
+  }
+  if (first === null && third === null) {
+    return second * 60 + fractional;
+  }
+  return null;
+};
+
 const parseDateTime = (rawValue) => {
   const normalized = normalizeText(rawValue);
   if (!normalized) return null;
@@ -227,6 +257,36 @@ const getCsvValue = (row, ...candidateHeaders) => {
 const isRonnieAuctionItem = (productName) => {
   const name = normalizeText(productName).toLowerCase();
   return name.includes('$1 starts w/ronnie');
+};
+const extractCategoryTag = (descriptionText) => {
+  const raw = normalizeText(descriptionText).toUpperCase();
+  if (!raw) return null;
+  const match = raw.match(/\[(AUC|GVY|BGY|CFE|RGY)\]/);
+  return match ? match[1] : null;
+};
+const parseItemCategory = ({ productName, descriptionText }) => {
+  const tag = extractCategoryTag(descriptionText);
+  if (tag === 'AUC') return ITEM_CATEGORY_AUCTION;
+  if (tag === 'GVY') return ITEM_CATEGORY_GIVEAWAY;
+  if (tag === 'BGY') return ITEM_CATEGORY_BUYERS_GIVEAWAY;
+  if (tag === 'CFE') return ITEM_CATEGORY_COFFEE;
+  if (tag === 'RGY') return ITEM_CATEGORY_RAID_GIVEAWAY;
+  if (isRonnieAuctionItem(productName)) return ITEM_CATEGORY_AUCTION;
+  return ITEM_CATEGORY_FLASH_SALE_OTHER;
+};
+const getRowItemCategory = (row) => {
+  const explicitCategory = normalizeText(row?.itemCategory);
+  if (explicitCategory) return explicitCategory;
+  return row?.isAuctionItem ? ITEM_CATEGORY_AUCTION : ITEM_CATEGORY_FLASH_SALE_OTHER;
+};
+const buildFailedAuctionKey = ({ buyer, stickerNumber }) =>
+  `${normalizeText(buyer).toLowerCase()}::${normalizeSticker(stickerNumber).toLowerCase()}`;
+const getExpectedNonAuctionContextForRow = (row) => {
+  const category = getRowItemCategory(row);
+  if (category === ITEM_CATEGORY_BUYERS_GIVEAWAY) {
+    return BUYERS_GIVEAWAY_STICKER;
+  }
+  return FLASH_SALE_STICKER;
 };
 const toUserDisplayName = (user) => {
   if (!user) return null;
@@ -361,6 +421,20 @@ const summarizeShipment = (
   const totalExpectedItems = rows.reduce((sum, row) => sum + Number(row.expectedQty || 0), 0);
   const totalScannedItems = rows.reduce((sum, row) => sum + Number(row.scannedQty || 0), 0);
   const totalRemainingItems = Math.max(0, totalExpectedItems - totalScannedItems);
+  const categoryCounts = rows.reduce((acc, row) => {
+    const category = getRowItemCategory(row);
+    if (!acc[category]) {
+      acc[category] = {
+        rows: 0,
+        expectedQty: 0,
+        scannedQty: 0,
+      };
+    }
+    acc[category].rows += 1;
+    acc[category].expectedQty += Number(row.expectedQty || 0);
+    acc[category].scannedQty += Number(row.scannedQty || 0);
+    return acc;
+  }, {});
 
   return {
     checklist: checklistWithLinks,
@@ -375,6 +449,7 @@ const summarizeShipment = (
     nonAuctionExpectedItems,
     nonAuctionScannedItems,
     nonAuctionRemainingItems,
+    categoryCounts,
   };
 };
 
@@ -586,8 +661,30 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
         underReviewShipments: [],
         pendingShipments: [],
         completedShipments: [],
+        categoryCounts: {},
+        failedOrders: [],
       });
     }
+
+    const failedOrders = await WhatnotFailedOrder.findAll({
+      where: {
+        whatnotShowId: showId,
+        importId: activeImport.id,
+      },
+      attributes: [
+        'id',
+        'buyer',
+        'stickerNumber',
+        'soldPrice',
+        'failureStatus',
+        'attemptCount',
+      ],
+      order: [
+        ['stickerNumber', 'ASC'],
+        ['buyer', 'ASC'],
+      ],
+      raw: true,
+    });
 
     const pendingRows = await WhatnotShipmentItem.findAll({
       where: {
@@ -623,11 +720,23 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
         whatnotShowId: showId,
         importId: activeImport.id,
       },
-      attributes: ['shipmentId', 'tracking', 'expectedQty', 'scannedQty', 'closedAt', 'closedBy', 'status', 'mismatchReason'],
+      attributes: [
+        'shipmentId',
+        'tracking',
+        'expectedQty',
+        'scannedQty',
+        'closedAt',
+        'closedBy',
+        'status',
+        'mismatchReason',
+        'itemCategory',
+        'isAuctionItem',
+      ],
       raw: true,
     });
     const shipmentCloseMap = new Map();
     const shipmentSummaryMap = new Map();
+    const categoryCounts = {};
     for (const row of shipmentStatusRows) {
       const shipmentId = normalizeText(row.shipmentId);
       if (!shipmentId) continue;
@@ -646,11 +755,16 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
           hasPendingReview: false,
           mismatchReason: null,
           currentStatus: 'ready',
+          countsTowardOpenShipments: false,
         });
       }
       const summaryEntry = shipmentSummaryMap.get(shipmentId);
       summaryEntry.expectedItems += Number(row.expectedQty || 0);
       summaryEntry.scannedItems += Number(row.scannedQty || 0);
+      const rowCategory = getRowItemCategory(row);
+      if (!EXCLUDED_PENDING_SHIPMENT_CATEGORIES.has(rowCategory)) {
+        summaryEntry.countsTowardOpenShipments = true;
+      }
       if (normalizeText(row.status) === 'pending_review') {
         summaryEntry.hasPendingReview = true;
         if (!summaryEntry.mismatchReason && normalizeText(row.mismatchReason)) {
@@ -676,11 +790,24 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
       if (!summaryEntry.closedBy && row.closedBy) {
         summaryEntry.closedBy = row.closedBy;
       }
+
+      const category = rowCategory;
+      if (!categoryCounts[category]) {
+        categoryCounts[category] = {
+          rows: 0,
+          expectedQty: 0,
+          scannedQty: 0,
+        };
+      }
+      categoryCounts[category].rows += 1;
+      categoryCounts[category].expectedQty += Number(row.expectedQty || 0);
+      categoryCounts[category].scannedQty += Number(row.scannedQty || 0);
     }
     const closedShipments = Array.from(shipmentCloseMap.values()).filter(Boolean).length;
-    const remainingShipments = Math.max(0, shipmentCloseMap.size - closedShipments);
-
     const allShipments = Array.from(shipmentSummaryMap.values());
+    const remainingShipments = allShipments.filter(
+      (entry) => !entry.isClosed && entry.countsTowardOpenShipments
+    ).length;
 
     const completedShipments = allShipments
       .filter((entry) => entry.isClosed)
@@ -708,7 +835,9 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
       .slice(0, 1000);
 
     const pendingShipments = allShipments
-      .filter((entry) => !entry.isClosed && !entry.hasPendingReview)
+      .filter(
+        (entry) => !entry.isClosed && !entry.hasPendingReview && entry.countsTowardOpenShipments
+      )
       .sort((a, b) => a.shipmentId.localeCompare(b.shipmentId, undefined, { numeric: true }))
       .map((entry) => ({
         shipmentId: entry.shipmentId,
@@ -767,6 +896,15 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
       underReviewShipments,
       pendingShipments,
       completedShipments: completedShipmentsWithNames,
+      categoryCounts,
+      failedOrders: failedOrders.map((entry) => ({
+        id: entry.id,
+        buyer: normalizeText(entry.buyer) || 'N/A',
+        stickerNumber: normalizeSticker(entry.stickerNumber),
+        soldPrice: entry.soldPrice,
+        failureStatus: normalizeText(entry.failureStatus) || 'failed',
+        attemptCount: Number(entry.attemptCount || 0),
+      })),
     });
   } catch (error) {
     console.error('Error fetching Whatnot fulfillment summary:', error);
@@ -889,23 +1027,78 @@ router.post(
 
       const grouped = new Map();
       const trackingToShipments = new Map();
+      const failedAuctionAttemptMap = new Map();
+      const recoveredAuctionKeySet = new Set();
       let parsedRows = 0;
 
       for (const row of records) {
+        const productName = normalizeText(getCsvValue(row, 'product name', 'product_name'));
+        const descriptionText = normalizeText(
+          getCsvValue(row, 'description', 'product description', 'product_description')
+        );
+        const itemCategory = parseItemCategory({ productName, descriptionText });
+        const isAuctionItem = itemCategory === ITEM_CATEGORY_AUCTION;
+        const stickerNumber = isAuctionItem ? extractStickerNumber(productName) : null;
+        const buyer = normalizeText(getCsvValue(row, 'buyer', 'buyer username', 'buyer_username'));
+        const orderId = normalizeText(getCsvValue(row, 'order id', 'order_id'));
+        const orderNumericId = normalizeText(getCsvValue(row, 'order numeric id', 'order_numeric_id'));
+        const placedAtRaw = normalizeText(getCsvValue(row, 'placed at', 'placed_at'));
+        const failureStatus = normalizeText(getCsvValue(row, 'cancelled or failed', 'cancelled_or_failed')).toLowerCase();
+        const soldPrice = parseMoney(
+          getCsvValue(row, 'sold price', 'sold_price', 'original item price', 'original_item_price')
+        );
+
+        if (isAuctionItem && stickerNumber) {
+          const failedAuctionKey = buildFailedAuctionKey({ buyer, stickerNumber });
+          if (failureStatus === 'failed' || failureStatus === 'cancelled') {
+            const existingFailedOrder = failedAuctionAttemptMap.get(failedAuctionKey) || {
+              buyer: buyer || null,
+              stickerNumber,
+              soldPrice,
+              failureStatus,
+              attemptCount: 0,
+              latestPlacedAtRaw: placedAtRaw || null,
+              latestPlacedAtSeconds: parseShowElapsedSeconds(placedAtRaw),
+              latestOrderId: orderId || null,
+              latestOrderNumericId: orderNumericId || null,
+            };
+            existingFailedOrder.attemptCount += 1;
+            if (existingFailedOrder.soldPrice === null && soldPrice !== null) {
+              existingFailedOrder.soldPrice = soldPrice;
+            }
+            const currentPlacedAtSeconds = parseShowElapsedSeconds(placedAtRaw);
+            const existingPlacedAtSeconds =
+              existingFailedOrder.latestPlacedAtSeconds === undefined
+                ? null
+                : existingFailedOrder.latestPlacedAtSeconds;
+            const shouldReplaceLatest =
+              currentPlacedAtSeconds !== null &&
+              (existingPlacedAtSeconds === null || currentPlacedAtSeconds >= existingPlacedAtSeconds);
+            if (shouldReplaceLatest || !existingFailedOrder.latestPlacedAtRaw) {
+              existingFailedOrder.latestPlacedAtRaw = placedAtRaw || existingFailedOrder.latestPlacedAtRaw;
+              existingFailedOrder.latestPlacedAtSeconds = currentPlacedAtSeconds;
+              existingFailedOrder.latestOrderId = orderId || existingFailedOrder.latestOrderId;
+              existingFailedOrder.latestOrderNumericId =
+                orderNumericId || existingFailedOrder.latestOrderNumericId;
+              existingFailedOrder.failureStatus = failureStatus;
+              if (soldPrice !== null) {
+                existingFailedOrder.soldPrice = soldPrice;
+              }
+            }
+            failedAuctionAttemptMap.set(failedAuctionKey, existingFailedOrder);
+            continue;
+          }
+
+          recoveredAuctionKeySet.add(failedAuctionKey);
+        }
+
         const shipmentId = normalizeText(getCsvValue(row, 'shipment id', 'shipment_id'));
         if (!shipmentId) continue;
 
         const tracking = normalizeTracking(getCsvValue(row, 'tracking', 'tracking code', 'tracking_code'));
-        const productName = normalizeText(getCsvValue(row, 'product name', 'product_name'));
-        const isAuctionItem = isRonnieAuctionItem(productName);
-        const stickerNumber = isAuctionItem ? extractStickerNumber(productName) : null;
         const expectedQty = parseQuantity(getCsvValue(row, 'product quantity', 'product_quantity'));
-        const soldPrice = parseMoney(getCsvValue(row, 'sold price', 'sold_price', 'original item price', 'original_item_price'));
         const costPerItem = parseMoney(getCsvValue(row, 'cost per item', 'cost_per_item'));
         const totalCost = parseMoney(getCsvValue(row, 'total cost', 'total_cost'));
-        const buyer = normalizeText(getCsvValue(row, 'buyer', 'buyer username', 'buyer_username'));
-        const orderId = normalizeText(getCsvValue(row, 'order id', 'order_id'));
-        const orderNumericId = normalizeText(getCsvValue(row, 'order numeric id', 'order_numeric_id'));
         const placedAt = parseDateTime(getCsvValue(row, 'placed at', 'placed_at'));
 
         if (!grouped.has(shipmentId)) {
@@ -938,11 +1131,16 @@ router.post(
           trackingToShipments.get(tracking).add(shipmentId);
         }
 
-        const rowKey = `${trackingKey}::${isAuctionItem ? stickerNumber || '__MISSING_AUCTION_STICKER__' : `NON_AUCTION::${productName || '__UNKNOWN_PRODUCT__'}`}`;
+        const rowKey = `${trackingKey}::${
+          isAuctionItem
+            ? stickerNumber || '__MISSING_AUCTION_STICKER__'
+            : `NON_AUCTION::${itemCategory}::${productName || '__UNKNOWN_PRODUCT__'}`
+        }`;
         if (!bucket.rows.has(rowKey)) {
           bucket.rows.set(rowKey, {
             tracking: tracking || null,
             productName: productName || null,
+            itemCategory,
             isAuctionItem,
             stickerNumber: isAuctionItem ? stickerNumber || null : null,
             expectedQty: 0,
@@ -1032,6 +1230,7 @@ router.post(
             shipmentId: bucket.shipmentId,
             tracking: aggregated.tracking,
             productName: aggregated.productName,
+            itemCategory: aggregated.itemCategory,
             isAuctionItem: aggregated.isAuctionItem,
             stickerNumber: aggregated.stickerNumber,
             expectedQty: aggregated.expectedQty,
@@ -1051,6 +1250,25 @@ router.post(
 
       if (itemRows.length > 0) {
         await WhatnotShipmentItem.bulkCreate(itemRows, { transaction });
+      }
+
+      const failedOrderRows = Array.from(failedAuctionAttemptMap.entries())
+        .filter(([key]) => !recoveredAuctionKeySet.has(key))
+        .map(([, failedOrder]) => ({
+          whatnotShowId: showId,
+          importId: importRecord.id,
+          buyer: failedOrder.buyer || null,
+          stickerNumber: failedOrder.stickerNumber,
+          soldPrice: failedOrder.soldPrice,
+          failureStatus: failedOrder.failureStatus || 'failed',
+          attemptCount: Number(failedOrder.attemptCount || 1),
+          latestPlacedAtRaw: failedOrder.latestPlacedAtRaw || null,
+          latestOrderId: failedOrder.latestOrderId || null,
+          latestOrderNumericId: failedOrder.latestOrderNumericId || null,
+        }));
+
+      if (failedOrderRows.length > 0) {
+        await WhatnotFailedOrder.bulkCreate(failedOrderRows, { transaction });
       }
 
       await importRecord.update(
@@ -1329,7 +1547,9 @@ router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, 
         matchedAuctionSticker = scannedValue;
       }
     } else if (specialNonAuctionContext) {
-      const nonAuctionRows = getNonAuctionRows(shipmentRows);
+      const nonAuctionRows = getNonAuctionRows(shipmentRows).filter(
+        (row) => getExpectedNonAuctionContextForRow(row) === specialNonAuctionContext
+      );
       if (!nonAuctionRows.length) {
         result = 'unexpected';
         message = `This shipment has no non-auction items to scan with ${specialNonAuctionContext}.`;
@@ -1542,7 +1762,11 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
             Boolean(row.isAuctionItem) &&
             normalizeSticker(row.stickerNumber) === auctionStickerNumber
         );
-    const nonAuctionRows = isSpecialNonAuctionContext ? getNonAuctionRows(shipmentRows) : [];
+    const nonAuctionRows = isSpecialNonAuctionContext
+      ? getNonAuctionRows(shipmentRows).filter(
+          (row) => getExpectedNonAuctionContextForRow(row) === specialNonAuctionContext
+        )
+      : [];
     const hasScannedNonAuctionRow = isSpecialNonAuctionContext
       ? nonAuctionRows.some((row) => Number(row.scannedQty || 0) > 0)
       : false;

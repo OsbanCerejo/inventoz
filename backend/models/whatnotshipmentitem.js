@@ -34,6 +34,10 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      itemCategory: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       isAuctionItem: {
         type: DataTypes.BOOLEAN,
         allowNull: false,

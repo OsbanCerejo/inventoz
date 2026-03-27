@@ -67,6 +67,10 @@ module.exports = (sequelize) => {
       foreignKey: 'importId',
       as: 'scans',
     });
+    WhatnotShipmentImport.hasMany(models.WhatnotFailedOrder, {
+      foreignKey: 'importId',
+      as: 'failedOrders',
+    });
   };
 
   return WhatnotShipmentImport;
