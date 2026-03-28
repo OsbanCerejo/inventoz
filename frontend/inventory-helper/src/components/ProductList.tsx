@@ -109,16 +109,9 @@ function ProductList({
     }
   };
 
-  // Calculate index of the last product on the current page
-  const indexOfLastProduct = currentPage * productsPerPage;
-  // Calculate index of the first product on the current page
-  const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
-  // Get the current products to display on the current page
-  const currentProducts = products.slice(
-    indexOfFirstProduct,
-    indexOfLastProduct
-  );
-  const showingFrom = products.length === 0 ? 0 : indexOfFirstProduct + 1;
+  const indexOfFirstProduct = (currentPage - 1) * productsPerPage;
+  const currentProducts = products;
+  const showingFrom = totalProducts === 0 ? 0 : indexOfFirstProduct + 1;
   const showingTo = indexOfFirstProduct + currentProducts.length;
 
   const getFilterValue = (columnKey: string) => {
@@ -234,6 +227,7 @@ function ProductList({
               </thead>
               <tbody>
                 {currentProducts.map((product, index) => {
+                  const displayIndex = indexOfFirstProduct + index + 1;
                   const isVerified =
                     product.verified === true ||
                     product.verified === 1 ||
@@ -252,7 +246,7 @@ function ProductList({
                       }}
                     >
                       <td style={{ padding: "10px", borderBottom: "1px solid #edf2f7", borderRight: "1px solid #eef2f7", verticalAlign: "top" }}>
-                        <div style={{ fontWeight: 700, color: "#334155", marginBottom: product.image ? 6 : 0 }}>{index + 1}</div>
+                        <div style={{ fontWeight: 700, color: "#334155", marginBottom: product.image ? 6 : 0 }}>{displayIndex}</div>
                         {product.image ? (
                           <img
                             src={product.image}
@@ -319,7 +313,7 @@ function ProductList({
         <Box sx={{ display: "flex", justifyContent: "center", mt: 1.5 }}>
           <Pagination
             productsPerPage={productsPerPage}
-            totalProducts={products.length}
+            totalProducts={totalProducts}
             paginate={paginate}
             currentPage={currentPage}
           />

@@ -4,35 +4,27 @@ import ProductList from "../components/ProductList";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button, Box, Stack, Typography } from "@mui/material";
 import PermissionGuard from "../components/PermissionGuard";
-import { getApiUrl } from '../config/api';
-import {
-  PRODUCTS_CACHE_KEY,
-  PRODUCTS_CACHE_TIMESTAMP_KEY,
-} from "../utils/productCache";
-
-const PRODUCTS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const PRODUCTS_AUTO_REFETCH_INTERVAL_MS = 60 * 1000; // 60 seconds
+import { getApiUrl } from "../config/api";
 
 function Products() {
-  // State Variables
   const [listOfProducts, setListOfProducts] = useState<any[]>([]);
+  const [totalProducts, setTotalProducts] = useState(0);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const backgroundRefreshInFlightRef = useRef(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const hasHydratedFromStorageRef = useRef(false);
 
   const [sortConfig, setSortConfig] = useState<{
     key: string | null;
     direction: string;
   }>({
-    key: null,
+    key: "sku",
     direction: "asc",
   });
   const [filterConfig, setFilterConfig] = useState<
     { key: string; value: string }[]
   >([]);
-
   const [currentPage, setCurrentPage] = useState(1);
   const [productsPerPage] = useState(20);
 
@@ -43,44 +35,26 @@ function Products() {
       }
       setFetchError(null);
       try {
-        const response = await axios.get(getApiUrl("products"), {
-          signal: options?.signal,
+        const params: Record<string, string | number> = {
+          page: currentPage,
+          pageSize: productsPerPage,
+          sortKey: sortConfig.key || "sku",
+          sortDirection: sortConfig.direction || "asc",
+        };
+
+        filterConfig.forEach(({ key, value }) => {
+          const trimmedValue = String(value || "").trim();
+          if (trimmedValue) {
+            params[key] = trimmedValue;
+          }
         });
-        setListOfProducts(response.data);
-        try {
-          // Strip each product down to only the fields used for display/filtering
-          // to stay well under the localStorage 5 MB limit.
-          const slim = response.data.map((p: any) => ({
-            sku: p.sku,
-            brand: p.brand,
-            itemName: p.itemName,
-            sizeOz: p.sizeOz,
-            sizeMl: p.sizeMl,
-            strength: p.strength,
-            shade: p.shade,
-            location: p.location,
-            warehouseLocations: p.warehouseLocations,
-            quantity: p.quantity,
-            listed: p.listed,
-            verified: p.verified,
-            image: p.image,
-            category: p.category,
-            type: p.type,
-            condition: p.condition,
-            upc: p.upc,
-            alternativeSku: p.alternativeSku,
-            ProductDetail: p.ProductDetail
-              ? { tester: p.ProductDetail.tester, discontinued: p.ProductDetail.discontinued }
-              : undefined,
-          }));
-          localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(slim));
-          localStorage.setItem(
-            PRODUCTS_CACHE_TIMESTAMP_KEY,
-            Date.now().toString()
-          );
-        } catch (storageError) {
-          console.warn("Failed to save products to localStorage:", storageError);
-        }
+
+        const response = await axios.get(getApiUrl("products/list"), {
+          signal: options?.signal,
+          params,
+        });
+        setListOfProducts(response.data?.rows || []);
+        setTotalProducts(Number(response.data?.total || 0));
       } catch (error: any) {
         if (axios.isCancel && axios.isCancel(error)) {
           return;
@@ -93,141 +67,75 @@ function Products() {
         }
       }
     },
-    []
+    [currentPage, productsPerPage, sortConfig.key, sortConfig.direction, filterConfig]
   );
 
-  const triggerBackgroundRefresh = useCallback(async () => {
-    if (document.hidden || backgroundRefreshInFlightRef.current) return;
-    backgroundRefreshInFlightRef.current = true;
-    try {
-      await fetchProducts({ silent: true });
-    } finally {
-      backgroundRefreshInFlightRef.current = false;
-    }
-  }, [fetchProducts]);
-
-  // Fetch initial product list on component mount
   useEffect(() => {
-    const controller = new AbortController();
+    if (hasHydratedFromStorageRef.current) return;
+    hasHydratedFromStorageRef.current = true;
+    try {
+      const savedSortConfig = localStorage.getItem("sortConfig");
+      const savedFilterConfig = localStorage.getItem("filterConfig");
+      const savedCurrentPage = localStorage.getItem("currentPage");
 
-    // Clear filters if navigated with the clearFilters state
-    if (location.state?.clearFilters) {
-      fetchProducts({ signal: controller.signal });
-      setSortConfig({ key: "sku", direction: "asc" });
-      setFilterConfig([]);
-      setCurrentPage(1);
-      try {
-        localStorage.removeItem("sortConfig");
-        localStorage.removeItem("filterConfig");
-        localStorage.removeItem("currentPage");
-      } catch (error) {
-        console.warn("localStorage error:", error);
+      if (savedSortConfig) {
+        const parsedSortConfig = JSON.parse(savedSortConfig);
+        setSortConfig({
+          key: parsedSortConfig?.key || "sku",
+          direction: parsedSortConfig?.direction || "asc",
+        });
       }
 
-      navigate(location.pathname, { replace: true, state: {} });
-    }
+      if (savedFilterConfig) {
+        const parsedFilterConfig = JSON.parse(savedFilterConfig);
+        if (Array.isArray(parsedFilterConfig)) {
+          setFilterConfig(parsedFilterConfig);
+        }
+      }
 
-    let savedProducts: string | null = null;
-    let savedSortConfig: string | null = null;
-    let savedFilterConfig: string | null = null;
-    let savedCurrentPage: string | null = null;
-
-    try {
-      savedProducts = localStorage.getItem(PRODUCTS_CACHE_KEY);
-      savedSortConfig = localStorage.getItem("sortConfig");
-      savedFilterConfig = localStorage.getItem("filterConfig");
-      savedCurrentPage = localStorage.getItem("currentPage");
+      if (savedCurrentPage) {
+        const parsedPage = parseInt(savedCurrentPage, 10);
+        if (!Number.isNaN(parsedPage) && parsedPage > 0) {
+          setCurrentPage(parsedPage);
+        }
+      }
     } catch (error) {
       console.warn("localStorage error:", error);
     }
-
-    if (savedProducts) {
-      try {
-        const parsedProducts = JSON.parse(savedProducts);
-        const hasNewStructure =
-          parsedProducts.length > 0 &&
-          parsedProducts[0].ProductDetail !== undefined;
-
-        if (hasNewStructure) {
-          setListOfProducts(parsedProducts);
-        }
-      } catch (error) {
-        console.warn("Failed to parse cached products:", error);
-        localStorage.removeItem(PRODUCTS_CACHE_KEY);
-        localStorage.removeItem(PRODUCTS_CACHE_TIMESTAMP_KEY);
-      }
-    }
-
-    if (savedSortConfig) {
-      setSortConfig(JSON.parse(savedSortConfig));
-    }
-
-    if (savedFilterConfig) {
-      const parsedFilterConfig = JSON.parse(savedFilterConfig);
-      if (Array.isArray(parsedFilterConfig)) {
-        setFilterConfig(parsedFilterConfig);
-      } else {
-        console.warn("savedFilterConfig is not an array", parsedFilterConfig);
-        setFilterConfig([]);
-      }
-    }
-
-    if (savedCurrentPage) {
-      setCurrentPage(parseInt(savedCurrentPage, 10));
-    }
-
-    const cacheTimestamp = localStorage.getItem(PRODUCTS_CACHE_TIMESTAMP_KEY);
-    const isCacheFresh =
-      cacheTimestamp &&
-      Date.now() - parseInt(cacheTimestamp, 10) < PRODUCTS_CACHE_TTL;
-
-    if (!isCacheFresh) {
-      fetchProducts({ signal: controller.signal });
-    } else {
-      // Refresh in background without blocking UI
-      fetchProducts({ signal: controller.signal, silent: true });
-    }
-
-    return () => controller.abort();
-  }, [location.state, fetchProducts, navigate, location.pathname]);
+  }, []);
 
   useEffect(() => {
-    const onWindowFocus = () => {
-      triggerBackgroundRefresh();
-    };
+    if (!location.state?.clearFilters) return;
+    setSortConfig({ key: "sku", direction: "asc" });
+    setFilterConfig([]);
+    setCurrentPage(1);
+    try {
+      localStorage.removeItem("sortConfig");
+      localStorage.removeItem("filterConfig");
+      localStorage.removeItem("currentPage");
+    } catch (error) {
+      console.warn("localStorage error:", error);
+    }
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state, navigate, location.pathname]);
 
-    const onVisibilityChange = () => {
-      if (!document.hidden) {
-        triggerBackgroundRefresh();
-      }
-    };
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchProducts({ signal: controller.signal });
+    return () => controller.abort();
+  }, [fetchProducts]);
 
-    const intervalId = window.setInterval(() => {
-      if (!document.hidden) {
-        triggerBackgroundRefresh();
-      }
-    }, PRODUCTS_AUTO_REFETCH_INTERVAL_MS);
-
-    window.addEventListener("focus", onWindowFocus);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-
-    return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener("focus", onWindowFocus);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [triggerBackgroundRefresh]);
-
-  // Function to handle sorting
   const handleSort = (columnKey: string) => {
     let direction = "asc";
     if (sortConfig.key === columnKey && sortConfig.direction === "asc") {
       direction = "desc";
     }
     const newSortConfig = { key: columnKey, direction };
-    setSortConfig({ key: columnKey, direction });
+    setSortConfig(newSortConfig);
+    setCurrentPage(1);
     try {
       localStorage.setItem("sortConfig", JSON.stringify(newSortConfig));
+      localStorage.setItem("currentPage", "1");
     } catch (error) {
       console.warn("Failed to save sort config to localStorage:", error);
     }
@@ -243,51 +151,21 @@ function Products() {
       newFilterConfig.push({ key: columnKey, value });
     }
     setFilterConfig(newFilterConfig);
+    setCurrentPage(1);
     try {
       localStorage.setItem("filterConfig", JSON.stringify(newFilterConfig));
+      localStorage.setItem("currentPage", "1");
     } catch (error) {
       console.warn("Failed to save filter config to localStorage:", error);
     }
-    paginate(1);
   };
 
-  const sortedAndFilteredProducts = listOfProducts
-    .filter((product) => {
-      return filterConfig.every(({ key, value }) => {
-        const productValue = product[key];
-        if (productValue === null || productValue === undefined) return false;
-        return String(productValue).toLowerCase().includes(value.toLowerCase());
-      });
-    })
-    .sort((a, b) => {
-      if (sortConfig.key) {
-        const aValue = a[sortConfig.key];
-        const bValue = b[sortConfig.key];
-
-        if (sortConfig.key === "quantity") {
-          return sortConfig.direction === "asc"
-            ? aValue - bValue
-            : bValue - aValue;
-        } else {
-          const aStr = aValue?.toString().toLowerCase() ?? "";
-          const bStr = bValue?.toString().toLowerCase() ?? "";
-          if (aStr < bStr) return sortConfig.direction === "asc" ? -1 : 1;
-          if (aStr > bStr) return sortConfig.direction === "asc" ? 1 : -1;
-          return 0;
-        }
-      }
-      return 0;
-    });
-
   useEffect(() => {
-    const totalPages = Math.max(
-      1,
-      Math.ceil(sortedAndFilteredProducts.length / productsPerPage)
-    );
+    const totalPages = Math.max(1, Math.ceil(totalProducts / productsPerPage));
     if (currentPage > totalPages) {
       paginate(totalPages);
     }
-  }, [sortedAndFilteredProducts.length, currentPage, productsPerPage]);
+  }, [totalProducts, currentPage, productsPerPage]);
 
   const paginate = (pageNumber: number) => {
     setCurrentPage(pageNumber);
@@ -299,8 +177,12 @@ function Products() {
   };
 
   const handleRefresh = () => {
-    fetchProducts();
-    setSortConfig({ key: null, direction: "asc" });
+    const isAlreadyDefaultState =
+      (sortConfig.key || "sku") === "sku" &&
+      sortConfig.direction === "asc" &&
+      filterConfig.length === 0 &&
+      currentPage === 1;
+    setSortConfig({ key: "sku", direction: "asc" });
     setFilterConfig([]);
     setCurrentPage(1);
     try {
@@ -309,6 +191,9 @@ function Products() {
       localStorage.removeItem("currentPage");
     } catch (error) {
       console.warn("Failed to clear localStorage:", error);
+    }
+    if (isAlreadyDefaultState) {
+      fetchProducts();
     }
   };
 
@@ -327,7 +212,7 @@ function Products() {
                 variant="contained"
                 color="primary"
                 size="large"
-                style={{ fontWeight: 500, textTransform: 'none', boxShadow: 'none' }}
+                style={{ fontWeight: 500, textTransform: "none", boxShadow: "none" }}
                 disabled
                 title="You don't have permission to create products"
               >
@@ -340,7 +225,7 @@ function Products() {
               variant="contained"
               color="primary"
               size="large"
-              style={{ fontWeight: 500, textTransform: 'none', boxShadow: 'none' }}
+              style={{ fontWeight: 500, textTransform: "none", boxShadow: "none" }}
               onClick={() => navigate("/addProduct")}
             >
               Add Product
@@ -350,7 +235,7 @@ function Products() {
             variant="contained"
             color="error"
             size="large"
-            style={{ fontWeight: 500, textTransform: 'none', boxShadow: 'none' }}
+            style={{ fontWeight: 500, textTransform: "none", boxShadow: "none" }}
             onClick={handleRefresh}
           >
             Refresh
@@ -363,7 +248,7 @@ function Products() {
         </Typography>
       )}
       <ProductList
-        products={sortedAndFilteredProducts}
+        products={listOfProducts}
         heading={""}
         handleSort={handleSort}
         sortConfig={sortConfig}
@@ -372,15 +257,15 @@ function Products() {
         currentPage={currentPage}
         productsPerPage={productsPerPage}
         paginate={paginate}
-        totalProducts={sortedAndFilteredProducts.length}
-      ></ProductList>
+        totalProducts={totalProducts}
+      />
       {isLoadingProducts && (
         <Typography variant="body2" sx={{ mt: 2 }}>
-                    Refreshing inventory...
+          Refreshing inventory...
         </Typography>
       )}
     </div>
   );
 }
 
-export default Products; 
+export default Products;

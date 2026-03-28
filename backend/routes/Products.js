@@ -1,11 +1,39 @@
 const express = require("express");
 const router = express.Router();
-const { Products, ProductHistory, StockUpdateHistory, Logs } = require("../models");
+const { Products, ProductDetails, ProductHistory, StockUpdateHistory, Logs } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 const StockUpdateService = require("../Services/StockUpdateService");
 const { auth } = require('../middleware/auth');
 const { checkPermission } = require('../middleware/permissions');
+
+const LIST_SORT_KEYS = new Set([
+  "sku",
+  "brand",
+  "itemName",
+  "quantity",
+  "sizeOz",
+  "strength",
+  "shade",
+  "location",
+  "upc",
+]);
+
+const buildContainsFilter = (columnName, rawValue, options = {}) => {
+  const value = String(rawValue || "").trim();
+  if (!value) return null;
+  if (options.castToChar) {
+    return Sequelize.where(
+      Sequelize.cast(Sequelize.col(columnName), "CHAR"),
+      { [Op.like]: `%${value}%` }
+    );
+  }
+  return {
+    [columnName]: {
+      [Op.like]: `%${value}%`,
+    },
+  };
+};
 
 router.get("/", auth, checkPermission('products', 'view'), async (req, res) => {
   const db = require("../models");
@@ -17,6 +45,81 @@ router.get("/", auth, checkPermission('products', 'view'), async (req, res) => {
     }]
   });
   res.json(listOfProducts);
+});
+
+router.get("/list", auth, checkPermission('products', 'view'), async (req, res) => {
+  try {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 20));
+    const requestedSortKey = String(req.query.sortKey || "sku").trim();
+    const sortKey = LIST_SORT_KEYS.has(requestedSortKey) ? requestedSortKey : "sku";
+    const sortDirection = String(req.query.sortDirection || "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
+
+    const filters = {
+      upc: req.query.upc,
+      sku: req.query.sku,
+      brand: req.query.brand,
+      itemName: req.query.itemName,
+      sizeOz: req.query.sizeOz,
+      strength: req.query.strength,
+      shade: req.query.shade,
+      location: req.query.location,
+    };
+
+    const whereClauses = [
+      buildContainsFilter("sku", filters.sku),
+      buildContainsFilter("brand", filters.brand),
+      buildContainsFilter("itemName", filters.itemName),
+      buildContainsFilter("strength", filters.strength),
+      buildContainsFilter("shade", filters.shade),
+      buildContainsFilter("location", filters.location),
+      buildContainsFilter("upc", filters.upc, { castToChar: true }),
+      buildContainsFilter("sizeOz", filters.sizeOz, { castToChar: true }),
+    ].filter(Boolean);
+
+    const where = whereClauses.length ? { [Op.and]: whereClauses } : {};
+    const offset = (page - 1) * pageSize;
+
+    const { count, rows } = await Products.findAndCountAll({
+      attributes: [
+        "sku",
+        "brand",
+        "itemName",
+        "sizeOz",
+        "sizeMl",
+        "strength",
+        "shade",
+        "location",
+        "quantity",
+        "image",
+        "verified",
+        "upc",
+      ],
+      where,
+      include: [
+        {
+          model: ProductDetails,
+          required: false,
+          attributes: ["tester", "discontinued"],
+        },
+      ],
+      order: [[sortKey, sortDirection]],
+      limit: pageSize,
+      offset,
+      distinct: true,
+      subQuery: false,
+    });
+
+    return res.json({
+      rows,
+      total: count,
+      page,
+      pageSize,
+    });
+  } catch (error) {
+    console.error("Error loading paginated products list:", error);
+    return res.status(500).json({ error: "Failed to load products list" });
+  }
 });
 
 router.get("/byId/:id", auth, checkPermission('products', 'view'), async (req, res) => {
