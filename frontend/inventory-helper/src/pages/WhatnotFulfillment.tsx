@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
   Alert,
@@ -171,6 +171,180 @@ interface ProductLookupResult {
     strength?: string | null;
   };
 }
+
+interface ShipmentHistorySectionProps {
+  shipmentTab: "completed" | "pending" | "underReview" | "failed";
+  completedSearch: string;
+  filteredCompletedShipments: Array<
+    CompletedShipmentRow | PendingShipmentRow | UnderReviewShipmentRow | FailedOrderRow
+  >;
+  completedCount: number;
+  pendingCount: number;
+  underReviewCount: number;
+  failedCount: number;
+  onShipmentTabChange: (value: "completed" | "pending" | "underReview" | "failed") => void;
+  onCompletedSearchChange: (value: string) => void;
+  onOpenShipmentView: (shipmentId: string) => void;
+}
+
+const ShipmentHistorySection = memo(
+  ({
+    shipmentTab,
+    completedSearch,
+    filteredCompletedShipments,
+    completedCount,
+    pendingCount,
+    underReviewCount,
+    failedCount,
+    onShipmentTabChange,
+    onCompletedSearchChange,
+    onOpenShipmentView,
+  }: ShipmentHistorySectionProps) => (
+    <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: { xs: "stretch", md: "center" },
+          justifyContent: "space-between",
+          flexDirection: { xs: "column", md: "row" },
+          gap: 1.5,
+          mb: 2,
+        }}
+      >
+        <Tabs
+          value={shipmentTab}
+          onChange={(_, value) => onShipmentTabChange(value)}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{ minHeight: 36 }}
+        >
+          <Tab
+            value="completed"
+            label={`Completed Shipments (${completedCount})`}
+            sx={{ minHeight: 36, textTransform: "none" }}
+          />
+          <Tab
+            value="pending"
+            label={`Pending Shipments (${pendingCount})`}
+            sx={{ minHeight: 36, textTransform: "none" }}
+          />
+          <Tab
+            value="underReview"
+            label={`Under Review Shipments (${underReviewCount})`}
+            sx={{ minHeight: 36, textTransform: "none" }}
+          />
+          <Tab
+            value="failed"
+            label={`Failed Orders (${failedCount})`}
+            sx={{ minHeight: 36, textTransform: "none" }}
+          />
+        </Tabs>
+        <TextField
+          size="small"
+          label={shipmentTab === "failed" ? "Search User / Auction #" : "Search Shipment / Tracking"}
+          value={completedSearch}
+          onChange={(e) => onCompletedSearchChange(e.target.value)}
+          sx={{ width: { xs: "100%", md: 280 } }}
+        />
+      </Box>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            {shipmentTab === "failed" ? (
+              <>
+                <TableCell>Username</TableCell>
+                <TableCell>Auction #</TableCell>
+                <TableCell align="right">Price</TableCell>
+              </>
+            ) : (
+              <>
+                <TableCell>Shipment ID</TableCell>
+                <TableCell>Tracking</TableCell>
+                <TableCell align="right">Orders</TableCell>
+                <TableCell>{shipmentTab === "completed" ? "Closed" : "Status"}</TableCell>
+                <TableCell align="right">Action</TableCell>
+              </>
+            )}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {filteredCompletedShipments.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={shipmentTab === "failed" ? 3 : 5}>
+                <Typography variant="body2" color="text.secondary">
+                  {shipmentTab === "completed"
+                    ? "No completed shipments found."
+                    : shipmentTab === "pending"
+                    ? "No pending shipments found."
+                    : shipmentTab === "underReview"
+                    ? "No under-review shipments found."
+                    : "No failed orders found."}
+                </Typography>
+              </TableCell>
+            </TableRow>
+          ) : shipmentTab === "failed" ? (
+            filteredCompletedShipments.map((row) => {
+              const failedRow = row as FailedOrderRow;
+              return (
+                <TableRow key={`failed-${failedRow.id}`}>
+                  <TableCell>{failedRow.buyer}</TableCell>
+                  <TableCell>#{failedRow.stickerNumber}</TableCell>
+                  <TableCell align="right">
+                    {Number(failedRow.soldPrice || 0).toLocaleString(undefined, {
+                      style: "currency",
+                      currency: "USD",
+                    })}
+                  </TableCell>
+                </TableRow>
+              );
+            })
+          ) : (
+            filteredCompletedShipments.map((row) => (
+              <TableRow
+                key={row.shipmentId}
+                hover
+                sx={{ cursor: "pointer" }}
+                onClick={() => onOpenShipmentView(row.shipmentId)}
+              >
+                <TableCell>{row.shipmentId}</TableCell>
+                <TableCell>{row.tracking}</TableCell>
+                <TableCell align="right">
+                  {Number(row.scannedItems || 0)} / {Number(row.expectedItems || 0)}
+                </TableCell>
+                <TableCell>
+                  {shipmentTab === "completed" ? (
+                    (row as CompletedShipmentRow).closedAt ? (
+                      new Date((row as CompletedShipmentRow).closedAt || "").toLocaleString()
+                    ) : (
+                      "N/A"
+                    )
+                  ) : shipmentTab === "underReview" ? (
+                    (row as UnderReviewShipmentRow).mismatchReason || "Requires review"
+                  ) : (
+                    (row as PendingShipmentRow).status || "ready"
+                  )}
+                </TableCell>
+                <TableCell align="right">
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onOpenShipmentView(row.shipmentId);
+                    }}
+                  >
+                    View
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </Paper>
+  )
+);
+ShipmentHistorySection.displayName = "ShipmentHistorySection";
 
 const FLASH_SALE_STICKER = "WHATNOT-FLASH-SALE";
 const BUYERS_GIVEAWAY_STICKER = "BUYERS-GIVEAWAY";
@@ -470,21 +644,20 @@ const WhatnotFulfillment = () => {
         showId: Number(selectedShowId),
         tracking: trackingInput.trim(),
       });
-      const payload = response.data;
       setActiveShipment({
-        shipmentId: payload.shipmentId,
-        tracking: payload.tracking,
-        expectedItems: payload.expectedItems,
-        scannedItems: payload.scannedItems,
-        remainingItems: payload.remainingItems,
-        completed: payload.completed,
-        auctionExpectedItems: payload.auctionExpectedItems || 0,
-        auctionScannedItems: payload.auctionScannedItems || 0,
-        auctionRemainingItems: payload.auctionRemainingItems || 0,
-        nonAuctionExpectedItems: payload.nonAuctionExpectedItems || 0,
-        nonAuctionScannedItems: payload.nonAuctionScannedItems || 0,
-        nonAuctionRemainingItems: payload.nonAuctionRemainingItems || 0,
-        checklist: payload.checklist || [],
+        shipmentId: response.data.shipmentId,
+        tracking: response.data.tracking,
+        expectedItems: response.data.expectedItems,
+        scannedItems: response.data.scannedItems,
+        remainingItems: response.data.remainingItems,
+        completed: response.data.completed,
+        auctionExpectedItems: response.data.auctionExpectedItems || 0,
+        auctionScannedItems: response.data.auctionScannedItems || 0,
+        auctionRemainingItems: response.data.auctionRemainingItems || 0,
+        nonAuctionExpectedItems: response.data.nonAuctionExpectedItems || 0,
+        nonAuctionScannedItems: response.data.nonAuctionScannedItems || 0,
+        nonAuctionRemainingItems: response.data.nonAuctionRemainingItems || 0,
+        checklist: response.data.checklist || [],
       });
       setActiveAuctionSticker("");
       setAutoReturnToAuction(false);
@@ -543,49 +716,48 @@ const WhatnotFulfillment = () => {
         tracking: activeShipment.tracking,
         stickerNumber: itemScanInput.trim(),
       });
-      const payload = response.data;
       setActiveShipment({
-        shipmentId: payload.shipmentId,
-        tracking: payload.tracking,
-        expectedItems: payload.expectedItems,
-        scannedItems: payload.scannedItems,
-        remainingItems: payload.remainingItems,
-        completed: payload.completed,
-        auctionExpectedItems: payload.auctionExpectedItems || 0,
-        auctionScannedItems: payload.auctionScannedItems || 0,
-        auctionRemainingItems: payload.auctionRemainingItems || 0,
-        nonAuctionExpectedItems: payload.nonAuctionExpectedItems || 0,
-        nonAuctionScannedItems: payload.nonAuctionScannedItems || 0,
-        nonAuctionRemainingItems: payload.nonAuctionRemainingItems || 0,
-        checklist: payload.checklist || [],
+        shipmentId: response.data.shipmentId,
+        tracking: response.data.tracking,
+        expectedItems: response.data.expectedItems,
+        scannedItems: response.data.scannedItems,
+        remainingItems: response.data.remainingItems,
+        completed: response.data.completed,
+        auctionExpectedItems: response.data.auctionExpectedItems || 0,
+        auctionScannedItems: response.data.auctionScannedItems || 0,
+        auctionRemainingItems: response.data.auctionRemainingItems || 0,
+        nonAuctionExpectedItems: response.data.nonAuctionExpectedItems || 0,
+        nonAuctionScannedItems: response.data.nonAuctionScannedItems || 0,
+        nonAuctionRemainingItems: response.data.nonAuctionRemainingItems || 0,
+        checklist: response.data.checklist || [],
       });
-      if (payload.matchedAuctionSticker) {
-        const matchedContext = String(payload.matchedAuctionSticker);
+      if (response.data.matchedAuctionSticker) {
+        const matchedContext = String(response.data.matchedAuctionSticker);
         setActiveAuctionSticker(matchedContext);
         // Flash-sale behaves like a sticky mode: stay in product scan until user changes context.
         setAutoReturnToAuction(!Boolean(getSpecialNonAuctionContext(matchedContext)));
       }
       let shouldFocusItemScan = false;
-      if (payload.scanResult === "matched") {
-        if (payload.matchedAuctionSticker) {
-          const matchedContext = String(payload.matchedAuctionSticker);
-          const matchedContextLabel = payload.matchedContextType
-            ? String(payload.matchedContextType)
+      if (response.data.scanResult === "matched") {
+        if (response.data.matchedAuctionSticker) {
+          const matchedContext = String(response.data.matchedAuctionSticker);
+          const matchedContextLabel = response.data.matchedContextType
+            ? String(response.data.matchedContextType)
             : formatStickerContext(matchedContext);
           setSuccess(
-            payload.completed
+            response.data.completed
               ? `Shipment complete. ${matchedContextLabel} verified.`
               : `${matchedContextLabel} verified. Now scan UPC/SKU product(s) for this order.`
           );
           suppressNextProductFocusPinRef.current = true;
           setTimeout(() => productInputRef.current?.focus(), 80);
         } else {
-          setSuccess(payload.completed ? "Shipment complete and verified." : "Order scan verified.");
+          setSuccess(response.data.completed ? "Shipment complete and verified." : "Order scan verified.");
           shouldFocusItemScan = true;
           setTimeout(() => itemScanRef.current?.focus(), 80);
         }
       } else {
-        setInterventionAlert(payload.message || "Scan requires intervention.");
+        setInterventionAlert(response.data.message || "Scan requires intervention.");
         playInterventionSound();
         shouldFocusItemScan = true;
       }
@@ -716,28 +888,21 @@ const WhatnotFulfillment = () => {
       setProductCandidates([]);
       setProductInput("");
       const product = response.data?.product;
-      if (response.data?.checklist) {
-        setActiveShipment((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            expectedItems: response.data.expectedItems ?? prev.expectedItems,
-            scannedItems: response.data.scannedItems ?? prev.scannedItems,
-            remainingItems: response.data.remainingItems ?? prev.remainingItems,
-            completed: response.data.completed ?? prev.completed,
-            auctionExpectedItems: response.data.auctionExpectedItems ?? prev.auctionExpectedItems,
-            auctionScannedItems: response.data.auctionScannedItems ?? prev.auctionScannedItems,
-            auctionRemainingItems: response.data.auctionRemainingItems ?? prev.auctionRemainingItems,
-            nonAuctionExpectedItems:
-              response.data.nonAuctionExpectedItems ?? prev.nonAuctionExpectedItems,
-            nonAuctionScannedItems:
-              response.data.nonAuctionScannedItems ?? prev.nonAuctionScannedItems,
-            nonAuctionRemainingItems:
-              response.data.nonAuctionRemainingItems ?? prev.nonAuctionRemainingItems,
-            checklist: response.data.checklist || prev.checklist,
-          };
-        });
-      }
+      setActiveShipment({
+        shipmentId: response.data.shipmentId,
+        tracking: response.data.tracking,
+        expectedItems: response.data.expectedItems,
+        scannedItems: response.data.scannedItems,
+        remainingItems: response.data.remainingItems,
+        completed: response.data.completed,
+        auctionExpectedItems: response.data.auctionExpectedItems || 0,
+        auctionScannedItems: response.data.auctionScannedItems || 0,
+        auctionRemainingItems: response.data.auctionRemainingItems || 0,
+        nonAuctionExpectedItems: response.data.nonAuctionExpectedItems || 0,
+        nonAuctionScannedItems: response.data.nonAuctionScannedItems || 0,
+        nonAuctionRemainingItems: response.data.nonAuctionRemainingItems || 0,
+        checklist: response.data.checklist || [],
+      });
       if (product?.sku) {
         const contextLabel = formatActiveContextLabel(activeAuctionSticker);
         setSuccess(
@@ -836,7 +1001,7 @@ const WhatnotFulfillment = () => {
     }
   };
 
-  const handleOpenShipmentView = async (shipmentId: string) => {
+  const handleOpenShipmentView = useCallback(async (shipmentId: string) => {
     if (!selectedShowId || !shipmentId) return;
     setShipmentViewLoading(true);
     try {
@@ -871,7 +1036,18 @@ const WhatnotFulfillment = () => {
     } finally {
       setShipmentViewLoading(false);
     }
-  };
+  }, [selectedShowId]);
+
+  const handleShipmentTabChange = useCallback(
+    (value: "completed" | "pending" | "underReview" | "failed") => {
+      setShipmentTab(value);
+    },
+    []
+  );
+
+  const handleCompletedSearchChange = useCallback((value: string) => {
+    setCompletedSearch(value);
+  }, []);
 
   return (
     <Box sx={{ mt: 4, px: 3, pb: 6 }}>
@@ -1519,148 +1695,18 @@ const WhatnotFulfillment = () => {
         </Alert>
       )}
 
-      <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: { xs: "stretch", md: "center" },
-            justifyContent: "space-between",
-            flexDirection: { xs: "column", md: "row" },
-            gap: 1.5,
-            mb: 2,
-          }}
-        >
-          <Tabs
-            value={shipmentTab}
-            onChange={(_, value) => setShipmentTab(value)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{ minHeight: 36 }}
-          >
-            <Tab
-              value="completed"
-              label={`Completed Shipments (${summary?.completedShipments?.length || 0})`}
-              sx={{ minHeight: 36, textTransform: "none" }}
-            />
-            <Tab
-              value="pending"
-              label={`Pending Shipments (${summary?.pendingShipments?.length || 0})`}
-              sx={{ minHeight: 36, textTransform: "none" }}
-            />
-            <Tab
-              value="underReview"
-              label={`Under Review Shipments (${summary?.underReviewShipments?.length || summary?.pendingReview?.length || 0})`}
-              sx={{ minHeight: 36, textTransform: "none" }}
-            />
-            <Tab
-              value="failed"
-              label={`Failed Orders (${summary?.failedOrders?.length || 0})`}
-              sx={{ minHeight: 36, textTransform: "none" }}
-            />
-          </Tabs>
-          <TextField
-            size="small"
-            label={shipmentTab === "failed" ? "Search User / Auction #" : "Search Shipment / Tracking"}
-            value={completedSearch}
-            onChange={(e) => setCompletedSearch(e.target.value)}
-            sx={{ width: { xs: "100%", md: 280 } }}
-          />
-        </Box>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              {shipmentTab === "failed" ? (
-                <>
-                  <TableCell>Username</TableCell>
-                  <TableCell>Auction #</TableCell>
-                  <TableCell align="right">Price</TableCell>
-                </>
-              ) : (
-                <>
-                  <TableCell>Shipment ID</TableCell>
-                  <TableCell>Tracking</TableCell>
-                  <TableCell align="right">Orders</TableCell>
-                  <TableCell>{shipmentTab === "completed" ? "Closed" : "Status"}</TableCell>
-                  <TableCell align="right">Action</TableCell>
-                </>
-              )}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredCompletedShipments.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={shipmentTab === "failed" ? 3 : 5}>
-                  <Typography variant="body2" color="text.secondary">
-                    {shipmentTab === "completed"
-                      ? "No completed shipments found."
-                      : shipmentTab === "pending"
-                      ? "No pending shipments found."
-                      : shipmentTab === "underReview"
-                      ? "No under-review shipments found."
-                      : "No failed orders found."}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              shipmentTab === "failed"
-                ? filteredCompletedShipments.map((row) => {
-                    const failedRow = row as FailedOrderRow;
-                    return (
-                      <TableRow key={`failed-${failedRow.id}`}>
-                        <TableCell>{failedRow.buyer}</TableCell>
-                        <TableCell>#{failedRow.stickerNumber}</TableCell>
-                        <TableCell align="right">
-                          {Number(failedRow.soldPrice || 0).toLocaleString(undefined, {
-                            style: "currency",
-                            currency: "USD",
-                          })}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                : filteredCompletedShipments.map((row) => (
-                    <TableRow
-                      key={row.shipmentId}
-                      hover
-                      sx={{ cursor: "pointer" }}
-                      onClick={() => handleOpenShipmentView(row.shipmentId)}
-                    >
-                      <TableCell>{row.shipmentId}</TableCell>
-                      <TableCell>{row.tracking}</TableCell>
-                      <TableCell align="right">
-                        {Number(row.scannedItems || 0)} / {Number(row.expectedItems || 0)}
-                      </TableCell>
-                      <TableCell>
-                        {shipmentTab === "completed" ? (
-                          (row as CompletedShipmentRow).closedAt ? (
-                            new Date((row as CompletedShipmentRow).closedAt || "").toLocaleString()
-                          ) : (
-                            "N/A"
-                          )
-                        ) : shipmentTab === "underReview" ? (
-                          (row as UnderReviewShipmentRow).mismatchReason || "Requires review"
-                        ) : (
-                          (row as PendingShipmentRow).status || "ready"
-                        )}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleOpenShipmentView(row.shipmentId);
-                          }}
-                        >
-                          View
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-            )}
-          </TableBody>
-        </Table>
-      </Paper>
+      <ShipmentHistorySection
+        shipmentTab={shipmentTab}
+        completedSearch={completedSearch}
+        filteredCompletedShipments={filteredCompletedShipments}
+        completedCount={summary?.completedShipments?.length || 0}
+        pendingCount={summary?.pendingShipments?.length || 0}
+        underReviewCount={summary?.underReviewShipments?.length || summary?.pendingReview?.length || 0}
+        failedCount={summary?.failedOrders?.length || 0}
+        onShipmentTabChange={handleShipmentTabChange}
+        onCompletedSearchChange={handleCompletedSearchChange}
+        onOpenShipmentView={handleOpenShipmentView}
+      />
 
       <Dialog open={Boolean(shipmentView)} onClose={() => setShipmentView(null)} fullWidth maxWidth="lg">
         <DialogContent sx={{ p: 3 }}>

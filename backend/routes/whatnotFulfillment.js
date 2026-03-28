@@ -459,31 +459,16 @@ const getLinkedProductSummaryBySticker = async ({
   shipmentId,
   transaction = null,
 }) => {
-  const linkRows = await WhatnotShipmentScan.findAll({
-    attributes: ['id', 'auctionStickerNumber', 'productSku', 'createdAt'],
+  const shipmentScanRows = await WhatnotShipmentScan.findAll({
+    attributes: ['id', 'auctionStickerNumber', 'productSku', 'createdAt', 'scanType'],
     where: {
       whatnotShowId: showId,
       importId,
       shipmentId,
       result: 'matched',
-      productSku: { [Op.not]: null, [Op.ne]: '' },
-      auctionStickerNumber: { [Op.not]: null, [Op.ne]: '' },
-    },
-    order: [['createdAt', 'ASC']],
-    raw: true,
-    transaction,
-  });
-  const nonAuctionContextRows = await WhatnotShipmentScan.findAll({
-    attributes: ['id', 'auctionStickerNumber', 'createdAt'],
-    where: {
-      whatnotShowId: showId,
-      importId,
-      shipmentId,
-      result: 'matched',
-      scanType: 'item',
-      productSku: { [Op.or]: [{ [Op.is]: null }, { [Op.eq]: '' }] },
       auctionStickerNumber: {
-        [Op.in]: SPECIAL_NON_AUCTION_STICKERS,
+        [Op.not]: null,
+        [Op.ne]: '',
       },
     },
     order: [
@@ -494,10 +479,29 @@ const getLinkedProductSummaryBySticker = async ({
     transaction,
   });
 
+  const linkRows = [];
+  const nonAuctionContextRows = [];
+  for (const row of shipmentScanRows) {
+    const productSku = normalizeText(row.productSku);
+    const sticker = normalizeText(row.auctionStickerNumber);
+    if (!sticker) continue;
+    if (productSku) {
+      linkRows.push(row);
+      continue;
+    }
+    if (
+      row.scanType === 'item' &&
+      SPECIAL_NON_AUCTION_STICKERS.includes(sticker)
+    ) {
+      nonAuctionContextRows.push(row);
+    }
+  }
+
   const skus = [...new Set(linkRows.map((row) => normalizeText(row.productSku)).filter(Boolean))];
   let productsBySku = {};
   if (skus.length > 0) {
     const products = await Products.findAll({
+      attributes: ['sku', 'brand', 'itemName', 'strength', 'sizeOz', 'sizeMl', 'condition', 'image'],
       where: { sku: { [Op.in]: skus } },
       include: [
         {
@@ -506,6 +510,8 @@ const getLinkedProductSummaryBySticker = async ({
           attributes: ['tester'],
         },
       ],
+      raw: true,
+      nest: true,
       transaction,
     });
     productsBySku = products.reduce((acc, product) => {
@@ -582,22 +588,23 @@ const getActiveImport = async (showId) => {
 };
 
 const resolveShipmentByTracking = async (showId, tracking, importId, transaction = null) => {
-  const rows = await WhatnotShipmentItem.findAll({
+  const trackingRows = await WhatnotShipmentItem.findAll({
     where: {
       whatnotShowId: showId,
       importId,
       tracking,
     },
-    order: [['id', 'ASC']],
+    attributes: ['shipmentId'],
     transaction,
     lock: transaction ? transaction.LOCK.UPDATE : undefined,
+    raw: true,
   });
 
-  if (!rows.length) {
+  if (!trackingRows.length) {
     return { type: 'shipment_not_found' };
   }
 
-  const shipmentIds = [...new Set(rows.map((row) => normalizeText(row.shipmentId)).filter(Boolean))];
+  const shipmentIds = [...new Set(trackingRows.map((row) => normalizeText(row.shipmentId)).filter(Boolean))];
   if (shipmentIds.length !== 1) {
     return {
       type: 'tracking_conflict',
@@ -694,6 +701,7 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
       },
       attributes: ['shipmentId', 'tracking', 'mismatchReason', 'expectedQty', 'scannedQty'],
       order: [['shipmentId', 'ASC']],
+      raw: true,
     });
 
     const pendingMap = new Map();
@@ -1604,7 +1612,6 @@ router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, 
       result === 'matched' && matchedContextType
         ? buildNonAuctionInstanceKey(createdScan.id)
         : matchedAuctionSticker;
-
     const refreshedRows = await WhatnotShipmentItem.findAll({
       where: {
         whatnotShowId: showId,
@@ -1803,6 +1810,7 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
     }
 
     const matches = await Products.findAll({
+      attributes: ['sku', 'upc', 'brand', 'itemName', 'strength', 'sizeOz', 'sizeMl', 'condition', 'quantity', 'image'],
       where: {
         [Op.or]: [{ upc: barcode }, { sku: barcode }],
       },
@@ -1843,27 +1851,6 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
     } else if (matches.length === 1) {
       product = matches[0];
     } else {
-      const matchedSkus = matches.map((entry) => normalizeText(entry.sku)).filter(Boolean);
-      const detailedMatches = matchedSkus.length
-        ? await Products.findAll({
-            where: {
-              sku: {
-                [Op.in]: matchedSkus,
-              },
-            },
-            include: [
-              {
-                model: ProductDetails,
-                required: false,
-                attributes: ['tester'],
-              },
-            ],
-          })
-        : [];
-      const detailedBySku = new Map(
-        detailedMatches.map((entry) => [normalizeText(entry.sku), entry.toJSON()])
-      );
-
       await WhatnotShipmentScan.create({
         whatnotShowId: showId,
         importId: activeImport.id,
@@ -1882,16 +1869,11 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
       return res.status(409).json({
         error: 'Multiple products found. Select one SKU.',
         multiple: true,
-        products: matchedSkus.map((sku) => {
-          const record = detailedBySku.get(sku);
-          if (record) return record;
-          const fallback = matches.find((entry) => normalizeText(entry.sku) === sku);
-          return fallback ? fallback.toJSON() : { sku };
-        }),
+        products: matches.map((entry) => entry.toJSON()),
       });
     }
 
-    await WhatnotShipmentScan.create({
+    const createdLinkScan = await WhatnotShipmentScan.create({
       whatnotShowId: showId,
       importId: activeImport.id,
       shipmentId: resolved.shipmentId,
@@ -1918,6 +1900,7 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
       },
       order: [['id', 'ASC']],
     });
+
     const linkedSummary = await getLinkedProductSummaryBySticker({
       showId,
       importId: activeImport.id,
@@ -1936,14 +1919,20 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
 
     return res.json({
       success: true,
+      showId,
+      importId: activeImport.id,
       shipmentId: resolved.shipmentId,
       tracking,
+      shipmentStatus,
       auctionStickerNumber: contextForLink || auctionStickerNumber,
       product: {
         sku: product.sku,
         upc: product.upc,
         brand: product.brand,
         itemName: product.itemName,
+        strength: product.strength,
+        sizeOz: product.sizeOz,
+        sizeMl: product.sizeMl,
         quantity: Number(product.quantity || 0),
         image: product.image || null,
         tester: Boolean(product?.ProductDetail?.tester),
@@ -1954,7 +1943,6 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
       message: isSpecialNonAuctionContext
         ? `Product linked to ${specialNonAuctionContext}. Inventory will update when shipment is closed.`
         : `Product linked to auction #${auctionStickerNumber}. Inventory will update when shipment is closed.`,
-      shipmentStatus,
       ...summary,
     });
   } catch (error) {
