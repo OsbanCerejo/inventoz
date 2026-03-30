@@ -1077,6 +1077,7 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
   const transaction = await sequelize.transaction();
   try {
     const id = Number(req.params.id);
+    const vendorIdInput = parseOptionalInteger(req.body?.vendorId);
     if (!Number.isInteger(id) || id <= 0) {
       await transaction.rollback();
       return res.status(400).json({ error: "Invalid invoice id" });
