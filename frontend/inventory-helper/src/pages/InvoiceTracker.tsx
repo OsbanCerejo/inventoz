@@ -11,6 +11,7 @@ import {
   Inventory2 as InventoryIcon,
 } from "@mui/icons-material";
 import {
+  Autocomplete,
   Alert,
   Box,
   Button,
@@ -61,6 +62,7 @@ type UserMini = {
 
 type Invoice = {
   id: number;
+  vendorId?: number | null;
   vendorName: string;
   invoiceNumber: string;
   orderDate: string;
@@ -87,6 +89,12 @@ type Invoice = {
   inboundSummary?: InboundSummary;
   creator?: UserMini | null;
   updater?: UserMini | null;
+};
+
+type VendorOption = {
+  id: number;
+  name: string;
+  normalizedName?: string;
 };
 
 type InboundRow = {
@@ -162,6 +170,7 @@ const emptyForm = {
   id: null as number | null,
   updatedAt: "",
   isArchived: false,
+  vendorId: null as number | null,
   vendorName: "",
   invoiceNumber: "",
   orderDate: new Date().toISOString().slice(0, 10),
@@ -199,6 +208,11 @@ function InvoiceTracker() {
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [savedFormSnapshot, setSavedFormSnapshot] = useState("");
+  const [vendorOptions, setVendorOptions] = useState<VendorOption[]>([]);
+  const [vendorInputValue, setVendorInputValue] = useState("");
+  const [addVendorDialogOpen, setAddVendorDialogOpen] = useState(false);
+  const [newVendorName, setNewVendorName] = useState("");
+  const [creatingVendor, setCreatingVendor] = useState(false);
   const [skuLookupLoading, setSkuLookupLoading] = useState<Record<number, boolean>>({});
   const [inboundDialogOpen, setInboundDialogOpen] = useState(false);
   const [startInboundConfirmOpen, setStartInboundConfirmOpen] = useState(false);
@@ -230,6 +244,7 @@ function InvoiceTracker() {
   const buildFormSnapshot = (target: typeof emptyForm) =>
     JSON.stringify({
       id: target.id,
+      vendorId: target.vendorId,
       vendorName: target.vendorName,
       invoiceNumber: target.invoiceNumber,
       orderDate: target.orderDate,
@@ -316,13 +331,35 @@ function InvoiceTracker() {
     }
   };
 
+  const loadVendorOptions = async () => {
+    if (!token) return;
+    try {
+      const response = await axios.get<VendorOption[]>(getApiUrl("invoice-tracker/vendors"), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setVendorOptions(
+        [...(response.data || [])]
+          .filter((row) => row?.id && String(row?.name || "").trim())
+          .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+      );
+    } catch (error) {
+      console.error("Failed to load vendor options:", error);
+    }
+  };
+
   useEffect(() => {
     loadInvoices();
   }, [token, dateFrom, dateTo, shipmentStatusFilter, itemCheckStatusFilter, inboundStatusFilter, paymentStatusFilter, showArchived]);
 
+  useEffect(() => {
+    loadVendorOptions();
+  }, [token]);
+
   const openCreateDialog = () => {
     setDialogMode("create");
     setForm(emptyForm);
+    setVendorInputValue("");
+    setNewVendorName("");
     setSavedFormSnapshot(buildFormSnapshot(emptyForm));
     setDialogOpen(true);
   };
@@ -337,6 +374,7 @@ function InvoiceTracker() {
       id: detail.id,
       updatedAt: detail.updatedAt,
       isArchived: !!detail.isArchived,
+      vendorId: detail.vendorId || null,
       vendorName: detail.vendorName,
       invoiceNumber: detail.invoiceNumber,
       orderDate: detail.orderDate,
@@ -365,6 +403,8 @@ function InvoiceTracker() {
           : [],
     };
     setForm(normalizedForm);
+    setVendorInputValue(detail.vendorName || "");
+    setNewVendorName("");
     setSavedFormSnapshot(buildFormSnapshot(normalizedForm));
     setDialogOpen(true);
   };
@@ -374,6 +414,9 @@ function InvoiceTracker() {
     setDialogOpen(false);
     setDialogMode("create");
     setForm(emptyForm);
+    setVendorInputValue("");
+    setNewVendorName("");
+    setAddVendorDialogOpen(false);
     setSavedFormSnapshot(buildFormSnapshot(emptyForm));
     setInboundDialogOpen(false);
     setInboundRows([]);
@@ -500,9 +543,57 @@ function InvoiceTracker() {
     }));
   };
 
+  const selectedVendorOption = useMemo(
+    () => vendorOptions.find((option) => option.id === form.vendorId) || null,
+    [vendorOptions, form.vendorId]
+  );
+
+  const openAddVendorDialog = () => {
+    setNewVendorName(vendorInputValue.trim() || form.vendorName.trim());
+    setAddVendorDialogOpen(true);
+  };
+
+  const handleCreateVendor = async () => {
+    if (!token) return;
+    const name = newVendorName.trim();
+    if (!name) {
+      toast.error("Vendor name is required");
+      return;
+    }
+
+    try {
+      setCreatingVendor(true);
+      const response = await axios.post<VendorOption>(
+        getApiUrl("invoice-tracker/vendors"),
+        { name },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const createdVendor = response.data;
+      setVendorOptions((prev) =>
+        [...prev.filter((option) => option.id !== createdVendor.id), createdVendor].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        )
+      );
+      setForm((prev) => ({
+        ...prev,
+        vendorId: createdVendor.id,
+        vendorName: createdVendor.name,
+      }));
+      setVendorInputValue(createdVendor.name);
+      setAddVendorDialogOpen(false);
+      setNewVendorName("");
+      toast.success("Vendor added");
+    } catch (error: any) {
+      console.error("Failed to create vendor:", error);
+      toast.error(error?.response?.data?.error || "Failed to add vendor");
+    } finally {
+      setCreatingVendor(false);
+    }
+  };
+
   const saveInvoice = async () => {
     if (!token) return;
-    if (!form.vendorName.trim() || !form.invoiceNumber.trim() || !form.orderDate) {
+    if ((!form.vendorId && !form.vendorName.trim()) || !form.invoiceNumber.trim() || !form.orderDate) {
       toast.error("Vendor Name, Invoice Number, and Order Date are required");
       return;
     }
@@ -521,6 +612,7 @@ function InvoiceTracker() {
     const runSave = async () => {
       const payload = {
         expectedUpdatedAt: form.id ? form.updatedAt : undefined,
+        vendorId: form.vendorId,
         vendorName: form.vendorName.trim(),
         invoiceNumber: form.invoiceNumber.trim(),
         orderDate: form.orderDate,
@@ -552,6 +644,7 @@ function InvoiceTracker() {
         toast.success("Invoice created");
       }
 
+      await loadVendorOptions();
       setSavedFormSnapshot(buildFormSnapshot(form));
       closeDialog();
       await loadInvoices();
@@ -1109,16 +1202,51 @@ function InvoiceTracker() {
                   Invoice Details
                 </Typography>
                 <Grid container spacing={2}>
-                  <Grid item xs={12} md={4}>
-                    <TextField
-                      fullWidth
-                      label="Vendor Name *"
-                      value={form.vendorName}
-                      onChange={(e) => setForm((prev) => ({ ...prev, vendorName: e.target.value }))}
-                      disabled={isReadOnly}
-                    />
+                  <Grid item xs={12} md={6}>
+                    <Stack direction="row" spacing={1} alignItems="flex-start">
+                      <Autocomplete
+                        options={vendorOptions}
+                        getOptionLabel={(option) => option.name}
+                        isOptionEqualToValue={(option, value) => option.id === value.id}
+                        value={selectedVendorOption}
+                        inputValue={vendorInputValue}
+                        onChange={(_, value) => {
+                          setForm((prev) => ({
+                            ...prev,
+                            vendorId: value?.id || null,
+                            vendorName: value?.name || "",
+                          }));
+                          setVendorInputValue(value?.name || "");
+                        }}
+                        onInputChange={(_, value, reason) => {
+                          setVendorInputValue(value);
+                          if (reason === "clear") {
+                            setForm((prev) => ({ ...prev, vendorId: null, vendorName: "" }));
+                            return;
+                          }
+                          if (value !== (selectedVendorOption?.name || "")) {
+                            setForm((prev) => ({ ...prev, vendorId: null, vendorName: value }));
+                          }
+                        }}
+                        disabled={isReadOnly}
+                        sx={{ flex: 1 }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            fullWidth
+                            label="Vendor Name *"
+                            helperText="Select a vendor or add a new one"
+                          />
+                        )}
+                      />
+                      {!isReadOnly && (
+                        <Button variant="outlined" onClick={openAddVendorDialog} sx={{ minWidth: 110 }}>
+                          Add Vendor
+                        </Button>
+                      )}
+                    </Stack>
                   </Grid>
-                  <Grid item xs={12} md={4}>
+                  <Grid item xs={12} md={3}>
                     <TextField
                       fullWidth
                       label="Invoice Number *"
@@ -1127,7 +1255,7 @@ function InvoiceTracker() {
                       disabled={isReadOnly}
                     />
                   </Grid>
-                  <Grid item xs={12} md={4}>
+                  <Grid item xs={12} md={3}>
                     <TextField
                       fullWidth
                       type="date"
@@ -1498,6 +1626,35 @@ function InvoiceTracker() {
               {saving ? "Saving..." : form.id ? "Save Changes" : "Create Invoice"}
             </Button>
           )}
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={addVendorDialogOpen}
+        onClose={() => {
+          if (!creatingVendor) setAddVendorDialogOpen(false);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Add Vendor</DialogTitle>
+        <DialogContent dividers>
+          <TextField
+            fullWidth
+            label="Vendor Name"
+            value={newVendorName}
+            onChange={(e) => setNewVendorName(e.target.value)}
+            disabled={creatingVendor}
+            autoFocus
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddVendorDialogOpen(false)} disabled={creatingVendor}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleCreateVendor} disabled={creatingVendor}>
+            {creatingVendor ? "Saving..." : "Save Vendor"}
+          </Button>
         </DialogActions>
       </Dialog>
 

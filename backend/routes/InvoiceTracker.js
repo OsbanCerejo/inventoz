@@ -3,6 +3,7 @@ const { Op } = require("sequelize");
 const {
   InvoiceTrackerInvoice,
   InvoiceTrackerInvoiceItem,
+  InvoiceTrackerVendor,
   InvoiceTrackerInboundBatch,
   InvoiceTrackerInboundRow,
   Inbound,
@@ -62,6 +63,12 @@ const listInvoiceIncludes = [
 const detailInvoiceIncludes = [
   ...listInvoiceIncludes,
   {
+    model: InvoiceTrackerVendor,
+    as: "vendor",
+    attributes: ["id", "name", "normalizedName"],
+    required: false,
+  },
+  {
     model: InvoiceTrackerInboundRow,
     as: "inboundRows",
     required: false,
@@ -113,6 +120,13 @@ const detailInvoiceIncludes = [
 const sanitizeString = (value) => {
   if (typeof value !== "string") return "";
   return value.trim();
+};
+
+const normalizeVendorName = (value) => sanitizeString(value).replace(/\s+/g, " ").toLowerCase();
+
+const parseOptionalInteger = (value) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
 const parseExpectedUpdatedAt = (value) => {
@@ -248,6 +262,7 @@ const serializeInvoice = (invoice) => {
 
   return {
     ...plain,
+    vendorId: plain.vendorId || plain.vendor?.id || null,
     miscellaneousAmount,
     shippingAmount,
     items: serializedItems,
@@ -338,6 +353,7 @@ const buildItems = async (items) => {
 };
 
 const validateHeaderFields = ({
+  vendorId,
   vendorName,
   invoiceNumber,
   notes,
@@ -352,7 +368,7 @@ const validateHeaderFields = ({
   miscellaneousAmount,
   shippingAmount,
 }) => {
-  if (!vendorName || !invoiceNumber || !orderDate) {
+  if ((!vendorId && !vendorName) || !invoiceNumber || !orderDate) {
     return "Vendor Name, Invoice Number, and Order Date are required";
   }
   if (vendorName.length > MAX_VENDOR_NAME_LENGTH) return "Vendor Name is too long";
@@ -377,12 +393,69 @@ const validateHeaderFields = ({
   return null;
 };
 
-const findDuplicateInvoice = async ({ vendorName, invoiceNumber, excludeId = null, transaction = null }) => {
+const resolveInvoiceVendor = async ({ vendorId, vendorName, actorUserId = null, transaction = null }) => {
+  const normalizedVendorName = normalizeVendorName(vendorName);
+
+  if (vendorId) {
+    const vendor = await InvoiceTrackerVendor.findByPk(vendorId, { transaction });
+    if (!vendor) {
+      const error = new Error("Selected vendor could not be found");
+      error.status = 400;
+      throw error;
+    }
+    return {
+      vendorId: vendor.id,
+      vendorName: vendor.name,
+      normalizedVendorName: vendor.normalizedName,
+    };
+  }
+
+  if (!normalizedVendorName) {
+    const error = new Error("Vendor Name is required");
+    error.status = 400;
+    throw error;
+  }
+
+  const existingVendor = await InvoiceTrackerVendor.findOne({
+    where: { normalizedName: normalizedVendorName },
+    transaction,
+  });
+
+  if (existingVendor) {
+    return {
+      vendorId: existingVendor.id,
+      vendorName: existingVendor.name,
+      normalizedVendorName: existingVendor.normalizedName,
+    };
+  }
+
+  const createdVendor = await InvoiceTrackerVendor.create(
+    {
+      name: sanitizeString(vendorName).replace(/\s+/g, " "),
+      normalizedName: normalizedVendorName,
+      createdBy: actorUserId || null,
+      lastUpdatedBy: actorUserId || null,
+    },
+    { transaction }
+  );
+
+  return {
+    vendorId: createdVendor.id,
+    vendorName: createdVendor.name,
+    normalizedVendorName: createdVendor.normalizedName,
+  };
+};
+
+const findDuplicateInvoice = async ({ vendorId, vendorName, invoiceNumber, excludeId = null, transaction = null }) => {
   const where = {
-    vendorName,
     invoiceNumber,
     isArchived: false,
   };
+  if (vendorId) {
+    where.vendorId = vendorId;
+  } else {
+    where.vendorName = vendorName;
+  }
   if (excludeId) {
     where.id = { [Op.ne]: excludeId };
   }
@@ -779,6 +852,70 @@ router.get("/", auth, checkPermission("invoiceTracker", "view"), async (req, res
   }
 });
 
+router.get("/vendors", auth, checkPermission("invoiceTracker", "view"), async (req, res) => {
+  try {
+    const rows = await InvoiceTrackerVendor.findAll({
+      attributes: ["id", "name", "normalizedName"],
+      order: [["name", "ASC"]],
+      raw: true,
+    });
+
+    return res.json(
+      rows
+        .map((row) => ({
+          id: Number(row.id),
+          name: sanitizeString(row.name),
+          normalizedName: sanitizeString(row.normalizedName),
+        }))
+        .filter((row) => row.id && row.name)
+    );
+  } catch (error) {
+    console.error("Error fetching invoice tracker vendors:", error);
+    return res.status(500).json({ error: "Failed to fetch vendors" });
+  }
+});
+
+router.post("/vendors", auth, checkPermission("invoiceTracker", "create"), async (req, res) => {
+  try {
+    const name = sanitizeString(req.body?.name).replace(/\s+/g, " ");
+    const normalizedName = normalizeVendorName(name);
+
+    if (!name) {
+      return res.status(400).json({ error: "Vendor name is required" });
+    }
+    if (name.length > MAX_VENDOR_NAME_LENGTH) {
+      return res.status(400).json({ error: "Vendor name is too long" });
+    }
+
+    const existing = await InvoiceTrackerVendor.findOne({
+      where: { normalizedName },
+    });
+    if (existing) {
+      return res.json({
+        id: existing.id,
+        name: existing.name,
+        normalizedName: existing.normalizedName,
+      });
+    }
+
+    const vendor = await InvoiceTrackerVendor.create({
+      name,
+      normalizedName,
+      createdBy: req.user?.id || null,
+      lastUpdatedBy: req.user?.id || null,
+    });
+
+    return res.status(201).json({
+      id: vendor.id,
+      name: vendor.name,
+      normalizedName: vendor.normalizedName,
+    });
+  } catch (error) {
+    console.error("Error creating invoice tracker vendor:", error);
+    return res.status(500).json({ error: "Failed to create vendor" });
+  }
+});
+
 router.get("/:id", auth, checkPermission("invoiceTracker", "view"), async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -836,6 +973,7 @@ router.get("/:id/inbound-review", auth, checkPermission("invoiceTracker", "view"
 router.post("/", auth, checkPermission("invoiceTracker", "create"), async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
+    const vendorIdInput = parseOptionalInteger(req.body?.vendorId);
     const vendorName = sanitizeString(req.body?.vendorName);
     const invoiceNumber = sanitizeString(req.body?.invoiceNumber);
     const orderDate = sanitizeString(req.body?.orderDate);
@@ -850,8 +988,16 @@ router.post("/", auth, checkPermission("invoiceTracker", "create"), async (req, 
     const notes = sanitizeString(req.body?.notes) || null;
     const items = await buildItems(req.body?.items);
 
-    const validationError = validateHeaderFields({
+    const resolvedVendor = await resolveInvoiceVendor({
+      vendorId: vendorIdInput,
       vendorName,
+      actorUserId: req.user?.id || null,
+      transaction,
+    });
+
+    const validationError = validateHeaderFields({
+      vendorId: resolvedVendor.vendorId,
+      vendorName: resolvedVendor.vendorName,
       invoiceNumber,
       notes,
       orderDate,
@@ -870,7 +1016,12 @@ router.post("/", auth, checkPermission("invoiceTracker", "create"), async (req, 
       return res.status(400).json({ error: validationError });
     }
 
-    const existingDuplicate = await findDuplicateInvoice({ vendorName, invoiceNumber, transaction });
+    const existingDuplicate = await findDuplicateInvoice({
+      vendorId: resolvedVendor.vendorId,
+      vendorName: resolvedVendor.vendorName,
+      invoiceNumber,
+      transaction,
+    });
     if (existingDuplicate) {
       await transaction.rollback();
       return res.status(409).json({ error: "An invoice with this vendor and invoice number already exists" });
@@ -878,7 +1029,8 @@ router.post("/", auth, checkPermission("invoiceTracker", "create"), async (req, 
 
     const invoice = await InvoiceTrackerInvoice.create(
       {
-        vendorName,
+        vendorId: resolvedVendor.vendorId,
+        vendorName: resolvedVendor.vendorName,
         invoiceNumber,
         orderDate,
         shipmentStatus,
@@ -971,8 +1123,16 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
     const notes = sanitizeString(req.body?.notes) || null;
     const items = await buildItems(req.body?.items);
 
-    const validationError = validateHeaderFields({
+    const resolvedVendor = await resolveInvoiceVendor({
+      vendorId: vendorIdInput,
       vendorName,
+      actorUserId: req.user?.id || null,
+      transaction,
+    });
+
+    const validationError = validateHeaderFields({
+      vendorId: resolvedVendor.vendorId,
+      vendorName: resolvedVendor.vendorName,
       invoiceNumber,
       notes,
       orderDate,
@@ -992,7 +1152,8 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
     }
 
     const existingDuplicate = await findDuplicateInvoice({
-      vendorName,
+      vendorId: resolvedVendor.vendorId,
+      vendorName: resolvedVendor.vendorName,
       invoiceNumber,
       excludeId: invoice.id,
       transaction,
@@ -1004,7 +1165,8 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
 
     await invoice.update(
       {
-        vendorName,
+        vendorId: resolvedVendor.vendorId,
+        vendorName: resolvedVendor.vendorName,
         invoiceNumber,
         orderDate,
         shipmentStatus,
@@ -1387,6 +1549,7 @@ router.patch("/:id/restore", auth, checkPermission("invoiceTracker", "edit"), as
     }
 
     const existingDuplicate = await findDuplicateInvoice({
+      vendorId: invoice.vendorId || null,
       vendorName: invoice.vendorName,
       invoiceNumber: invoice.invoiceNumber,
       excludeId: invoice.id,

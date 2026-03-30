@@ -11,6 +11,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: false,
       },
+      vendorId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
       invoiceNumber: {
         type: DataTypes.STRING,
         allowNull: false,
@@ -102,6 +106,10 @@ module.exports = (sequelize, DataTypes) => {
   );
 
   InvoiceTrackerInvoice.associate = (models) => {
+    InvoiceTrackerInvoice.belongsTo(models.InvoiceTrackerVendor, {
+      foreignKey: "vendorId",
+      as: "vendor",
+    });
     InvoiceTrackerInvoice.hasMany(models.InvoiceTrackerInvoiceItem, {
       foreignKey: "invoiceId",
       as: "items",
