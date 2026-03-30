@@ -5,6 +5,36 @@ const { auth } = require('../middleware/auth');
 const { checkPermission } = require('../middleware/permissions');
 const PermissionService = require('../Services/PermissionService');
 const { ValidationError, Op } = require('sequelize');
+const ACTIVE_SESSION_WINDOW_MINUTES = Number(process.env.ACTIVE_SESSION_WINDOW_MINUTES || 30);
+
+const mapSessionPayload = (session) => ({
+  id: session.id,
+  sessionId: session.sessionId,
+  userId: session.userId,
+  ipAddress: session.ipAddress,
+  userAgent: session.userAgent,
+  deviceName: session.deviceName,
+  geoCountry: session.geoCountry,
+  geoRegion: session.geoRegion,
+  geoCity: session.geoCity,
+  geoLat: session.geoLat,
+  geoLng: session.geoLng,
+  geoSource: session.geoSource,
+  loginAt: session.loginAt,
+  lastSeenAt: session.lastSeenAt,
+  logoutAt: session.logoutAt,
+  isActive: session.isActive,
+  user: session.user
+    ? {
+        id: session.user.id,
+        name: session.user.name,
+        username: session.user.username,
+        email: session.user.email,
+        role: session.user.role,
+        isActive: session.user.isActive,
+      }
+    : null,
+});
 
 // Get all users (users permission required)
 router.get('/', auth, checkPermission('users', 'view'), async (req, res) => {
@@ -123,8 +153,13 @@ router.put('/:id/permissions', auth, checkPermission('users', 'edit'), async (re
 // Get active login sessions (users permission required)
 router.get('/sessions/active', auth, checkPermission('users', 'view'), async (req, res) => {
   try {
+    const activeThreshold = new Date(Date.now() - ACTIVE_SESSION_WINDOW_MINUTES * 60 * 1000);
     const sessions = await UserSession.findAll({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        logoutAt: { [Op.is]: null },
+        lastSeenAt: { [Op.gte]: activeThreshold },
+      },
       include: [
         {
           model: User,
@@ -136,40 +171,42 @@ router.get('/sessions/active', auth, checkPermission('users', 'view'), async (re
       limit: 200,
     });
 
-    const payload = sessions.map((session) => ({
-      id: session.id,
-      sessionId: session.sessionId,
-      userId: session.userId,
-      ipAddress: session.ipAddress,
-      userAgent: session.userAgent,
-      deviceName: session.deviceName,
-      geoCountry: session.geoCountry,
-      geoRegion: session.geoRegion,
-      geoCity: session.geoCity,
-      geoLat: session.geoLat,
-      geoLng: session.geoLng,
-      geoSource: session.geoSource,
-      loginAt: session.loginAt,
-      lastSeenAt: session.lastSeenAt,
-      logoutAt: session.logoutAt,
-      isActive: session.isActive,
-      user: session.user
-        ? {
-            id: session.user.id,
-            name: session.user.name,
-            username: session.user.username,
-            email: session.user.email,
-            role: session.user.role,
-            isActive: session.user.isActive,
-          }
-        : null,
-    }));
-
-    res.json(payload);
+    res.json(sessions.map(mapSessionPayload));
   } catch (error) {
     console.error('Get active sessions error:', error);
     res.status(500).json({
       error: 'Failed to retrieve active sessions. Please try again.',
+    });
+  }
+});
+
+router.get('/sessions/inactive', auth, checkPermission('users', 'view'), async (req, res) => {
+  try {
+    const activeThreshold = new Date(Date.now() - ACTIVE_SESSION_WINDOW_MINUTES * 60 * 1000);
+    const sessions = await UserSession.findAll({
+      where: {
+        [Op.or]: [
+          { isActive: false },
+          { logoutAt: { [Op.not]: null } },
+          { lastSeenAt: { [Op.lt]: activeThreshold } },
+        ],
+      },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'name', 'username', 'email', 'role', 'isActive'],
+        },
+      ],
+      order: [['lastSeenAt', 'DESC']],
+      limit: 200,
+    });
+
+    res.json(sessions.map(mapSessionPayload));
+  } catch (error) {
+    console.error('Get inactive sessions error:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve inactive sessions. Please try again.',
     });
   }
 });

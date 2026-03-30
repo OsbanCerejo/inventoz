@@ -54,9 +54,9 @@ function Home() {
     orders: {
       title: "Orders",
       description: "View and manage all orders",
-      icon: <OrdersIcon sx={{ fontSize: 40, color: '#9c27b0' }} />,
+      icon: <OrdersIcon sx={{ fontSize: 40, color: '#ef6c00' }} />,
       path: "/orders/showAll",
-      color: "#f3e5f5"
+      color: "#fff3e0"
     },
     packing: {
       title: "Packing Mode",
@@ -68,23 +68,23 @@ function Home() {
     pricelist: {
       title: "Price List",
       description: "Manage product pricing and lists",
-      icon: <PriceListIcon sx={{ fontSize: 40, color: '#388e3c' }} />,
+      icon: <PriceListIcon sx={{ fontSize: 40, color: '#2e7d32' }} />,
       path: "/price-list",
-      color: "#e8f5e8"
+      color: "#e8f5e9"
     },
     whatnot: {
-      title: "Whatnot",
-      description: "Whatnot barcode scanner",
-      icon: <WhatnotIcon sx={{ fontSize: 40, color: '#7b1fa2' }} />,
-      path: "/whatnot",
+      title: "Whatnot Fulfilment",
+      description: "Fulfilment workflow for Whatnot shipments",
+      icon: <WhatnotIcon sx={{ fontSize: 40, color: '#6a1b9a' }} />,
+      path: "/whatnot-fulfillment",
       color: "#f3e5f5"
     },
     users: {
       title: "Users",
       description: "Manage users and permissions",
-      icon: <UsersIcon sx={{ fontSize: 40, color: '#00695c' }} />,
+      icon: <UsersIcon sx={{ fontSize: 40, color: '#ad1457' }} />,
       path: "/users",
-      color: "#e0f2f1"
+      color: "#fce4ec"
     },
     barcodeScan: {
       title: "Barcode Scan",
@@ -103,9 +103,9 @@ function Home() {
     whatnotAnalytics: {
       title: "Whatnot Analytics",
       description: "View Whatnot scan and sales performance",
-      icon: <WhatnotAnalyticsIcon sx={{ fontSize: 40, color: '#7b1fa2' }} />,
+      icon: <WhatnotAnalyticsIcon sx={{ fontSize: 40, color: '#1565c0' }} />,
       path: "/whatnot-analytics",
-      color: "#f3e5f5"
+      color: "#e8f1ff"
     },
     packingAnalytics: {
       title: "Packing Analytics",
@@ -124,21 +124,32 @@ function Home() {
     tickets: {
       title: "Tickets",
       description: "Customer care reshipment ticket workflow",
-      icon: <TicketsIcon sx={{ fontSize: 40, color: '#0d47a1' }} />,
+      icon: <TicketsIcon sx={{ fontSize: 40, color: '#c62828' }} />,
       path: "/tickets",
-      color: "#e8f0ff"
+      color: "#ffebee"
     },
     invoiceTracker: {
       title: "Invoice Tracker",
       description: "Track vendor invoices and received shipment lines",
-      icon: <InvoiceTrackerIcon sx={{ fontSize: 40, color: '#5d4037' }} />,
+      icon: <InvoiceTrackerIcon sx={{ fontSize: 40, color: '#6d4c41' }} />,
       path: "/invoice-tracker",
       color: "#efebe9"
     }
   };
 
-  const orderedMenuKeys = permissions?.menu || [];
-  const dashboardItems = orderedMenuKeys
+  const dashboardOrder = [
+    "products",
+    "orders",
+    "invoiceTracker",
+    "packingAnalytics",
+    "whatnotAnalytics",
+    "tickets",
+    "whatnot",
+    "pricelist",
+    "users",
+  ];
+
+  const dashboardItems = dashboardOrder
     .filter((menuKey) => tileConfig[menuKey] && hasMenuAccess(menuKey))
     .map((menuKey) => ({
       menuKey,

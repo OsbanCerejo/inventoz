@@ -70,6 +70,7 @@ type UserPermissionRow = {
 const Users: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
+  const [inactiveSessions, setInactiveSessions] = useState<ActiveSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -127,10 +128,31 @@ const Users: React.FC = () => {
     }
   };
 
+  const fetchInactiveSessions = async (silent = false) => {
+    if (!token) {
+      return;
+    }
+
+    try {
+      const response = await axios.get(getApiUrl('api/users/sessions/inactive'), {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setInactiveSessions(response.data || []);
+    } catch (error) {
+      console.error('Error fetching inactive sessions:', error);
+      if (!silent) {
+        toast.error('Failed to fetch inactive sessions');
+      }
+    }
+  };
+
   useEffect(() => {
     if (token) {
       fetchUsers();
       fetchActiveSessions();
+      fetchInactiveSessions();
     }
   }, [token]);
 
@@ -138,6 +160,7 @@ const Users: React.FC = () => {
     if (!token) return;
     const id = window.setInterval(() => {
       fetchActiveSessions(true);
+      fetchInactiveSessions(true);
     }, 60000);
     return () => window.clearInterval(id);
   }, [token]);
@@ -360,7 +383,7 @@ const Users: React.FC = () => {
             <Card>
               <CardHeader
                 title={`Active Sessions (${activeSessions.length})`}
-                subheader="Tracks active user logins by device/computer, IP, and approximate geolocation."
+                subheader="Shows only currently active sessions seen recently."
               />
               <CardContent>
                 {sessionsLoading ? (
@@ -406,6 +429,68 @@ const Users: React.FC = () => {
                             </TableCell>
                             <TableCell>{formatDateTime(session.loginAt)}</TableCell>
                             <TableCell>{formatDateTime(session.lastSeenAt)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </CardContent>
+            </Card>
+          </Box>
+
+          <Box mt={4}>
+            <Card>
+              <CardHeader
+                title={`Inactive Sessions (${inactiveSessions.length})`}
+                subheader="Login history for logged-out or stale sessions."
+              />
+              <CardContent>
+                {sessionsLoading ? (
+                  <Box display="flex" justifyContent="center" py={2}>
+                    <CircularProgress size={24} />
+                  </Box>
+                ) : inactiveSessions.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    No inactive sessions found.
+                  </Typography>
+                ) : (
+                  <TableContainer component={Paper} elevation={0}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell><strong>User</strong></TableCell>
+                          <TableCell><strong>Role</strong></TableCell>
+                          <TableCell><strong>Computer / Device</strong></TableCell>
+                          <TableCell><strong>IP</strong></TableCell>
+                          <TableCell><strong>Location</strong></TableCell>
+                          <TableCell><strong>Login At</strong></TableCell>
+                          <TableCell><strong>Last Seen</strong></TableCell>
+                          <TableCell><strong>Logged Out</strong></TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {inactiveSessions.map((session) => (
+                          <TableRow key={`inactive-${session.id}`} hover>
+                            <TableCell>
+                              <Typography variant="body2" fontWeight="medium">
+                                {session.user?.name || session.user?.username || `User #${session.userId}`}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Chip size="small" label={session.user?.role || 'N/A'} />
+                            </TableCell>
+                            <TableCell>{session.deviceName || 'Unknown device'}</TableCell>
+                            <TableCell>{session.ipAddress || 'N/A'}</TableCell>
+                            <TableCell>
+                              <Typography variant="body2">{formatGeo(session)}</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Source: {session.geoSource || 'unknown'}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>{formatDateTime(session.loginAt)}</TableCell>
+                            <TableCell>{formatDateTime(session.lastSeenAt)}</TableCell>
+                            <TableCell>{formatDateTime(session.logoutAt)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
