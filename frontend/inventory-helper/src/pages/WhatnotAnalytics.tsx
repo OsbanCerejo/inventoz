@@ -358,12 +358,6 @@ function WhatnotAnalytics() {
       setError(null);
 
       const results = await Promise.allSettled([
-        axios.get(getApiUrl("whatnot/analytics/fulfillment-overview"), { params }),
-        axios.get(getApiUrl("whatnot/analytics/fulfillment-trend"), { params }),
-        axios.get(getApiUrl("whatnot/analytics/fulfillment-shows"), { params }),
-        axios.get(getApiUrl("whatnot/analytics/fulfillment-products-top"), { params }),
-        axios.get(getApiUrl("whatnot/analytics/fulfillment-brand-mix"), { params: { ...params, limit: 12 } }),
-        axios.get(getApiUrl("whatnot/analytics/fulfillment-sales-mix"), { params }),
         axios.get(getApiUrl("whatnot/analytics/overview"), { params }),
         axios.get(getApiUrl("whatnot/analytics/trend"), { params }),
         axios.get(getApiUrl("whatnot/analytics/shows-performance"), { params }),
@@ -377,12 +371,6 @@ function WhatnotAnalytics() {
       ]);
 
       const [
-        fulfillmentOverviewResult,
-        fulfillmentTrendResult,
-        fulfillmentShowsResult,
-        fulfillmentTopProductsResult,
-        fulfillmentBrandMixResult,
-        fulfillmentSalesMixResult,
         overviewResult,
         trendResult,
         showsPerfResult,
@@ -395,15 +383,6 @@ function WhatnotAnalytics() {
         riskResult,
       ] = results;
 
-      if (fulfillmentOverviewResult.status === "fulfilled") setFulfillmentOverview(fulfillmentOverviewResult.value.data);
-      if (fulfillmentTrendResult.status === "fulfilled") setFulfillmentTrend(fulfillmentTrendResult.value.data || []);
-      if (fulfillmentShowsResult.status === "fulfilled") setFulfillmentShowsPerformance(fulfillmentShowsResult.value.data || []);
-      if (fulfillmentTopProductsResult.status === "fulfilled") setFulfillmentTopProducts(fulfillmentTopProductsResult.value.data || []);
-      if (fulfillmentBrandMixResult.status === "fulfilled") {
-        const payload = fulfillmentBrandMixResult.value.data || {};
-        setFulfillmentBrandMix(payload.rows || []);
-      }
-      if (fulfillmentSalesMixResult.status === "fulfilled") setFulfillmentSalesMix(fulfillmentSalesMixResult.value.data || []);
       if (overviewResult.status === "fulfilled") setOverview(overviewResult.value.data);
       if (trendResult.status === "fulfilled") setTrend(trendResult.value.data || []);
       if (showsPerfResult.status === "fulfilled") setShowsPerformance(showsPerfResult.value.data || []);
@@ -429,12 +408,6 @@ function WhatnotAnalytics() {
       if (riskResult.status === "fulfilled") setRiskRows(riskResult.value.data || []);
 
       const failedEndpoints = [
-        { name: "fulfillment-overview", result: fulfillmentOverviewResult },
-        { name: "fulfillment-trend", result: fulfillmentTrendResult },
-        { name: "fulfillment-shows", result: fulfillmentShowsResult },
-        { name: "fulfillment-products-top", result: fulfillmentTopProductsResult },
-        { name: "fulfillment-brand-mix", result: fulfillmentBrandMixResult },
-        { name: "fulfillment-sales-mix", result: fulfillmentSalesMixResult },
         { name: "overview", result: overviewResult },
         { name: "trend", result: trendResult },
         { name: "shows-performance", result: showsPerfResult },
@@ -838,7 +811,7 @@ function WhatnotAnalytics() {
           Whatnot Analytics
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Admin dashboard for scan activity, unit sales, show performance, SKU velocity, and inventory risk.
+          Legacy scan and operations analytics powered by the Whatnot logs table.
         </Typography>
       </Paper>
 
@@ -927,27 +900,17 @@ function WhatnotAnalytics() {
         </Box>
       )}
 
-      {!loading && ((activeTab === 0 && fulfillmentOverview) || (activeTab !== 0 && overview)) && (
+      {!loading && overview && (
         <>
           <Grid container spacing={2} sx={{ mb: 2.5 }}>
-            {(activeTab === 0
-              ? [
-                  { label: "Revenue", value: formatCurrency(fulfillmentOverview?.revenue || 0), color: "#0b6bcb" },
-                  { label: "Units Sold", value: fulfillmentOverview?.unitsSold || 0, color: "#1f7a1f" },
-                  { label: "Avg Sold Price", value: formatCurrency(fulfillmentOverview?.avgSoldPrice || 0), color: "#6a1b9a" },
-                  { label: "Completed Shipments", value: fulfillmentOverview?.completedShipments || 0, color: "#ef6c00" },
-                  { label: "Pending Revenue", value: formatCurrency(fulfillmentOverview?.pendingRevenue || 0), color: "#00838f" },
-                  { label: "Review Revenue", value: formatCurrency(fulfillmentOverview?.reviewRevenue || 0), color: "#c62828" },
-                ]
-              : [
-                  { label: "Units Sold", value: overview.unitsSold, color: "#1f7a1f" },
-                  { label: "Scan Attempts", value: overview.scanAttempts, color: "#1565c0" },
-                  { label: "Success Rate", value: `${overview.successRate}%`, color: "#6a1b9a" },
-                  { label: "Unique SKUs Sold", value: overview.uniqueSkusSold, color: "#ef6c00" },
-                  { label: "Unique Shows", value: overview.uniqueShowsWithSales, color: "#00838f" },
-                  { label: "Issue Scans", value: Number(overview.notFoundScans || 0) + Number(overview.multipleFoundScans || 0), color: "#c62828" },
-                ]
-            ).map((metric) => (
+            {[
+              { label: "Units Sold", value: overview.unitsSold, color: "#1f7a1f" },
+              { label: "Scan Attempts", value: overview.scanAttempts, color: "#1565c0" },
+              { label: "Success Rate", value: `${overview.successRate}%`, color: "#6a1b9a" },
+              { label: "Unique SKUs Sold", value: overview.uniqueSkusSold, color: "#ef6c00" },
+              { label: "Unique Shows", value: overview.uniqueShowsWithSales, color: "#00838f" },
+              { label: "Issue Scans", value: Number(overview.notFoundScans || 0) + Number(overview.multipleFoundScans || 0), color: "#c62828" },
+            ].map((metric) => (
               <Grid item xs={12} sm={6} md={4} lg={2} key={metric.label}>
                 <Card sx={{ borderRadius: 2, border: "1px solid #e3e8ef" }}>
                   <CardContent>
@@ -965,7 +928,6 @@ function WhatnotAnalytics() {
 
           <Paper sx={{ borderRadius: 2, mb: 2.5 }}>
             <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
-              <Tab label="Fulfillment Sales" />
               <Tab label="Overview" />
               <Tab label="Shows" />
               <Tab label="Products" />
@@ -973,234 +935,7 @@ function WhatnotAnalytics() {
               <Tab label="Inventory Risk" />
             </Tabs>
           </Paper>
-
           {activeTab === 0 && (
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={8}>
-                <Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}>
-                  <Typography variant="h6" sx={{ mb: 1.5 }}>
-                    Revenue Trend ({granularity})
-                  </Typography>
-                  {fulfillmentTrend.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      No fulfillment sales data in this date range.
-                    </Typography>
-                  ) : (
-                    <Stack spacing={1.1}>
-                      {fulfillmentTrend.map((point) => {
-                        const widthPct =
-                          fulfillmentTrendRevenueMax > 0
-                            ? Math.max((Number(point.revenue || 0) / fulfillmentTrendRevenueMax) * 100, 2)
-                            : 0;
-                        return (
-                          <Box key={point.bucket}>
-                            <Box display="flex" justifyContent="space-between" mb={0.25}>
-                              <Typography variant="body2">{point.bucket}</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                {formatCurrency(point.revenue)} | {formatNumber(point.unitsSold)} units
-                              </Typography>
-                            </Box>
-                            <Box sx={{ height: 8, bgcolor: "#ebf1f8", borderRadius: 999, overflow: "hidden" }}>
-                              <Box sx={{ width: `${widthPct}%`, height: "100%", bgcolor: "#1565c0", borderRadius: 999 }} />
-                            </Box>
-                          </Box>
-                        );
-                      })}
-                    </Stack>
-                  )}
-                </Paper>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}>
-                  <Typography variant="h6" sx={{ mb: 1.5 }}>
-                    Brand Revenue Mix
-                  </Typography>
-                  {fulfillmentBrandMixWithPct.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      No brand revenue data in this range.
-                    </Typography>
-                  ) : (
-                    <>
-                      <Box display="flex" justifyContent="center" sx={{ my: 1.5 }}>
-                        <Box
-                          sx={{
-                            width: 170,
-                            height: 170,
-                            borderRadius: "50%",
-                            background: fulfillmentBrandDonutGradient,
-                            position: "relative",
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              position: "absolute",
-                              inset: 24,
-                              borderRadius: "50%",
-                              bgcolor: "#fff",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              textAlign: "center",
-                              px: 1,
-                            }}
-                          >
-                            <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                              {formatCurrency(fulfillmentBrandMixTotalRevenue)}
-                              <br />
-                              Revenue
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </Box>
-                      <Stack spacing={0.8}>
-                        {fulfillmentBrandMixWithPct.slice(0, 10).map((row) => (
-                          <Box key={row.brand} display="flex" justifyContent="space-between" alignItems="center">
-                            <Box display="flex" alignItems="center" gap={1}>
-                              <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: row.color }} />
-                              <Typography variant="body2">{row.brand}</Typography>
-                            </Box>
-                            <Typography variant="body2" color="text.secondary">
-                              {row.pct.toFixed(1)}%
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Stack>
-                    </>
-                  )}
-                </Paper>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}>
-                  <Typography variant="h6" sx={{ mb: 1.5 }}>
-                    Revenue by Show
-                  </Typography>
-                  {fulfillmentShowsPerformance.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      No show revenue data in this range.
-                    </Typography>
-                  ) : (
-                    <Stack spacing={1.1}>
-                      {fulfillmentShowsPerformance.slice(0, 8).map((show) => {
-                        const maxRevenue = Math.max(
-                          1,
-                          ...fulfillmentShowsPerformance.map((entry) => Number(entry.revenue || 0))
-                        );
-                        const widthPct = Math.max((Number(show.revenue || 0) / maxRevenue) * 100, 2);
-                        return (
-                          <Box key={show.showId}>
-                            <Box display="flex" justifyContent="space-between" mb={0.25}>
-                              <Typography variant="body2">{show.showName}</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                {formatCurrency(show.revenue)}
-                              </Typography>
-                            </Box>
-                            <Box sx={{ height: 8, bgcolor: "#ebf1f8", borderRadius: 999, overflow: "hidden" }}>
-                              <Box sx={{ width: `${widthPct}%`, height: "100%", bgcolor: "#00838f", borderRadius: 999 }} />
-                            </Box>
-                            <Typography variant="caption" color="text.secondary">
-                              {formatNumber(show.unitsSold)} units | {formatNumber(show.completedShipments)} shipments
-                            </Typography>
-                          </Box>
-                        );
-                      })}
-                    </Stack>
-                  )}
-                </Paper>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}>
-                  <Typography variant="h6" sx={{ mb: 1.5 }}>
-                    Top SKUs by Revenue
-                  </Typography>
-                  {fulfillmentTopProducts.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      No fulfilled SKU revenue data in this range.
-                    </Typography>
-                  ) : (
-                    <Stack spacing={1}>
-                      {fulfillmentTopProducts.slice(0, 8).map((product) => (
-                        <Box key={product.sku} sx={{ py: 0.6, borderBottom: "1px solid #edf1f7" }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            {product.brand} {product.itemName}
-                          </Typography>
-                          <Box display="flex" justifyContent="space-between">
-                            <Typography variant="caption" color="text.secondary">
-                              {product.sku}
-                            </Typography>
-                            <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                              {formatCurrency(product.revenue)}
-                            </Typography>
-                          </Box>
-                          <Typography variant="caption" color="text.secondary">
-                            {formatNumber(product.unitsSold)} units | Avg {formatCurrency(product.avgSoldPrice)}
-                          </Typography>
-                        </Box>
-                      ))}
-                    </Stack>
-                  )}
-                </Paper>
-              </Grid>
-              <Grid item xs={12} md={7}>
-                <Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}>
-                  <Typography variant="h6" sx={{ mb: 1.5 }}>
-                    Sales Mix by Order Type
-                  </Typography>
-                  <HorizontalBarList
-                    items={fulfillmentSalesMix}
-                    labelKey="contextType"
-                    valueKey="revenue"
-                    barColor="#6a1b9a"
-                    maxItems={6}
-                    valueFormatter={formatCurrency}
-                  />
-                </Paper>
-              </Grid>
-              <Grid item xs={12} md={5}>
-                <Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}>
-                  <Typography variant="h6" sx={{ mb: 1.5 }}>
-                    Fulfillment Pipeline Value
-                  </Typography>
-                  <Stack spacing={1.3}>
-                    <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: "#f7fbff", border: "1px solid #d7e7fb" }}>
-                      <Typography variant="caption" color="text.secondary">
-                        Pending Shipments
-                      </Typography>
-                      <Typography variant="h6" sx={{ color: "#1565c0", fontWeight: 700 }}>
-                        {formatNumber(fulfillmentOverview?.pendingShipments || 0)}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {formatCurrency(fulfillmentOverview?.pendingRevenue || 0)} waiting to be fulfilled
-                      </Typography>
-                    </Box>
-                    <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: "#fff7f2", border: "1px solid #f5ddca" }}>
-                      <Typography variant="caption" color="text.secondary">
-                        Under Review
-                      </Typography>
-                      <Typography variant="h6" sx={{ color: "#ef6c00", fontWeight: 700 }}>
-                        {formatNumber(fulfillmentOverview?.reviewShipments || 0)}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {formatCurrency(fulfillmentOverview?.reviewRevenue || 0)} blocked in review
-                      </Typography>
-                    </Box>
-                    <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: "#f5fff7", border: "1px solid #d8efdc" }}>
-                      <Typography variant="caption" color="text.secondary">
-                        Unique SKUs Sold
-                      </Typography>
-                      <Typography variant="h6" sx={{ color: "#2e7d32", fontWeight: 700 }}>
-                        {formatNumber(fulfillmentOverview?.uniqueSkusSold || 0)}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Across {formatNumber(fulfillmentOverview?.uniqueShows || 0)} shows in this period
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </Paper>
-              </Grid>
-            </Grid>
-          )}
-
-          {activeTab === 2 && (
             <Grid container spacing={2}>
               <Grid item xs={12} md={8}>
                 <Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}>
@@ -1497,7 +1232,7 @@ function WhatnotAnalytics() {
             </Grid>
           )}
 
-          {activeTab === 3 && (
+          {activeTab === 2 && (
             <Grid container spacing={2}>
               <Grid item xs={12} md={6}>
                 <Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}>
@@ -1657,7 +1392,7 @@ function WhatnotAnalytics() {
             </Grid>
           )}
 
-          {activeTab === 4 && (
+          {activeTab === 3 && (
             <Grid container spacing={2}>
               <Grid item xs={12} md={6}>
                 <Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}>
@@ -1814,7 +1549,7 @@ function WhatnotAnalytics() {
             </Grid>
           )}
 
-          {activeTab === 5 && (
+          {activeTab === 4 && (
             <Paper sx={{ p: 2, borderRadius: 2 }}>
               <Typography variant="h6" sx={{ mb: 2 }}>
                 Inventory Run-Out Risk

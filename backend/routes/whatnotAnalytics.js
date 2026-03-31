@@ -8,6 +8,7 @@ const {
   WhatnotLog,
   Products,
   ProductDetails,
+  ProductVendorPrice,
   WhatnotShow,
   WhatnotShipmentItem,
   WhatnotShipmentScan,
@@ -24,6 +25,7 @@ const TABLES = {
   logs: `\`${toTableName(WhatnotLog)}\``,
   products: `\`${toTableName(Products)}\``,
   details: `\`${toTableName(ProductDetails)}\``,
+  vendorPrices: `\`${toTableName(ProductVendorPrice)}\``,
   shows: `\`${toTableName(WhatnotShow)}\``,
   shipmentItems: `\`${toTableName(WhatnotShipmentItem)}\``,
   shipmentScans: `\`${toTableName(WhatnotShipmentScan)}\``,
@@ -62,6 +64,25 @@ const SHIPMENT_CLOSE_SUMMARY_SUBQUERY = `
     GROUP BY whatnotShowId, importId, shipmentId
   )
 `;
+
+const ACTIVE_VENDOR_COST_SUBQUERY = `
+  (
+    SELECT
+      sku,
+      ROUND(
+        SUM(COALESCE(price, 0) * COALESCE(NULLIF(quantity, 0), 1)) /
+        NULLIF(SUM(COALESCE(NULLIF(quantity, 0), 1)), 0),
+        2
+      ) AS avgVendorCost
+    FROM ${TABLES.vendorPrices}
+    WHERE isActive = 1
+    GROUP BY sku
+  )
+`;
+
+const WHATNOT_COMMISSION_RATE = 0.08;
+const WHATNOT_PROCESSING_RATE = 0.029;
+const WHATNOT_PROCESSING_FIXED_FEE = 0.30;
 
 const isDateOnly = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
 
@@ -456,6 +477,776 @@ router.get("/fulfillment-sales-mix", auth, checkPermission("whatnotAnalytics", "
   } catch (error) {
     console.error("Error fetching fulfillment sales mix analytics:", error);
     return res.status(500).json({ error: "Failed to fetch fulfillment sales mix analytics" });
+  }
+});
+
+router.get("/fulfillment-profitability-overview", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        COUNT(*) AS unitsSold,
+        COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue,
+        SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN 1 ELSE 0 END) AS knownCostUnits,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(wss.soldPrice, 0) ELSE 0 END), 0) AS knownCostRevenue,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN vc.avgVendorCost ELSE 0 END), 0) AS estimatedCost,
+        SUM(CASE WHEN vc.avgVendorCost IS NULL THEN 1 ELSE 0 END) AS unknownCostUnits,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NULL THEN COALESCE(wss.soldPrice, 0) ELSE 0 END), 0) AS unknownCostRevenue,
+        COALESCE(SUM(COALESCE(wss.soldPrice, 0) * ${WHATNOT_COMMISSION_RATE}), 0) AS totalCommissionFees,
+        COALESCE(SUM(COALESCE(wss.soldPrice, 0) * ${WHATNOT_PROCESSING_RATE}), 0) AS totalProcessingRateFees,
+        COUNT(DISTINCT CONCAT(wss.whatnotShowId, ':', wss.importId, ':', wss.shipmentId)) AS totalFeeShipmentCount,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(wss.soldPrice, 0) * ${WHATNOT_COMMISSION_RATE} ELSE 0 END), 0) AS knownCostCommissionFees,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(wss.soldPrice, 0) * ${WHATNOT_PROCESSING_RATE} ELSE 0 END), 0) AS knownCostProcessingRateFees,
+        COUNT(DISTINCT CASE WHEN vc.avgVendorCost IS NOT NULL THEN CONCAT(wss.whatnotShowId, ':', wss.importId, ':', wss.shipmentId) END) AS knownCostShipmentCount,
+        SUM(CASE WHEN vc.avgVendorCost IS NOT NULL AND COALESCE(wss.soldPrice, 0) - vc.avgVendorCost < 0 THEN 1 ELSE 0 END) AS negativeMarginUnits,
+        SUM(CASE
+          WHEN vc.avgVendorCost IS NOT NULL
+           AND COALESCE(wss.soldPrice, 0) - vc.avgVendorCost >= 0
+           AND COALESCE(wss.soldPrice, 0) - vc.avgVendorCost < 5
+          THEN 1
+          ELSE 0
+        END) AS lowMarginUnits
+      FROM ${TABLES.shipmentScans} wss
+      LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku", "wss.productSku")}
+      JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+        ON sc.whatnotShowId = wss.whatnotShowId
+       AND sc.importId = wss.importId
+       AND sc.shipmentId = wss.shipmentId
+      WHERE ${fulfilledSaleCondition("wss")}
+        AND sc.closedAt >= :from
+        AND sc.closedAt < :to
+        AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+        },
+      }
+    );
+
+    const row = rows[0] || {};
+    const revenue = Number(row.knownCostRevenue || 0);
+    const estimatedCost = Number(row.estimatedCost || 0);
+    const grossMargin = revenue - estimatedCost;
+    const totalWhatnotFees =
+      Number(row.totalCommissionFees || 0) +
+      Number(row.totalProcessingRateFees || 0) +
+      Number(row.totalFeeShipmentCount || 0) * WHATNOT_PROCESSING_FIXED_FEE;
+    const knownCostWhatnotFees =
+      Number(row.knownCostCommissionFees || 0) +
+      Number(row.knownCostProcessingRateFees || 0) +
+      Number(row.knownCostShipmentCount || 0) * WHATNOT_PROCESSING_FIXED_FEE;
+    const netMarginAfterFees = grossMargin - knownCostWhatnotFees;
+
+    return res.json({
+      unitsSold: Number(row.unitsSold || 0),
+      revenue: Number(Number(row.revenue || 0).toFixed(2)),
+      knownCostUnits: Number(row.knownCostUnits || 0),
+      knownCostRevenue: Number(revenue.toFixed(2)),
+      estimatedCost: Number(estimatedCost.toFixed(2)),
+      grossMargin: Number(grossMargin.toFixed(2)),
+      grossMarginPct: revenue > 0 ? Number(((grossMargin / revenue) * 100).toFixed(2)) : 0,
+      whatnotFees: Number(totalWhatnotFees.toFixed(2)),
+      knownCostWhatnotFees: Number(knownCostWhatnotFees.toFixed(2)),
+      netMarginAfterFees: Number(netMarginAfterFees.toFixed(2)),
+      netMarginAfterFeesPct: revenue > 0 ? Number(((netMarginAfterFees / revenue) * 100).toFixed(2)) : 0,
+      unknownCostUnits: Number(row.unknownCostUnits || 0),
+      unknownCostRevenue: Number(Number(row.unknownCostRevenue || 0).toFixed(2)),
+      negativeMarginUnits: Number(row.negativeMarginUnits || 0),
+      lowMarginUnits: Number(row.lowMarginUnits || 0),
+    });
+  } catch (error) {
+    console.error("Error fetching fulfillment profitability overview analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment profitability overview analytics" });
+  }
+});
+
+router.get("/fulfillment-profitability-shows", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const limit = Math.min(Math.max(Number(req.query.limit) || 15, 1), 50);
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        ws.id AS showId,
+        ws.name AS showName,
+        COUNT(*) AS unitsSold,
+        COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue,
+        SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN 1 ELSE 0 END) AS knownCostUnits,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(wss.soldPrice, 0) ELSE 0 END), 0) AS knownCostRevenue,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN vc.avgVendorCost ELSE 0 END), 0) AS estimatedCost,
+        SUM(CASE WHEN vc.avgVendorCost IS NULL THEN 1 ELSE 0 END) AS unknownCostUnits,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NULL THEN COALESCE(wss.soldPrice, 0) ELSE 0 END), 0) AS unknownCostRevenue,
+        COALESCE(SUM(COALESCE(wss.soldPrice, 0) * ${WHATNOT_COMMISSION_RATE}), 0) AS totalCommissionFees,
+        COALESCE(SUM(COALESCE(wss.soldPrice, 0) * ${WHATNOT_PROCESSING_RATE}), 0) AS totalProcessingRateFees,
+        COUNT(DISTINCT CONCAT(wss.whatnotShowId, ':', wss.importId, ':', wss.shipmentId)) AS totalFeeShipmentCount,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(wss.soldPrice, 0) * ${WHATNOT_COMMISSION_RATE} ELSE 0 END), 0) AS knownCostCommissionFees,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(wss.soldPrice, 0) * ${WHATNOT_PROCESSING_RATE} ELSE 0 END), 0) AS knownCostProcessingRateFees,
+        COUNT(DISTINCT CASE WHEN vc.avgVendorCost IS NOT NULL THEN CONCAT(wss.whatnotShowId, ':', wss.importId, ':', wss.shipmentId) END) AS knownCostShipmentCount
+      FROM ${TABLES.shipmentScans} wss
+      LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku", "wss.productSku")}
+      JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+        ON sc.whatnotShowId = wss.whatnotShowId
+       AND sc.importId = wss.importId
+       AND sc.shipmentId = wss.shipmentId
+      JOIN ${TABLES.shows} ws ON ws.id = wss.whatnotShowId
+      WHERE ${fulfilledSaleCondition("wss")}
+        AND sc.closedAt >= :from
+        AND sc.closedAt < :to
+        AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+      GROUP BY ws.id, ws.name
+      ORDER BY revenue DESC
+      LIMIT :limit
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          limit,
+        },
+      }
+    );
+
+    return res.json(
+      rows.map((row) => {
+        const revenue = Number(row.knownCostRevenue || 0);
+        const estimatedCost = Number(row.estimatedCost || 0);
+        const grossMargin = revenue - estimatedCost;
+        const totalWhatnotFees =
+          Number(row.totalCommissionFees || 0) +
+          Number(row.totalProcessingRateFees || 0) +
+          Number(row.totalFeeShipmentCount || 0) * WHATNOT_PROCESSING_FIXED_FEE;
+        const knownCostWhatnotFees =
+          Number(row.knownCostCommissionFees || 0) +
+          Number(row.knownCostProcessingRateFees || 0) +
+          Number(row.knownCostShipmentCount || 0) * WHATNOT_PROCESSING_FIXED_FEE;
+        const netMarginAfterFees = grossMargin - knownCostWhatnotFees;
+        return {
+          ...row,
+          unitsSold: Number(row.unitsSold || 0),
+          revenue: Number(Number(row.revenue || 0).toFixed(2)),
+          knownCostUnits: Number(row.knownCostUnits || 0),
+          knownCostRevenue: Number(revenue.toFixed(2)),
+          estimatedCost: Number(estimatedCost.toFixed(2)),
+          grossMargin: Number(grossMargin.toFixed(2)),
+          grossMarginPct: revenue > 0 ? Number(((grossMargin / revenue) * 100).toFixed(2)) : 0,
+          whatnotFees: Number(totalWhatnotFees.toFixed(2)),
+          knownCostWhatnotFees: Number(knownCostWhatnotFees.toFixed(2)),
+          netMarginAfterFees: Number(netMarginAfterFees.toFixed(2)),
+          netMarginAfterFeesPct: revenue > 0 ? Number(((netMarginAfterFees / revenue) * 100).toFixed(2)) : 0,
+          unknownCostUnits: Number(row.unknownCostUnits || 0),
+          unknownCostRevenue: Number(Number(row.unknownCostRevenue || 0).toFixed(2)),
+        };
+      })
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment profitability by show analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment profitability by show analytics" });
+  }
+});
+
+router.get("/fulfillment-review-queue", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
+
+  try {
+    const [reasonRows, agingRows, shipmentRows] = await Promise.all([
+      sequelize.query(
+        `
+        SELECT
+          COALESCE(NULLIF(TRIM(wsi.mismatchReason), ''), 'Unspecified') AS mismatchReason,
+          COUNT(*) AS rowCount,
+          COUNT(DISTINCT CONCAT(wsi.whatnotShowId, ':', wsi.importId, ':', wsi.shipmentId)) AS shipmentCount
+        FROM ${TABLES.shipmentItems} wsi
+        WHERE wsi.status = 'pending_review'
+          AND (:showId IS NULL OR wsi.whatnotShowId = :showId)
+        GROUP BY COALESCE(NULLIF(TRIM(wsi.mismatchReason), ''), 'Unspecified')
+        ORDER BY shipmentCount DESC, rowCount DESC
+        LIMIT 12
+        `,
+        { replacements: { showId } }
+      ),
+      sequelize.query(
+        `
+        SELECT
+          CASE
+            WHEN TIMESTAMPDIFF(DAY, COALESCE(MIN(wsi.createdAt), NOW()), NOW()) <= 1 THEN '0-1 days'
+            WHEN TIMESTAMPDIFF(DAY, COALESCE(MIN(wsi.createdAt), NOW()), NOW()) <= 3 THEN '2-3 days'
+            WHEN TIMESTAMPDIFF(DAY, COALESCE(MIN(wsi.createdAt), NOW()), NOW()) <= 7 THEN '4-7 days'
+            ELSE '8+ days'
+          END AS ageBucket,
+          COUNT(*) AS shipmentCount
+        FROM ${TABLES.shipmentItems} wsi
+        WHERE wsi.status = 'pending_review'
+          AND (:showId IS NULL OR wsi.whatnotShowId = :showId)
+        GROUP BY wsi.whatnotShowId, wsi.importId, wsi.shipmentId
+        `,
+        { replacements: { showId } }
+      ),
+      sequelize.query(
+        `
+        SELECT
+          wsi.whatnotShowId AS showId,
+          ws.name AS showName,
+          wsi.importId,
+          wsi.shipmentId,
+          MAX(wsi.tracking) AS tracking,
+          COALESCE(NULLIF(TRIM(MAX(wsi.mismatchReason)), ''), 'Unspecified') AS mismatchReason,
+          SUM(COALESCE(wsi.expectedQty, 0)) AS expectedQty,
+          SUM(COALESCE(wsi.scannedQty, 0)) AS scannedQty,
+          COALESCE(SUM(COALESCE(wsi.totalCost, COALESCE(wsi.soldPrice, 0) * COALESCE(wsi.expectedQty, 0))), 0) AS affectedRevenue,
+          TIMESTAMPDIFF(DAY, MIN(wsi.createdAt), NOW()) AS ageDays
+        FROM ${TABLES.shipmentItems} wsi
+        LEFT JOIN ${TABLES.shows} ws ON ws.id = wsi.whatnotShowId
+        WHERE wsi.status = 'pending_review'
+          AND (:showId IS NULL OR wsi.whatnotShowId = :showId)
+        GROUP BY wsi.whatnotShowId, ws.name, wsi.importId, wsi.shipmentId
+        ORDER BY ageDays DESC, affectedRevenue DESC
+        LIMIT :limit
+        `,
+        { replacements: { showId, limit } }
+      ),
+    ]);
+
+    const ageOrder = ["0-1 days", "2-3 days", "4-7 days", "8+ days"];
+    const bucketMap = new Map((agingRows[0] || agingRows).map((row) => [row.ageBucket, Number(row.shipmentCount || 0)]));
+
+    return res.json({
+      reasons: (reasonRows[0] || reasonRows).map((row) => ({
+        mismatchReason: row.mismatchReason,
+        rowCount: Number(row.rowCount || 0),
+        shipmentCount: Number(row.shipmentCount || 0),
+      })),
+      aging: ageOrder.map((bucket) => ({
+        ageBucket: bucket,
+        shipmentCount: bucketMap.get(bucket) || 0,
+      })),
+      shipments: (shipmentRows[0] || shipmentRows).map((row) => ({
+        ...row,
+        expectedQty: Number(row.expectedQty || 0),
+        scannedQty: Number(row.scannedQty || 0),
+        affectedRevenue: Number(Number(row.affectedRevenue || 0).toFixed(2)),
+        ageDays: Number(row.ageDays || 0),
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching fulfillment review queue analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment review queue analytics" });
+  }
+});
+
+router.get("/fulfillment-inventory-exposure", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        wss.productSku AS sku,
+        p.brand,
+        p.itemName,
+        p.quantity AS currentQty,
+        p.minimumQuantity,
+        COUNT(*) AS unitsSold,
+        COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN vc.avgVendorCost ELSE 0 END), 0) AS estimatedCost,
+        SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN 1 ELSE 0 END) AS knownCostUnits,
+        SUM(CASE WHEN vc.avgVendorCost IS NULL THEN 1 ELSE 0 END) AS unknownCostUnits
+      FROM ${TABLES.shipmentScans} wss
+      LEFT JOIN ${TABLES.products} p ON ${skuJoinCondition("p.sku", "wss.productSku")}
+      LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku", "wss.productSku")}
+      JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+        ON sc.whatnotShowId = wss.whatnotShowId
+       AND sc.importId = wss.importId
+       AND sc.shipmentId = wss.shipmentId
+      WHERE ${fulfilledSaleCondition("wss")}
+        AND sc.closedAt >= :from
+        AND sc.closedAt < :to
+        AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+      GROUP BY wss.productSku, p.brand, p.itemName, p.quantity, p.minimumQuantity
+      ORDER BY unitsSold DESC
+      LIMIT :limit
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          limit,
+        },
+      }
+    );
+
+    const daysInRange = Math.max(1, Math.ceil((range.to.getTime() - range.from.getTime()) / (24 * 60 * 60 * 1000)));
+
+    return res.json(
+      rows.map((row) => {
+        const currentQty = Number(row.currentQty || 0);
+        const unitsSold = Number(row.unitsSold || 0);
+        const avgDailySales = unitsSold / daysInRange;
+        const daysOfCover = avgDailySales > 0 ? Number((currentQty / avgDailySales).toFixed(1)) : null;
+        const estimatedCost = Number(row.estimatedCost || 0);
+        const revenue = Number(row.revenue || 0);
+        return {
+          sku: row.sku,
+          brand: row.brand,
+          itemName: row.itemName,
+          currentQty,
+          minimumQuantity: row.minimumQuantity === null ? null : Number(row.minimumQuantity || 0),
+          unitsSold,
+          revenue: Number(revenue.toFixed(2)),
+          grossMargin:
+            Number(row.knownCostUnits || 0) > 0
+              ? Number((revenue - estimatedCost).toFixed(2))
+              : null,
+          knownCostUnits: Number(row.knownCostUnits || 0),
+          unknownCostUnits: Number(row.unknownCostUnits || 0),
+          avgDailySales: Number(avgDailySales.toFixed(2)),
+          daysOfCover,
+          riskBand:
+            daysOfCover === null
+              ? "no_signal"
+              : daysOfCover <= 3
+              ? "critical"
+              : daysOfCover <= 7
+              ? "high"
+              : daysOfCover <= 14
+              ? "medium"
+              : "stable",
+        };
+      })
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment inventory exposure analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment inventory exposure analytics" });
+  }
+});
+
+router.get("/fulfillment-sku-search", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const q = String(req.query.q || "").trim();
+  const qTokens = q
+    .toLowerCase()
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+
+  const tokenCondition =
+    qTokens.length > 0
+      ? qTokens
+          .map(
+            (_, idx) => `
+              LOWER(
+                CONCAT_WS(
+                  ' ',
+                  COALESCE(wss.productSku, ''),
+                  COALESCE(p.brand, ''),
+                  COALESCE(p.itemName, ''),
+                  COALESCE(p.strength, ''),
+                  COALESCE(p.sizeOz, ''),
+                  COALESCE(p.sizeMl, ''),
+                  CASE WHEN pd.tester = 1 THEN 'tester' ELSE 'non tester' END
+                )
+              ) LIKE :tokenLike${idx}
+            `
+          )
+          .join(" AND ")
+      : "1 = 1";
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        wss.productSku AS sku,
+        COALESCE(NULLIF(TRIM(p.brand), ''), 'Unknown') AS brand,
+        COALESCE(NULLIF(TRIM(p.itemName), ''), 'Unknown Item') AS itemName,
+        p.strength,
+        p.sizeOz,
+        p.sizeMl,
+        pd.tester,
+        COUNT(*) AS unitsSold
+      FROM ${TABLES.shipmentScans} wss
+      LEFT JOIN ${TABLES.products} p ON ${skuJoinCondition("p.sku", "wss.productSku")}
+      LEFT JOIN ${TABLES.details} pd ON ${skuJoinCondition("pd.sku", "wss.productSku")}
+      JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+        ON sc.whatnotShowId = wss.whatnotShowId
+       AND sc.importId = wss.importId
+       AND sc.shipmentId = wss.shipmentId
+      WHERE ${fulfilledSaleCondition("wss")}
+        AND sc.closedAt >= :from
+        AND sc.closedAt < :to
+        AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+        AND (
+          :q = ''
+          OR wss.productSku LIKE :qLike
+          OR p.brand LIKE :qLike
+          OR p.itemName LIKE :qLike
+          OR CONCAT(COALESCE(p.brand, ''), ' ', COALESCE(p.itemName, '')) LIKE :qLike
+          OR (${tokenCondition})
+        )
+      GROUP BY wss.productSku, p.brand, p.itemName, p.strength, p.sizeOz, p.sizeMl, pd.tester
+      ORDER BY unitsSold DESC, wss.productSku ASC
+      LIMIT :limit
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          q,
+          qLike: `%${q}%`,
+          limit,
+          ...qTokens.reduce((acc, token, idx) => {
+            acc[`tokenLike${idx}`] = `%${token}%`;
+            return acc;
+          }, {}),
+        },
+      }
+    );
+
+    return res.json(
+      rows.map((row) => ({
+        sku: row.sku,
+        brand: row.brand,
+        itemName: row.itemName,
+        strength: row.strength,
+        sizeOz: row.sizeOz,
+        sizeMl: row.sizeMl,
+        tester: row.tester,
+        unitsSold: Number(row.unitsSold || 0),
+      }))
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment SKU search analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment SKU search analytics" });
+  }
+});
+
+router.get("/fulfillment-sku-detail", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const sku = String(req.query.sku || "").trim();
+
+  if (!sku) {
+    return res.status(400).json({ error: "sku is required" });
+  }
+
+  try {
+    const [
+      [summaryRows],
+      [showRows],
+      [dayRows],
+      [dayOfWeekRows],
+      [hourRows],
+      [recentSalesRows],
+    ] = await Promise.all([
+      sequelize.query(
+        `
+        SELECT
+          p.sku,
+          p.brand,
+          p.itemName,
+          p.strength,
+          p.sizeOz,
+          p.sizeMl,
+          p.location,
+          p.quantity,
+          p.minimumQuantity,
+          p.averagePrice,
+          p.\`condition\`,
+          pd.tester,
+          COUNT(*) AS unitsSold,
+          COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue,
+          SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN 1 ELSE 0 END) AS knownCostUnits,
+          COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(wss.soldPrice, 0) ELSE 0 END), 0) AS knownCostRevenue,
+          COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN vc.avgVendorCost ELSE 0 END), 0) AS estimatedCost,
+          SUM(CASE WHEN vc.avgVendorCost IS NULL THEN 1 ELSE 0 END) AS unknownCostUnits,
+          COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NULL THEN COALESCE(wss.soldPrice, 0) ELSE 0 END), 0) AS unknownCostRevenue,
+          COUNT(DISTINCT wss.whatnotShowId) AS uniqueShows,
+          COUNT(DISTINCT CONCAT(wss.whatnotShowId, ':', wss.importId, ':', wss.shipmentId)) AS uniqueShipments,
+          MIN(CASE WHEN COALESCE(wss.soldPrice, 0) > 0 THEN wss.soldPrice ELSE NULL END) AS lowestSoldPrice,
+          MAX(wss.soldPrice) AS highestSoldPrice,
+          MIN(wss.createdAt) AS firstSaleAt,
+          MAX(wss.createdAt) AS lastSaleAt
+        FROM ${TABLES.shipmentScans} wss
+        LEFT JOIN ${TABLES.products} p ON ${skuJoinCondition("p.sku", "wss.productSku")}
+        LEFT JOIN ${TABLES.details} pd ON ${skuJoinCondition("pd.sku", "wss.productSku")}
+        LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku", "wss.productSku")}
+        JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+          ON sc.whatnotShowId = wss.whatnotShowId
+         AND sc.importId = wss.importId
+         AND sc.shipmentId = wss.shipmentId
+        WHERE ${fulfilledSaleCondition("wss")}
+          AND sc.closedAt >= :from
+          AND sc.closedAt < :to
+          AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+          AND ${skuJoinCondition("wss.productSku", ":sku")}
+        GROUP BY
+          p.sku, p.brand, p.itemName, p.strength, p.sizeOz, p.sizeMl,
+          p.location, p.quantity, p.minimumQuantity, p.averagePrice,
+          p.\`condition\`, pd.tester
+        `,
+        { replacements: { from: range.from, to: range.to, showId, sku } }
+      ),
+      sequelize.query(
+        `
+        SELECT
+          ws.id AS showId,
+          ws.name AS showName,
+          COUNT(*) AS unitsSold,
+          COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue,
+          SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN 1 ELSE 0 END) AS knownCostUnits,
+          COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(wss.soldPrice, 0) ELSE 0 END), 0) AS knownCostRevenue,
+          COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN vc.avgVendorCost ELSE 0 END), 0) AS estimatedCost,
+          SUM(CASE WHEN vc.avgVendorCost IS NULL THEN 1 ELSE 0 END) AS unknownCostUnits,
+          COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NULL THEN COALESCE(wss.soldPrice, 0) ELSE 0 END), 0) AS unknownCostRevenue
+        FROM ${TABLES.shipmentScans} wss
+        LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku", "wss.productSku")}
+        JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+          ON sc.whatnotShowId = wss.whatnotShowId
+         AND sc.importId = wss.importId
+         AND sc.shipmentId = wss.shipmentId
+        JOIN ${TABLES.shows} ws ON ws.id = wss.whatnotShowId
+        WHERE ${fulfilledSaleCondition("wss")}
+          AND sc.closedAt >= :from
+          AND sc.closedAt < :to
+          AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+          AND ${skuJoinCondition("wss.productSku", ":sku")}
+        GROUP BY ws.id, ws.name
+        ORDER BY revenue DESC, unitsSold DESC
+        LIMIT 20
+        `,
+        { replacements: { from: range.from, to: range.to, showId, sku } }
+      ),
+      sequelize.query(
+        `
+        SELECT
+          DATE_FORMAT(wss.createdAt, '%Y-%m-%d') AS bucket,
+          COUNT(*) AS unitsSold,
+          COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue,
+          AVG(wss.soldPrice) AS avgSoldPrice
+        FROM ${TABLES.shipmentScans} wss
+        JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+          ON sc.whatnotShowId = wss.whatnotShowId
+         AND sc.importId = wss.importId
+         AND sc.shipmentId = wss.shipmentId
+        WHERE ${fulfilledSaleCondition("wss")}
+          AND sc.closedAt >= :from
+          AND sc.closedAt < :to
+          AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+          AND ${skuJoinCondition("wss.productSku", ":sku")}
+        GROUP BY bucket
+        ORDER BY bucket ASC
+        `,
+        { replacements: { from: range.from, to: range.to, showId, sku } }
+      ),
+      sequelize.query(
+        `
+        SELECT
+          DAYOFWEEK(wss.createdAt) AS dayIndex,
+          CASE DAYOFWEEK(wss.createdAt)
+            WHEN 1 THEN 'Sunday'
+            WHEN 2 THEN 'Monday'
+            WHEN 3 THEN 'Tuesday'
+            WHEN 4 THEN 'Wednesday'
+            WHEN 5 THEN 'Thursday'
+            WHEN 6 THEN 'Friday'
+            WHEN 7 THEN 'Saturday'
+          END AS dayName,
+          COUNT(*) AS unitsSold,
+          COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue
+        FROM ${TABLES.shipmentScans} wss
+        JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+          ON sc.whatnotShowId = wss.whatnotShowId
+         AND sc.importId = wss.importId
+         AND sc.shipmentId = wss.shipmentId
+        WHERE ${fulfilledSaleCondition("wss")}
+          AND sc.closedAt >= :from
+          AND sc.closedAt < :to
+          AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+          AND ${skuJoinCondition("wss.productSku", ":sku")}
+        GROUP BY dayIndex, dayName
+        ORDER BY dayIndex ASC
+        `,
+        { replacements: { from: range.from, to: range.to, showId, sku } }
+      ),
+      sequelize.query(
+        `
+        SELECT
+          HOUR(wss.createdAt) AS hourOfDay,
+          COUNT(*) AS unitsSold,
+          COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue
+        FROM ${TABLES.shipmentScans} wss
+        JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+          ON sc.whatnotShowId = wss.whatnotShowId
+         AND sc.importId = wss.importId
+         AND sc.shipmentId = wss.shipmentId
+        WHERE ${fulfilledSaleCondition("wss")}
+          AND sc.closedAt >= :from
+          AND sc.closedAt < :to
+          AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+          AND ${skuJoinCondition("wss.productSku", ":sku")}
+        GROUP BY HOUR(wss.createdAt)
+        ORDER BY hourOfDay ASC
+        `,
+        { replacements: { from: range.from, to: range.to, showId, sku } }
+      ),
+      sequelize.query(
+        `
+        SELECT
+          wss.id,
+          wss.createdAt,
+          ws.name AS showName,
+          wss.shipmentId,
+          wss.tracking,
+          wss.soldPrice,
+          wss.auctionStickerNumber,
+          wss.userId
+        FROM ${TABLES.shipmentScans} wss
+        LEFT JOIN ${TABLES.shows} ws ON ws.id = wss.whatnotShowId
+        JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+          ON sc.whatnotShowId = wss.whatnotShowId
+         AND sc.importId = wss.importId
+         AND sc.shipmentId = wss.shipmentId
+        WHERE ${fulfilledSaleCondition("wss")}
+          AND sc.closedAt >= :from
+          AND sc.closedAt < :to
+          AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+          AND ${skuJoinCondition("wss.productSku", ":sku")}
+        ORDER BY wss.createdAt DESC, wss.id DESC
+        LIMIT 25
+        `,
+        { replacements: { from: range.from, to: range.to, showId, sku } }
+      ),
+    ]);
+
+    const summaryRow = (summaryRows || [])[0];
+    if (!summaryRow) {
+      return res.status(404).json({ error: "SKU not found in fulfillment analytics for the selected range" });
+    }
+
+    const knownCostRevenue = Number(summaryRow.knownCostRevenue || 0);
+    const estimatedCost = Number(summaryRow.estimatedCost || 0);
+    const grossMargin = knownCostRevenue - estimatedCost;
+
+    return res.json({
+      product: {
+        sku: summaryRow.sku || sku,
+        brand: summaryRow.brand,
+        itemName: summaryRow.itemName,
+        strength: summaryRow.strength,
+        sizeOz: summaryRow.sizeOz,
+        sizeMl: summaryRow.sizeMl,
+        location: summaryRow.location,
+        quantity: summaryRow.quantity === null ? null : Number(summaryRow.quantity || 0),
+        minimumQuantity: summaryRow.minimumQuantity === null ? null : Number(summaryRow.minimumQuantity || 0),
+        averagePrice: summaryRow.averagePrice === null ? null : Number(summaryRow.averagePrice || 0),
+        condition: summaryRow.condition,
+        tester: summaryRow.tester,
+      },
+      summary: {
+        unitsSold: Number(summaryRow.unitsSold || 0),
+        revenue: Number(Number(summaryRow.revenue || 0).toFixed(2)),
+        avgSoldPrice:
+          Number(summaryRow.unitsSold || 0) > 0
+            ? Number((Number(summaryRow.revenue || 0) / Number(summaryRow.unitsSold || 0)).toFixed(2))
+            : 0,
+        knownCostUnits: Number(summaryRow.knownCostUnits || 0),
+        knownCostRevenue: Number(knownCostRevenue.toFixed(2)),
+        estimatedCost: Number(estimatedCost.toFixed(2)),
+        grossMargin: Number(grossMargin.toFixed(2)),
+        grossMarginPct: knownCostRevenue > 0 ? Number(((grossMargin / knownCostRevenue) * 100).toFixed(2)) : 0,
+        unknownCostUnits: Number(summaryRow.unknownCostUnits || 0),
+        unknownCostRevenue: Number(Number(summaryRow.unknownCostRevenue || 0).toFixed(2)),
+        uniqueShows: Number(summaryRow.uniqueShows || 0),
+        uniqueShipments: Number(summaryRow.uniqueShipments || 0),
+        lowestSoldPrice: Number(Number(summaryRow.lowestSoldPrice || 0).toFixed(2)),
+        highestSoldPrice: Number(Number(summaryRow.highestSoldPrice || 0).toFixed(2)),
+        firstSaleAt: summaryRow.firstSaleAt,
+        lastSaleAt: summaryRow.lastSaleAt,
+      },
+      byShow: (showRows || []).map((row) => {
+        const rowKnownRevenue = Number(row.knownCostRevenue || 0);
+        const rowCost = Number(row.estimatedCost || 0);
+        const rowMargin = rowKnownRevenue - rowCost;
+        return {
+          showId: row.showId,
+          showName: row.showName,
+          unitsSold: Number(row.unitsSold || 0),
+          revenue: Number(Number(row.revenue || 0).toFixed(2)),
+          knownCostUnits: Number(row.knownCostUnits || 0),
+          knownCostRevenue: Number(rowKnownRevenue.toFixed(2)),
+          estimatedCost: Number(rowCost.toFixed(2)),
+          grossMargin: Number(rowMargin.toFixed(2)),
+          grossMarginPct: rowKnownRevenue > 0 ? Number(((rowMargin / rowKnownRevenue) * 100).toFixed(2)) : 0,
+          unknownCostUnits: Number(row.unknownCostUnits || 0),
+          unknownCostRevenue: Number(Number(row.unknownCostRevenue || 0).toFixed(2)),
+        };
+      }),
+      byDay: (dayRows || []).map((row) => ({
+        bucket: row.bucket,
+        unitsSold: Number(row.unitsSold || 0),
+        revenue: Number(Number(row.revenue || 0).toFixed(2)),
+        avgSoldPrice: Number(Number(row.avgSoldPrice || 0).toFixed(2)),
+      })),
+      dayOfWeek: (dayOfWeekRows || []).map((row) => ({
+        dayIndex: Number(row.dayIndex || 0),
+        dayName: row.dayName,
+        unitsSold: Number(row.unitsSold || 0),
+        revenue: Number(Number(row.revenue || 0).toFixed(2)),
+      })),
+      hourOfDay: (hourRows || []).map((row) => ({
+        hourOfDay: Number(row.hourOfDay || 0),
+        unitsSold: Number(row.unitsSold || 0),
+        revenue: Number(Number(row.revenue || 0).toFixed(2)),
+      })),
+      recentSales: (recentSalesRows || []).map((row) => ({
+        id: row.id,
+        createdAt: row.createdAt,
+        showName: row.showName,
+        shipmentId: row.shipmentId,
+        tracking: row.tracking,
+        soldPrice: Number(Number(row.soldPrice || 0).toFixed(2)),
+        auctionStickerNumber: row.auctionStickerNumber,
+        userId: row.userId,
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching fulfillment SKU detail analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment SKU detail analytics" });
   }
 });
 

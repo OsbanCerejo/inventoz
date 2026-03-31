@@ -19,6 +19,7 @@ import EbayApi from "./pages/EbayApi";
 import Whatnot from "./pages/Whatnot";
 import WhatnotFulfillment from "./pages/WhatnotFulfillment";
 import WhatnotAnalytics from "./pages/WhatnotAnalytics";
+import WhatnotFulfillmentAnalytics from "./pages/WhatnotFulfillmentAnalytics";
 import PriceList from "./pages/PriceList";
 import Users from "./pages/Users";
 import BarcodeScan from "./pages/BarcodeScan";
@@ -267,6 +268,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="whatnotAnalytics" action="view" menuItem="whatnotAnalytics">
                   <WhatnotAnalytics />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/whatnot-fulfillment-analytics"
+              element={
+                <ProtectedRoute resource="whatnotAnalytics" action="view" menuItem="whatnotAnalytics">
+                  <WhatnotFulfillmentAnalytics />
                 </ProtectedRoute>
               }
             />
