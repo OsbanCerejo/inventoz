@@ -67,6 +67,7 @@ type Invoice = {
   invoiceNumber: string;
   orderDate: string;
   shipmentStatus: string;
+  trackingInfo?: string | null;
   itemCheckStatus: string;
   inboundStatus: string;
   paymentStatus: string;
@@ -175,6 +176,7 @@ const emptyForm = {
   invoiceNumber: "",
   orderDate: new Date().toISOString().slice(0, 10),
   shipmentStatus: "order_placed",
+  trackingInfo: "",
   itemCheckStatus: "not_checked",
   inboundStatus: "pending",
   paymentStatus: "unpaid",
@@ -249,6 +251,7 @@ function InvoiceTracker() {
       invoiceNumber: target.invoiceNumber,
       orderDate: target.orderDate,
       shipmentStatus: target.shipmentStatus,
+      trackingInfo: target.trackingInfo,
       itemCheckStatus: target.itemCheckStatus,
       inboundStatus: target.inboundStatus,
       paymentStatus: target.paymentStatus,
@@ -379,6 +382,7 @@ function InvoiceTracker() {
       invoiceNumber: detail.invoiceNumber,
       orderDate: detail.orderDate,
       shipmentStatus: detail.shipmentStatus,
+      trackingInfo: detail.trackingInfo || "",
       itemCheckStatus: detail.itemCheckStatus,
       inboundStatus: detail.inboundStatus,
       paymentStatus: detail.paymentStatus,
@@ -617,6 +621,7 @@ function InvoiceTracker() {
         invoiceNumber: form.invoiceNumber.trim(),
         orderDate: form.orderDate,
         shipmentStatus: form.shipmentStatus,
+        trackingInfo: form.trackingInfo.trim() || null,
         itemCheckStatus: form.itemCheckStatus,
         paymentStatus: form.paymentStatus,
         paymentDueBy: form.paymentStatus === "credit" ? form.paymentDueBy : null,
@@ -1347,6 +1352,19 @@ function InvoiceTracker() {
                       />
                     </Grid>
                   )}
+                  {(form.shipmentStatus === "shipped" || Boolean(form.trackingInfo)) && (
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        label="Tracking Info"
+                        placeholder="Tracking number or shipping link"
+                        value={form.trackingInfo}
+                        onChange={(e) => setForm((prev) => ({ ...prev, trackingInfo: e.target.value }))}
+                        disabled={isReadOnly}
+                        helperText="Optional. Add tracking number or shipping link."
+                      />
+                    </Grid>
+                  )}
                   <Grid item xs={12} md={3}>
                     <FormControl fullWidth disabled={isReadOnly}>
                       <InputLabel>Items Check Status</InputLabel>
@@ -1379,6 +1397,18 @@ function InvoiceTracker() {
                       </Select>
                     </FormControl>
                   </Grid>
+                  {isReadOnly && Boolean(form.trackingInfo) && (
+                    <Grid item xs={12}>
+                      <Paper variant="outlined" sx={{ px: 1.5, py: 1.25, backgroundColor: "#ffffff" }}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Tracking Info
+                        </Typography>
+                        <Typography sx={{ wordBreak: "break-word" }} fontWeight={500}>
+                          {form.trackingInfo}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  )}
                 </Grid>
               </Paper>
             </Grid>

@@ -33,6 +33,7 @@ const VALID_MISMATCH_REASONS = [
 const MAX_VENDOR_NAME_LENGTH = 255;
 const MAX_INVOICE_NUMBER_LENGTH = 255;
 const MAX_NOTES_LENGTH = 5000;
+const MAX_TRACKING_INFO_LENGTH = 4000;
 const MAX_SKU_LENGTH = 255;
 const MAX_ITEM_NAME_LENGTH = 255;
 const MAX_QUANTITY = 100000;
@@ -365,6 +366,7 @@ const validateHeaderFields = ({
   paymentDueBy,
   paymentDate,
   receivedDate,
+  trackingInfo,
   miscellaneousAmount,
   shippingAmount,
 }) => {
@@ -374,6 +376,7 @@ const validateHeaderFields = ({
   if (vendorName.length > MAX_VENDOR_NAME_LENGTH) return "Vendor Name is too long";
   if (invoiceNumber.length > MAX_INVOICE_NUMBER_LENGTH) return "Invoice Number is too long";
   if (notes && notes.length > MAX_NOTES_LENGTH) return "Notes are too long";
+  if (trackingInfo && trackingInfo.length > MAX_TRACKING_INFO_LENGTH) return "Tracking Info is too long";
   if (!VALID_SHIPMENT_STATUSES.includes(shipmentStatus)) return "Invalid shipment status";
   if (!VALID_ITEM_CHECK_STATUSES.includes(itemCheckStatus)) return "Invalid item check status";
   if (!VALID_INBOUND_STATUSES.includes(inboundStatus)) return "Invalid inbound status";
@@ -983,6 +986,7 @@ router.post("/", auth, checkPermission("invoiceTracker", "create"), async (req, 
     const paymentDueBy = sanitizeString(req.body?.paymentDueBy) || null;
     const paymentDate = sanitizeString(req.body?.paymentDate) || null;
     const receivedDate = sanitizeString(req.body?.receivedDate) || null;
+    const trackingInfo = sanitizeString(req.body?.trackingInfo) || null;
     const miscellaneousAmount = toMoneyNumber(req.body?.miscellaneousAmount);
     const shippingAmount = toMoneyNumber(req.body?.shippingAmount);
     const notes = sanitizeString(req.body?.notes) || null;
@@ -1008,6 +1012,7 @@ router.post("/", auth, checkPermission("invoiceTracker", "create"), async (req, 
       paymentDueBy,
       paymentDate,
       receivedDate,
+      trackingInfo,
       miscellaneousAmount,
       shippingAmount,
     });
@@ -1040,6 +1045,7 @@ router.post("/", auth, checkPermission("invoiceTracker", "create"), async (req, 
         paymentDueBy: paymentStatus === "credit" ? paymentDueBy : null,
         paymentDate: paymentStatus === "paid" ? paymentDate : null,
         receivedDate: shipmentStatus === "received" ? receivedDate : null,
+        trackingInfo,
         miscellaneousAmount,
         shippingAmount,
         notes,
@@ -1119,6 +1125,7 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
     const paymentDueBy = sanitizeString(req.body?.paymentDueBy) || null;
     const paymentDate = sanitizeString(req.body?.paymentDate) || null;
     const receivedDate = sanitizeString(req.body?.receivedDate) || null;
+    const trackingInfo = sanitizeString(req.body?.trackingInfo) || null;
     const miscellaneousAmount = toMoneyNumber(req.body?.miscellaneousAmount);
     const shippingAmount = toMoneyNumber(req.body?.shippingAmount);
     const notes = sanitizeString(req.body?.notes) || null;
@@ -1144,6 +1151,7 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
       paymentDueBy,
       paymentDate,
       receivedDate,
+      trackingInfo,
       miscellaneousAmount,
       shippingAmount,
     });
@@ -1176,6 +1184,7 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
         paymentDueBy: paymentStatus === "credit" ? paymentDueBy : null,
         paymentDate: paymentStatus === "paid" ? paymentDate : null,
         receivedDate: shipmentStatus === "received" ? receivedDate : null,
+        trackingInfo,
         miscellaneousAmount,
         shippingAmount,
         notes,

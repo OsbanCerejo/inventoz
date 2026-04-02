@@ -61,6 +61,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.DATEONLY,
         allowNull: true,
       },
+      trackingInfo: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
       paymentDate: {
         type: DataTypes.DATEONLY,
         allowNull: true,
