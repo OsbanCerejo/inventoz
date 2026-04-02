@@ -19,22 +19,37 @@ const { checkPermission } = require('../middleware/permissions');
 
 const router = express.Router();
 const FLASH_SALE_STICKER = 'WHATNOT-FLASH-SALE';
+const RAID_GIVEAWAY_STICKER = 'RAID-GIVEAWAY';
 const BUYERS_GIVEAWAY_STICKER = 'BUYERS-GIVEAWAY';
+const COFFEE_STICKER = 'COFFEE';
+const SPONSORED_GIVEAWAY_STICKER = 'SPONSORED-GIVEAWAY';
+const OTHERS_STICKER = 'OTHERS';
 const ITEM_CATEGORY_AUCTION = 'auction';
-const ITEM_CATEGORY_GIVEAWAY = 'giveaway';
-const ITEM_CATEGORY_BUYERS_GIVEAWAY = 'buyers_giveaway';
-const ITEM_CATEGORY_COFFEE = 'coffee';
+const ITEM_CATEGORY_WHATNOT_FLASH_SALE = 'whatnot_flash_sale';
 const ITEM_CATEGORY_RAID_GIVEAWAY = 'raid_giveaway';
-const ITEM_CATEGORY_FLASH_SALE_OTHER = 'flash_sale_other';
+const ITEM_CATEGORY_BUYERS_GIVEAWAY = 'buyers_giveaway';
+const ITEM_CATEGORY_RANDOM_GIVEAWAY = 'random_giveaway';
+const ITEM_CATEGORY_COFFEE = 'coffee';
+const ITEM_CATEGORY_SPONSORED_GIVEAWAY = 'sponsored_giveaway';
+const ITEM_CATEGORY_OTHERS = 'others';
 const EXCLUDED_PENDING_SHIPMENT_CATEGORIES = new Set([
-  ITEM_CATEGORY_GIVEAWAY,
-  ITEM_CATEGORY_COFFEE,
-  ITEM_CATEGORY_RAID_GIVEAWAY,
+  ITEM_CATEGORY_RANDOM_GIVEAWAY,
 ]);
 const FLASH_SALE_TOKEN = FLASH_SALE_STICKER.replace(/[^A-Z0-9-]/g, '');
+const RAID_GIVEAWAY_TOKEN = RAID_GIVEAWAY_STICKER.replace(/[^A-Z0-9-]/g, '');
 const BUYERS_GIVEAWAY_TOKEN = BUYERS_GIVEAWAY_STICKER.replace(/[^A-Z0-9-]/g, '');
+const COFFEE_TOKEN = COFFEE_STICKER.replace(/[^A-Z0-9-]/g, '');
+const SPONSORED_GIVEAWAY_TOKEN = SPONSORED_GIVEAWAY_STICKER.replace(/[^A-Z0-9-]/g, '');
+const OTHERS_TOKEN = OTHERS_STICKER.replace(/[^A-Z0-9-]/g, '');
 const NON_AUCTION_ROW_STICKER = 'NON-AUCTION-ITEMS';
-const SPECIAL_NON_AUCTION_STICKERS = [FLASH_SALE_STICKER, BUYERS_GIVEAWAY_STICKER];
+const SPECIAL_NON_AUCTION_STICKERS = [
+  FLASH_SALE_STICKER,
+  RAID_GIVEAWAY_STICKER,
+  BUYERS_GIVEAWAY_STICKER,
+  COFFEE_STICKER,
+  SPONSORED_GIVEAWAY_STICKER,
+  OTHERS_STICKER,
+];
 const NON_AUCTION_INSTANCE_PREFIX = 'NON-AUCTION-CONTEXT:';
 const EDIT_PIN_SECRET = String(process.env.WHATNOT_FULFILLMENT_EDIT_PIN || '').trim();
 const EDIT_PIN_SECRET_HASH = String(process.env.WHATNOT_FULFILLMENT_EDIT_PIN_HASH || '').trim().toLowerCase();
@@ -74,7 +89,11 @@ const getSpecialNonAuctionContext = (value) => {
   const token = normalizeScanToken(value);
   if (!token) return null;
   if (token.includes(FLASH_SALE_TOKEN)) return FLASH_SALE_STICKER;
+  if (token.includes(RAID_GIVEAWAY_TOKEN)) return RAID_GIVEAWAY_STICKER;
   if (token.includes(BUYERS_GIVEAWAY_TOKEN)) return BUYERS_GIVEAWAY_STICKER;
+  if (token.includes(COFFEE_TOKEN)) return COFFEE_STICKER;
+  if (token.includes(SPONSORED_GIVEAWAY_TOKEN)) return SPONSORED_GIVEAWAY_STICKER;
+  if (token.includes(OTHERS_TOKEN)) return OTHERS_STICKER;
   return null;
 };
 const buildNonAuctionInstanceKey = (scanId) => `${NON_AUCTION_INSTANCE_PREFIX}${Number(scanId)}`;
@@ -261,32 +280,105 @@ const isRonnieAuctionItem = (productName) => {
 const extractCategoryTag = (descriptionText) => {
   const raw = normalizeText(descriptionText).toUpperCase();
   if (!raw) return null;
-  const match = raw.match(/\[(AUC|GVY|BGY|CFE|RGY)\]/);
+  const match = raw.match(/\[(AUC|WFS|CFE|RGY|BGY|GVY|SGY|OTH)\]/);
+  return match ? match[1] : null;
+};
+const extractAnyBracketedTag = (descriptionText) => {
+  const raw = normalizeText(descriptionText).toUpperCase();
+  if (!raw) return null;
+  const match = raw.match(/\[([A-Z-]+)\]/);
   return match ? match[1] : null;
 };
 const parseItemCategory = ({ productName, descriptionText }) => {
   const tag = extractCategoryTag(descriptionText);
-  if (tag === 'AUC') return ITEM_CATEGORY_AUCTION;
-  if (tag === 'GVY') return ITEM_CATEGORY_GIVEAWAY;
-  if (tag === 'BGY') return ITEM_CATEGORY_BUYERS_GIVEAWAY;
-  if (tag === 'CFE') return ITEM_CATEGORY_COFFEE;
-  if (tag === 'RGY') return ITEM_CATEGORY_RAID_GIVEAWAY;
-  if (isRonnieAuctionItem(productName)) return ITEM_CATEGORY_AUCTION;
-  return ITEM_CATEGORY_FLASH_SALE_OTHER;
+  if (tag === 'AUC') return { itemCategory: ITEM_CATEGORY_AUCTION, reviewReason: null };
+  if (tag === 'WFS') {
+    return { itemCategory: ITEM_CATEGORY_WHATNOT_FLASH_SALE, reviewReason: null };
+  }
+  if (tag === 'GVY') return { itemCategory: ITEM_CATEGORY_RANDOM_GIVEAWAY, reviewReason: null };
+  if (tag === 'BGY') return { itemCategory: ITEM_CATEGORY_BUYERS_GIVEAWAY, reviewReason: null };
+  if (tag === 'CFE') return { itemCategory: ITEM_CATEGORY_COFFEE, reviewReason: null };
+  if (tag === 'RGY') return { itemCategory: ITEM_CATEGORY_RAID_GIVEAWAY, reviewReason: null };
+  if (tag === 'SGY') {
+    return { itemCategory: ITEM_CATEGORY_SPONSORED_GIVEAWAY, reviewReason: null };
+  }
+  if (tag === 'OTH') return { itemCategory: ITEM_CATEGORY_OTHERS, reviewReason: null };
+
+  const explicitTag = extractAnyBracketedTag(descriptionText);
+  if (explicitTag) {
+    return {
+      itemCategory: ITEM_CATEGORY_OTHERS,
+      reviewReason: `Unsupported item category tag [${explicitTag}] found in one or more rows.`,
+    };
+  }
+
+  if (isRonnieAuctionItem(productName) || extractStickerNumber(productName)) {
+    return { itemCategory: ITEM_CATEGORY_AUCTION, reviewReason: null };
+  }
+
+  return {
+    itemCategory: ITEM_CATEGORY_OTHERS,
+    reviewReason:
+      'Missing item category tag in one or more rows. Use [AUC], [WFS], [CFE], [RGY], [BGY], [GVY], [SGY], or [OTH].',
+  };
 };
 const getRowItemCategory = (row) => {
   const explicitCategory = normalizeText(row?.itemCategory);
   if (explicitCategory) return explicitCategory;
-  return row?.isAuctionItem ? ITEM_CATEGORY_AUCTION : ITEM_CATEGORY_FLASH_SALE_OTHER;
+  return row?.isAuctionItem ? ITEM_CATEGORY_AUCTION : ITEM_CATEGORY_OTHERS;
 };
 const buildFailedAuctionKey = ({ buyer, stickerNumber }) =>
   `${normalizeText(buyer).toLowerCase()}::${normalizeSticker(stickerNumber).toLowerCase()}`;
-const getExpectedNonAuctionContextForRow = (row) => {
+const getNonAuctionContextForRow = (row) => {
   const category = getRowItemCategory(row);
+  if (category === ITEM_CATEGORY_WHATNOT_FLASH_SALE) {
+    return FLASH_SALE_STICKER;
+  }
+  if (category === ITEM_CATEGORY_RAID_GIVEAWAY) {
+    return RAID_GIVEAWAY_STICKER;
+  }
   if (category === ITEM_CATEGORY_BUYERS_GIVEAWAY) {
     return BUYERS_GIVEAWAY_STICKER;
   }
-  return FLASH_SALE_STICKER;
+  if (category === ITEM_CATEGORY_COFFEE) {
+    return COFFEE_STICKER;
+  }
+  if (category === ITEM_CATEGORY_SPONSORED_GIVEAWAY) {
+    return SPONSORED_GIVEAWAY_STICKER;
+  }
+  if (category === ITEM_CATEGORY_OTHERS) {
+    return OTHERS_STICKER;
+  }
+  return null;
+};
+const isRequiredNonAuctionCategory = (category) =>
+  [
+    ITEM_CATEGORY_WHATNOT_FLASH_SALE,
+    ITEM_CATEGORY_COFFEE,
+    ITEM_CATEGORY_RAID_GIVEAWAY,
+    ITEM_CATEGORY_BUYERS_GIVEAWAY,
+    ITEM_CATEGORY_SPONSORED_GIVEAWAY,
+  ].includes(category);
+const isAutoApprovedNonAuctionCategory = (category) => category === ITEM_CATEGORY_RANDOM_GIVEAWAY;
+const isOptionalNonAuctionCategory = (category) => category === ITEM_CATEGORY_OTHERS;
+const isCloseRelevantNonAuctionRow = (row) => {
+  const category = getRowItemCategory(row);
+  return isRequiredNonAuctionCategory(category) || isAutoApprovedNonAuctionCategory(category);
+};
+const getNonAuctionDisplayTitle = (rowOrCategory) => {
+  const category =
+    typeof rowOrCategory === 'string' ? rowOrCategory : getRowItemCategory(rowOrCategory);
+  const productName =
+    typeof rowOrCategory === 'string' ? '' : normalizeText(rowOrCategory?.productName);
+  if (category === ITEM_CATEGORY_WHATNOT_FLASH_SALE) return 'Whatnot Flash Sale';
+  if (productName) return productName;
+  if (category === ITEM_CATEGORY_RAID_GIVEAWAY) return 'Raid Giveaway';
+  if (category === ITEM_CATEGORY_BUYERS_GIVEAWAY) return 'Buyers Giveaway';
+  if (category === ITEM_CATEGORY_RANDOM_GIVEAWAY) return 'Random Giveaway';
+  if (category === ITEM_CATEGORY_COFFEE) return 'Coffee';
+  if (category === ITEM_CATEGORY_SPONSORED_GIVEAWAY) return 'Sponsored Giveaway';
+  if (category === ITEM_CATEGORY_OTHERS) return 'Others';
+  return 'Non Auction Item';
 };
 const toUserDisplayName = (user) => {
   if (!user) return null;
@@ -308,6 +400,64 @@ const extractStickerNumber = (productName) => {
 
 const getAuctionRows = (rows) => rows.filter((row) => Boolean(row.isAuctionItem));
 const getNonAuctionRows = (rows) => rows.filter((row) => !row.isAuctionItem);
+const isAutoApprovedNonAuctionRow = (row) =>
+  !row?.isAuctionItem && isAutoApprovedNonAuctionCategory(getRowItemCategory(row));
+const getActionableNonAuctionRows = (rows) =>
+  getNonAuctionRows(rows).filter((row) => getNonAuctionContextForRow(row));
+
+const deriveShipmentRowStatus = (row, scannedQty) => {
+  if (normalizeText(row?.status) === 'pending_review') return 'pending_review';
+  const expectedQty = Math.max(0, Number(row?.expectedQty || 0));
+  if (scannedQty <= 0) return 'ready';
+  if (expectedQty > 0 && scannedQty >= expectedQty) return 'completed';
+  return 'in_progress';
+};
+
+const syncNonAuctionRowsToContexts = async ({
+  shipmentRows,
+  nonAuctionContexts = [],
+  transaction = null,
+}) => {
+  const nonAuctionRows = getActionableNonAuctionRows(shipmentRows);
+  if (!nonAuctionRows.length) return;
+
+  const contextCountsByType = (nonAuctionContexts || []).reduce((acc, contextRow) => {
+    const contextType = normalizeText(contextRow?.contextType);
+    if (!contextType) return acc;
+    acc[contextType] = Number(acc[contextType] || 0) + 1;
+    return acc;
+  }, {});
+
+  for (const contextType of SPECIAL_NON_AUCTION_STICKERS) {
+    const rowsForType = nonAuctionRows.filter(
+      (row) => getNonAuctionContextForRow(row) === contextType
+    );
+    if (!rowsForType.length) continue;
+
+    let remainingContexts = Number(contextCountsByType[contextType] || 0);
+    for (const row of rowsForType) {
+      const expectedQty = Math.max(0, Number(row.expectedQty || 0));
+      const targetScannedQty = Math.max(0, Math.min(expectedQty, remainingContexts));
+      remainingContexts = Math.max(0, remainingContexts - targetScannedQty);
+      const targetStatus = deriveShipmentRowStatus(row, targetScannedQty);
+
+      if (
+        Number(row.scannedQty || 0) !== targetScannedQty ||
+        normalizeText(row.status) !== targetStatus
+      ) {
+        await row.update(
+          {
+            scannedQty: targetScannedQty,
+            status: targetStatus,
+          },
+          { transaction }
+        );
+        row.scannedQty = targetScannedQty;
+        row.status = targetStatus;
+      }
+    }
+  }
+};
 
 const sortAuctionRowsForOrder = (rows) => {
   return [...rows].sort((a, b) => {
@@ -351,10 +501,31 @@ const summarizeShipment = (
 ) => {
   const auctionChecklist = buildAuctionChecklist(rows);
   const nonAuctionRows = getNonAuctionRows(rows);
-  const nonAuctionExpectedItems = nonAuctionRows.reduce((sum, row) => sum + Number(row.expectedQty || 0), 0);
-  const nonAuctionScannedItems = nonAuctionRows.reduce((sum, row) => sum + Number(row.scannedQty || 0), 0);
+  const closeRelevantNonAuctionRows = nonAuctionRows.filter((row) => isCloseRelevantNonAuctionRow(row));
+  const nonAuctionExpectedItems = closeRelevantNonAuctionRows.reduce(
+    (sum, row) => sum + Number(row.expectedQty || 0),
+    0
+  );
+  const nonAuctionScannedItems = closeRelevantNonAuctionRows.reduce(
+    (sum, row) => sum + Number(row.scannedQty || 0),
+    0
+  );
   const nonAuctionRemainingItems = Math.max(0, nonAuctionExpectedItems - nonAuctionScannedItems);
   const lastNonAuctionContext = normalizeText(options.lastNonAuctionContext);
+  const nonAuctionTitleQueues = getActionableNonAuctionRows(rows).reduce((acc, row) => {
+    const contextType = getNonAuctionContextForRow(row);
+    if (!contextType) return acc;
+    if (!acc[contextType]) acc[contextType] = [];
+    const title = getNonAuctionDisplayTitle(row);
+    const repetitions = Math.max(1, Number(row.expectedQty || 0));
+    for (let index = 0; index < repetitions; index += 1) {
+      acc[contextType].push({
+        displayTitle: title,
+        category: getRowItemCategory(row),
+      });
+    }
+    return acc;
+  }, {});
 
   const checklistWithLinks = auctionChecklist.map((item) => {
     const stickerKey = normalizeSticker(item.stickerNumber);
@@ -379,36 +550,63 @@ const summarizeShipment = (
       const instanceKey = normalizeText(contextRow.instanceKey);
       if (!instanceKey) return;
       const linkedCount = Number(productLinksBySticker[instanceKey] || 0);
+      const contextType = contextRow.contextType || null;
+      const contextTitleQueue = contextType ? nonAuctionTitleQueues[contextType] || [] : [];
+      const titleEntry = contextTitleQueue.length > 0 ? contextTitleQueue.shift() : null;
+      const category = titleEntry?.category || null;
+      const displayTitle = titleEntry?.displayTitle || getNonAuctionDisplayTitle(contextType);
+      const requiresLinkedProduct = Boolean(
+        category ? isRequiredNonAuctionCategory(category) : ![OTHERS_STICKER].includes(contextType)
+      );
       checklistWithLinks.push({
         stickerNumber: instanceKey,
         expectedQty: 1,
         scannedQty: 1,
         linkedProductScans: linkedCount,
-        pendingProductLinks: linkedCount < 1 ? 1 : 0,
+        pendingProductLinks: requiresLinkedProduct && linkedCount < 1 ? 1 : 0,
         linkedProducts: (linkedProductsBySticker[instanceKey] || []).map((entry) => ({
           ...entry,
           contextSticker: instanceKey,
         })),
-        nonAuctionContext: contextRow.contextType || null,
+        nonAuctionContext: contextType,
         nonAuctionContextIndex: index + 1,
+        displayTitle,
       });
     });
+  }
 
-    const unresolvedCount = Math.max(0, nonAuctionExpectedItems - sortedContexts.length);
-    if (unresolvedCount > 0) {
+  Object.entries(nonAuctionTitleQueues).forEach(([contextType, entries]) => {
+    entries.forEach((entry, index) => {
       checklistWithLinks.push({
-        stickerNumber: NON_AUCTION_ROW_STICKER,
-        expectedQty: unresolvedCount,
+        stickerNumber: `${NON_AUCTION_ROW_STICKER}:${contextType}:${index + 1}`,
+        expectedQty: 1,
         scannedQty: 0,
         linkedProductScans: 0,
         pendingProductLinks: 0,
         linkedProducts: [],
-        nonAuctionContext: SPECIAL_NON_AUCTION_STICKERS.includes(lastNonAuctionContext)
-          ? lastNonAuctionContext
-          : null,
+        nonAuctionContext: contextType,
+        nonAuctionContextIndex: index + 1,
+        displayTitle: entry.displayTitle,
       });
-    }
-  }
+    });
+  });
+
+  nonAuctionRows
+    .filter((row) => !getNonAuctionContextForRow(row) && isAutoApprovedNonAuctionRow(row))
+    .forEach((row, rowIndex) => {
+      const repetitions = Math.max(1, Number(row.expectedQty || 0));
+      for (let unitIndex = 0; unitIndex < repetitions; unitIndex += 1) {
+        checklistWithLinks.push({
+          stickerNumber: `AUTO-NON-AUCTION:${rowIndex + 1}:${unitIndex + 1}`,
+          expectedQty: 1,
+          scannedQty: 1,
+          linkedProductScans: 0,
+          pendingProductLinks: 0,
+          linkedProducts: [],
+          displayTitle: getNonAuctionDisplayTitle(row),
+        });
+      }
+    });
 
   const auctionExpectedItems = auctionChecklist.reduce((sum, item) => sum + item.expectedQty, 0);
   const auctionScannedItems = auctionChecklist.reduce((sum, item) => sum + item.scannedQty, 0);
@@ -418,8 +616,14 @@ const summarizeShipment = (
     0
   );
 
-  const totalExpectedItems = rows.reduce((sum, row) => sum + Number(row.expectedQty || 0), 0);
-  const totalScannedItems = rows.reduce((sum, row) => sum + Number(row.scannedQty || 0), 0);
+  const totalExpectedItems = rows.reduce((sum, row) => {
+    if (!row.isAuctionItem && isOptionalNonAuctionCategory(getRowItemCategory(row))) return sum;
+    return sum + Number(row.expectedQty || 0);
+  }, 0);
+  const totalScannedItems = rows.reduce((sum, row) => {
+    if (!row.isAuctionItem && isOptionalNonAuctionCategory(getRowItemCategory(row))) return sum;
+    return sum + Number(row.scannedQty || 0);
+  }, 0);
   const totalRemainingItems = Math.max(0, totalExpectedItems - totalScannedItems);
   const categoryCounts = rows.reduce((acc, row) => {
     const category = getRowItemCategory(row);
@@ -693,36 +897,6 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
       raw: true,
     });
 
-    const pendingRows = await WhatnotShipmentItem.findAll({
-      where: {
-        whatnotShowId: showId,
-        importId: activeImport.id,
-        status: 'pending_review',
-      },
-      attributes: ['shipmentId', 'tracking', 'mismatchReason', 'expectedQty', 'scannedQty'],
-      order: [['shipmentId', 'ASC']],
-      raw: true,
-    });
-
-    const pendingMap = new Map();
-    for (const row of pendingRows) {
-      const key = normalizeText(row.shipmentId);
-      if (!pendingMap.has(key)) {
-        pendingMap.set(key, {
-          shipmentId: key,
-          tracking: normalizeText(row.tracking) || 'N/A',
-          mismatchReason: row.mismatchReason || 'Mismatch detected',
-          expectedItems: 0,
-          scannedItems: 0,
-        });
-      }
-      const entry = pendingMap.get(key);
-      entry.expectedItems += Number(row.expectedQty || 0);
-      entry.scannedItems += Number(row.scannedQty || 0);
-    }
-
-    const pendingReview = Array.from(pendingMap.values()).slice(0, 100);
-
     const shipmentStatusRows = await WhatnotShipmentItem.findAll({
       where: {
         whatnotShowId: showId,
@@ -764,6 +938,7 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
           mismatchReason: null,
           currentStatus: 'ready',
           countsTowardOpenShipments: false,
+          visibleInShipmentLists: false,
         });
       }
       const summaryEntry = shipmentSummaryMap.get(shipmentId);
@@ -772,6 +947,9 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
       const rowCategory = getRowItemCategory(row);
       if (!EXCLUDED_PENDING_SHIPMENT_CATEGORIES.has(rowCategory)) {
         summaryEntry.countsTowardOpenShipments = true;
+      }
+      if (rowCategory !== ITEM_CATEGORY_RANDOM_GIVEAWAY) {
+        summaryEntry.visibleInShipmentLists = true;
       }
       if (normalizeText(row.status) === 'pending_review') {
         summaryEntry.hasPendingReview = true;
@@ -786,13 +964,11 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
           summaryEntry.closedAt = row.closedAt;
         }
       } else if (normalizeText(row.status)) {
-        if (normalizeText(row.status) === 'in_progress') {
-          summaryEntry.currentStatus = 'in_progress';
-        } else if (
-          summaryEntry.currentStatus !== 'in_progress' &&
-          normalizeText(row.status) === 'completed'
+        if (
+          normalizeText(row.status) === 'in_progress' ||
+          Number(row.scannedQty || 0) > 0
         ) {
-          summaryEntry.currentStatus = 'completed';
+          summaryEntry.currentStatus = 'in_progress';
         }
       }
       if (!summaryEntry.closedBy && row.closedBy) {
@@ -811,6 +987,17 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
       categoryCounts[category].expectedQty += Number(row.expectedQty || 0);
       categoryCounts[category].scannedQty += Number(row.scannedQty || 0);
     }
+    const pendingReview = Array.from(shipmentSummaryMap.values())
+      .filter((entry) => entry.hasPendingReview && entry.visibleInShipmentLists)
+      .sort((a, b) => a.shipmentId.localeCompare(b.shipmentId, undefined, { numeric: true }))
+      .map((entry) => ({
+        shipmentId: entry.shipmentId,
+        tracking: entry.tracking,
+        mismatchReason: entry.mismatchReason || 'Mismatch detected',
+        expectedItems: entry.expectedItems,
+        scannedItems: entry.scannedItems,
+      }))
+      .slice(0, 100);
     const closedShipments = Array.from(shipmentCloseMap.values()).filter(Boolean).length;
     const allShipments = Array.from(shipmentSummaryMap.values());
     const remainingShipments = allShipments.filter(
@@ -818,7 +1005,7 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
     ).length;
 
     const completedShipments = allShipments
-      .filter((entry) => entry.isClosed)
+      .filter((entry) => entry.isClosed && entry.visibleInShipmentLists)
       .sort((a, b) => new Date(b.closedAt || 0).getTime() - new Date(a.closedAt || 0).getTime())
       .map((entry) => ({
         shipmentId: entry.shipmentId,
@@ -831,7 +1018,7 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
       .slice(0, 500);
 
     const underReviewShipments = allShipments
-      .filter((entry) => !entry.isClosed && entry.hasPendingReview)
+      .filter((entry) => !entry.isClosed && entry.hasPendingReview && entry.visibleInShipmentLists)
       .sort((a, b) => a.shipmentId.localeCompare(b.shipmentId, undefined, { numeric: true }))
       .map((entry) => ({
         shipmentId: entry.shipmentId,
@@ -844,7 +1031,11 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
 
     const pendingShipments = allShipments
       .filter(
-        (entry) => !entry.isClosed && !entry.hasPendingReview && entry.countsTowardOpenShipments
+        (entry) =>
+          !entry.isClosed &&
+          !entry.hasPendingReview &&
+          entry.countsTowardOpenShipments &&
+          entry.visibleInShipmentLists
       )
       .sort((a, b) => a.shipmentId.localeCompare(b.shipmentId, undefined, { numeric: true }))
       .map((entry) => ({
@@ -1044,7 +1235,8 @@ router.post(
         const descriptionText = normalizeText(
           getCsvValue(row, 'description', 'product description', 'product_description')
         );
-        const itemCategory = parseItemCategory({ productName, descriptionText });
+        const parsedCategory = parseItemCategory({ productName, descriptionText });
+        const itemCategory = parsedCategory.itemCategory;
         const isAuctionItem = itemCategory === ITEM_CATEGORY_AUCTION;
         const stickerNumber = isAuctionItem ? extractStickerNumber(productName) : null;
         const buyer = normalizeText(getCsvValue(row, 'buyer', 'buyer username', 'buyer_username'));
@@ -1127,6 +1319,9 @@ router.post(
 
         if (!tracking) {
           bucket.reasons.add('Missing tracking number in one or more rows.');
+        }
+        if (parsedCategory.reviewReason) {
+          bucket.reasons.add(parsedCategory.reviewReason);
         }
         if (isAuctionItem && !stickerNumber) {
           bucket.reasons.add('Auction item is missing sticker number (#...).');
@@ -1232,6 +1427,7 @@ router.post(
         else readyShipments += 1;
 
         for (const aggregated of bucket.rows.values()) {
+          const autoApprovedGiveaway = aggregated.itemCategory === ITEM_CATEGORY_RANDOM_GIVEAWAY;
           itemRows.push({
             whatnotShowId: showId,
             importId: importRecord.id,
@@ -1246,8 +1442,8 @@ router.post(
             costPerItem: aggregated.costPerItem,
             totalCost: aggregated.totalCost,
             placedAt: aggregated.placedAt,
-            scannedQty: 0,
-            status,
+            scannedQty: autoApprovedGiveaway ? aggregated.expectedQty : 0,
+            status: autoApprovedGiveaway && status !== 'pending_review' ? 'completed' : status,
             mismatchReason: reasonText || null,
             buyer: bucket.buyer || null,
             orderId: bucket.orderId || null,
@@ -1555,8 +1751,8 @@ router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, 
         matchedAuctionSticker = scannedValue;
       }
     } else if (specialNonAuctionContext) {
-      const nonAuctionRows = getNonAuctionRows(shipmentRows).filter(
-        (row) => getExpectedNonAuctionContextForRow(row) === specialNonAuctionContext
+      const nonAuctionRows = getActionableNonAuctionRows(shipmentRows).filter(
+        (row) => getNonAuctionContextForRow(row) === specialNonAuctionContext
       );
       if (!nonAuctionRows.length) {
         result = 'unexpected';
@@ -1600,6 +1796,7 @@ router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, 
         tracking,
         scannedValue,
         auctionStickerNumber: matchedAuctionSticker,
+        soldPrice: rowToIncrement?.soldPrice || null,
         scanType: 'item',
         result,
         message,
@@ -1770,15 +1967,15 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
             normalizeSticker(row.stickerNumber) === auctionStickerNumber
         );
     const nonAuctionRows = isSpecialNonAuctionContext
-      ? getNonAuctionRows(shipmentRows).filter(
-          (row) => getExpectedNonAuctionContextForRow(row) === specialNonAuctionContext
+      ? getActionableNonAuctionRows(shipmentRows).filter(
+          (row) => getNonAuctionContextForRow(row) === specialNonAuctionContext
         )
       : [];
     const hasScannedNonAuctionRow = isSpecialNonAuctionContext
       ? nonAuctionRows.some((row) => Number(row.scannedQty || 0) > 0)
       : false;
     const nonAuctionReferenceRow = isSpecialNonAuctionContext
-      ? nonAuctionRows.find((row) => Number(row.scannedQty || 0) > 0) || nonAuctionRows[0] || null
+      ? contextScanRow || nonAuctionRows.find((row) => Number(row.scannedQty || 0) > 0) || nonAuctionRows[0] || null
       : null;
 
     if (!isSpecialNonAuctionContext && !auctionRow) {
@@ -2023,14 +2220,19 @@ router.post('/close-shipment', auth, checkPermission('whatnot', 'view'), async (
         lastNonAuctionContext: linkedSummary.lastNonAuctionContext,
       }
     );
-    const missingAuctionProductLinks = summary.checklist
+    const missingOrderContexts = summary.checklist
       .filter((item) => Number(item.scannedQty || 0) > 0 && Number(item.linkedProductScans || 0) < 1)
-      .map((item) => item.stickerNumber);
+      .map((item) => {
+        if (item.nonAuctionContext && isNonAuctionInstanceKey(item.stickerNumber)) {
+          return `${item.nonAuctionContext}`;
+        }
+        return item.stickerNumber;
+      });
 
-    if (missingAuctionProductLinks.length > 0) {
+    if (missingOrderContexts.length > 0) {
       await transaction.rollback();
       return res.status(400).json({
-        error: `Cannot close shipment. Missing product links for auction #: ${missingAuctionProductLinks.join(', ')}`,
+        error: `Cannot close shipment. Missing product links for order context(s): ${missingOrderContexts.join(', ')}`,
       });
     }
 
@@ -2300,6 +2502,43 @@ router.post('/delete-link', auth, checkPermission('whatnot', 'view'), async (req
       { transaction }
     );
 
+    const removedContextScanId = parseNonAuctionInstanceId(removedContext);
+    if (removedContextScanId) {
+      const remainingContextLinkCount = await WhatnotShipmentScan.count({
+        where: {
+          whatnotShowId: showId,
+          importId: activeImport.id,
+          shipmentId: resolved.shipmentId,
+          auctionStickerNumber: removedContext,
+          result: 'matched',
+          productSku: { [Op.not]: null, [Op.ne]: '' },
+        },
+        transaction,
+      });
+
+      if (remainingContextLinkCount < 1) {
+        await WhatnotShipmentScan.update(
+          {
+            result: 'duplicate',
+            message: `Context cleared after last linked product was removed from ${removedContext}.`,
+          },
+          {
+            where: {
+              id: removedContextScanId,
+              whatnotShowId: showId,
+              importId: activeImport.id,
+              shipmentId: resolved.shipmentId,
+              scanType: 'item',
+              result: 'matched',
+              productSku: { [Op.or]: [{ [Op.is]: null }, { [Op.eq]: '' }] },
+              auctionStickerNumber: { [Op.in]: SPECIAL_NON_AUCTION_STICKERS },
+            },
+            transaction,
+          }
+        );
+      }
+    }
+
     const refreshedRows = await WhatnotShipmentItem.findAll({
       where: {
         whatnotShowId: showId,
@@ -2309,6 +2548,17 @@ router.post('/delete-link', auth, checkPermission('whatnot', 'view'), async (req
       order: [['id', 'ASC']],
       transaction,
       lock: transaction.LOCK.UPDATE,
+    });
+    const refreshedLinkedSummary = await getLinkedProductSummaryBySticker({
+      showId,
+      importId: activeImport.id,
+      shipmentId: resolved.shipmentId,
+      transaction,
+    });
+    await syncNonAuctionRowsToContexts({
+      shipmentRows: refreshedRows,
+      nonAuctionContexts: refreshedLinkedSummary.nonAuctionContexts,
+      transaction,
     });
     const linkedSummary = await getLinkedProductSummaryBySticker({
       showId,
@@ -2346,6 +2596,7 @@ router.post('/reset-unlinked-auction-scans', auth, checkPermission('whatnot', 'v
   try {
     const showId = Number(req.body.showId);
     const tracking = normalizeTracking(req.body.tracking);
+    const targetContextSticker = normalizeText(req.body.contextStickerNumber);
 
     if (!showId || !tracking) {
       await transaction.rollback();
@@ -2406,6 +2657,9 @@ router.post('/reset-unlinked-auction-scans', auth, checkPermission('whatnot', 'v
     });
 
     const rowsToReset = resolved.shipmentRows.filter((row) => {
+      if (targetContextSticker && normalizeSticker(row.stickerNumber) !== targetContextSticker) {
+        return false;
+      }
       if (!row.isAuctionItem) return false;
       const sticker = normalizeSticker(row.stickerNumber);
       if (!sticker) return false;
@@ -2413,22 +2667,14 @@ router.post('/reset-unlinked-auction-scans', auth, checkPermission('whatnot', 'v
       const linkedCount = Number(linkedSummary.countsBySticker[sticker] || 0);
       return scannedQty > 0 && linkedCount < 1;
     });
-    const specialLinkedCount = SPECIAL_NON_AUCTION_STICKERS.reduce(
-      (sum, context) => sum + Number(linkedSummary.countsBySticker[context] || 0),
-      0
-    ) + Object.entries(linkedSummary.countsBySticker || {}).reduce((sum, [sticker, count]) => {
-      if (!isNonAuctionInstanceKey(sticker)) return sum;
-      return sum + Number(count || 0);
-    }, 0);
-    const nonAuctionRowsToReset =
-      specialLinkedCount < 1
-        ? resolved.shipmentRows.filter(
-            (row) => !row.isAuctionItem && Number(row.scannedQty || 0) > 0
-          )
-        : [];
-    const allRowsToReset = [...rowsToReset, ...nonAuctionRowsToReset];
+    const orphanNonAuctionContexts = (linkedSummary.nonAuctionContexts || []).filter((contextRow) => {
+      const instanceKey = normalizeText(contextRow.instanceKey);
+      if (!instanceKey) return false;
+      if (targetContextSticker && instanceKey !== targetContextSticker) return false;
+      return Number(linkedSummary.countsBySticker[instanceKey] || 0) < 1;
+    });
 
-    if (allRowsToReset.length > 0) {
+    if (rowsToReset.length > 0) {
       await WhatnotShipmentItem.update(
         {
           scannedQty: 0,
@@ -2437,7 +2683,7 @@ router.post('/reset-unlinked-auction-scans', auth, checkPermission('whatnot', 'v
         {
           where: {
             id: {
-              [Op.in]: allRowsToReset.map((row) => row.id),
+              [Op.in]: rowsToReset.map((row) => row.id),
             },
           },
           transaction,
@@ -2448,9 +2694,84 @@ router.post('/reset-unlinked-auction-scans', auth, checkPermission('whatnot', 'v
     const resetStickerSet = new Set(
       rowsToReset.map((row) => normalizeSticker(row.stickerNumber)).filter(Boolean)
     );
-    if (nonAuctionRowsToReset.length > 0) {
-      resetStickerSet.add(NON_AUCTION_ROW_STICKER);
+
+    if (orphanNonAuctionContexts.length > 0) {
+      await WhatnotShipmentScan.update(
+        {
+          result: 'duplicate',
+          message: 'Context reset because no linked products were attached.',
+        },
+        {
+          where: {
+            id: {
+              [Op.in]: orphanNonAuctionContexts
+                .map((contextRow) => parseNonAuctionInstanceId(contextRow.instanceKey))
+                .filter((id) => Number.isFinite(id) && id > 0),
+            },
+            whatnotShowId: showId,
+            importId: activeImport.id,
+            shipmentId: resolved.shipmentId,
+            scanType: 'item',
+            result: 'matched',
+            productSku: { [Op.or]: [{ [Op.is]: null }, { [Op.eq]: '' }] },
+            auctionStickerNumber: { [Op.in]: SPECIAL_NON_AUCTION_STICKERS },
+          },
+          transaction,
+        }
+      );
+
+      const refreshedRows = await WhatnotShipmentItem.findAll({
+        where: {
+          whatnotShowId: showId,
+          importId: activeImport.id,
+          shipmentId: resolved.shipmentId,
+        },
+        order: [['id', 'ASC']],
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+      const refreshedLinkedSummary = await getLinkedProductSummaryBySticker({
+        showId,
+        importId: activeImport.id,
+        shipmentId: resolved.shipmentId,
+        transaction,
+      });
+      await syncNonAuctionRowsToContexts({
+        shipmentRows: refreshedRows,
+        nonAuctionContexts: refreshedLinkedSummary.nonAuctionContexts,
+        transaction,
+      });
+
+      orphanNonAuctionContexts.forEach((contextRow) => {
+        resetStickerSet.add(contextRow.contextType || contextRow.instanceKey);
+      });
     }
+
+    const finalRows = await WhatnotShipmentItem.findAll({
+      where: {
+        whatnotShowId: showId,
+        importId: activeImport.id,
+        shipmentId: resolved.shipmentId,
+      },
+      order: [['id', 'ASC']],
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    const finalLinkedSummary = await getLinkedProductSummaryBySticker({
+      showId,
+      importId: activeImport.id,
+      shipmentId: resolved.shipmentId,
+      transaction,
+    });
+    const summary = summarizeShipment(
+      finalRows,
+      finalLinkedSummary.countsBySticker,
+      finalLinkedSummary.productsBySticker,
+      {
+        nonAuctionContexts: finalLinkedSummary.nonAuctionContexts,
+        lastNonAuctionContext: finalLinkedSummary.lastNonAuctionContext,
+      }
+    );
 
     await transaction.commit();
     releaseShipmentLock({
@@ -2464,8 +2785,9 @@ router.post('/reset-unlinked-auction-scans', auth, checkPermission('whatnot', 'v
       success: true,
       shipmentId: resolved.shipmentId,
       tracking,
-      resetCount: allRowsToReset.length,
+      resetCount: rowsToReset.length + orphanNonAuctionContexts.length,
       resetAuctionStickers: Array.from(resetStickerSet),
+      ...summary,
     });
   } catch (error) {
     await transaction.rollback();

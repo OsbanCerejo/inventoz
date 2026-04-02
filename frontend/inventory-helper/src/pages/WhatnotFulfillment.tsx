@@ -118,6 +118,7 @@ interface ShipmentChecklistItem {
   pendingProductLinks?: number;
   nonAuctionContext?: string | null;
   nonAuctionContextIndex?: number;
+  displayTitle?: string | null;
   linkedProducts?: Array<{
     sku: string;
     count: number;
@@ -347,10 +348,21 @@ const ShipmentHistorySection = memo(
 ShipmentHistorySection.displayName = "ShipmentHistorySection";
 
 const FLASH_SALE_STICKER = "WHATNOT-FLASH-SALE";
+const RAID_GIVEAWAY_STICKER = "RAID-GIVEAWAY";
 const BUYERS_GIVEAWAY_STICKER = "BUYERS-GIVEAWAY";
+const COFFEE_STICKER = "COFFEE";
+const SPONSORED_GIVEAWAY_STICKER = "SPONSORED-GIVEAWAY";
+const OTHERS_STICKER = "OTHERS";
 const NON_AUCTION_ROW_STICKER = "NON-AUCTION-ITEMS";
 const NON_AUCTION_INSTANCE_PREFIX = "NON-AUCTION-CONTEXT:";
-const SPECIAL_NON_AUCTION_CONTEXTS = [FLASH_SALE_STICKER, BUYERS_GIVEAWAY_STICKER];
+const SPECIAL_NON_AUCTION_CONTEXTS = [
+  FLASH_SALE_STICKER,
+  RAID_GIVEAWAY_STICKER,
+  BUYERS_GIVEAWAY_STICKER,
+  COFFEE_STICKER,
+  SPONSORED_GIVEAWAY_STICKER,
+  OTHERS_STICKER,
+];
 
 const WhatnotFulfillment = () => {
   const { user } = useAuth();
@@ -396,21 +408,40 @@ const WhatnotFulfillment = () => {
     if (!token) return null;
     return SPECIAL_NON_AUCTION_CONTEXTS.find((entry) => entry === token) || null;
   };
+  const formatSpecialContextLabel = (value?: string | null) => {
+    const token = getSpecialNonAuctionContext(value);
+    if (!token) return "";
+    if (token === FLASH_SALE_STICKER) return "Whatnot Flash Sale";
+    if (token === RAID_GIVEAWAY_STICKER) return "Raid Giveaway";
+    if (token === BUYERS_GIVEAWAY_STICKER) return "Buyers Giveaway";
+    if (token === COFFEE_STICKER) return "Coffee";
+    if (token === SPONSORED_GIVEAWAY_STICKER) return "Sponsored Giveaway";
+    if (token === OTHERS_STICKER) return "Others";
+    return token;
+  };
   const formatStickerContext = (value?: string | null) => {
     const normalized = String(value || "").trim().replace(/^#/, "");
     if (!normalized) return "None";
     const specialContext = getSpecialNonAuctionContext(normalized);
-    return specialContext ? specialContext : `#${normalized}`;
+    return specialContext ? formatSpecialContextLabel(specialContext) : `#${normalized}`;
   };
   const formatChecklistRowLabel = (item: ShipmentChecklistItem) => {
     const raw = String(item.stickerNumber || "").trim();
+    const displayTitle = String(item.displayTitle || "").trim();
+    if (
+      displayTitle &&
+      (raw.startsWith(NON_AUCTION_ROW_STICKER) || raw.startsWith("AUTO-NON-AUCTION:"))
+    ) {
+      return displayTitle;
+    }
     if (
       item.nonAuctionContext &&
       raw.startsWith(NON_AUCTION_INSTANCE_PREFIX)
     ) {
-      return item.nonAuctionContext;
+      return displayTitle || item.nonAuctionContext;
     }
     if (raw !== NON_AUCTION_ROW_STICKER) return raw;
+    if (displayTitle) return displayTitle;
     const contextActivated =
       Number(item.scannedQty || 0) > 0 || Number(item.linkedProductScans || 0) > 0;
     if (!contextActivated) return "Non Auction Items";
@@ -492,7 +523,7 @@ const WhatnotFulfillment = () => {
     if (!activeShipment) return false;
     if (!isShipmentFullyScanned) return false;
     if (!activeShipment.checklist.length) return true;
-    return activeShipment.checklist.every((item) => Number(item.linkedProductScans || 0) >= 1);
+    return activeShipment.checklist.every((item) => Number(item.pendingProductLinks || 0) <= 0);
   }, [activeShipment, isShipmentFullyScanned]);
   const filteredCompletedShipments = useMemo(() => {
     const completedRows = summary?.completedShipments || [];
@@ -534,7 +565,7 @@ const WhatnotFulfillment = () => {
     shipmentTab,
   ]);
   const categoryCounts = summary?.categoryCounts || {};
-  const randomGiveawayCount = Number(categoryCounts.giveaway?.expectedQty || 0);
+  const randomGiveawayCount = Number(categoryCounts.random_giveaway?.expectedQty || 0);
   const coffeeCount = Number(categoryCounts.coffee?.expectedQty || 0);
   const raidGiveawayCount = Number(categoryCounts.raid_giveaway?.expectedQty || 0);
   const failedOrderCount = Number(summary?.failedOrders?.length || 0);
@@ -734,15 +765,18 @@ const WhatnotFulfillment = () => {
       if (response.data.matchedAuctionSticker) {
         const matchedContext = String(response.data.matchedAuctionSticker);
         setActiveAuctionSticker(matchedContext);
-        // Flash-sale behaves like a sticky mode: stay in product scan until user changes context.
-        setAutoReturnToAuction(!Boolean(getSpecialNonAuctionContext(matchedContext)));
+        const isStickyNonAuctionContext =
+          Boolean(getSpecialNonAuctionContext(matchedContext)) ||
+          matchedContext.startsWith(NON_AUCTION_INSTANCE_PREFIX);
+        // Non-auction contexts behave like a sticky mode: stay in product scan until user changes context.
+        setAutoReturnToAuction(!isStickyNonAuctionContext);
       }
       let shouldFocusItemScan = false;
       if (response.data.scanResult === "matched") {
         if (response.data.matchedAuctionSticker) {
           const matchedContext = String(response.data.matchedAuctionSticker);
           const matchedContextLabel = response.data.matchedContextType
-            ? String(response.data.matchedContextType)
+            ? formatStickerContext(String(response.data.matchedContextType))
             : formatStickerContext(matchedContext);
           setSuccess(
             response.data.completed
@@ -782,9 +816,9 @@ const WhatnotFulfillment = () => {
         setError("Cannot close shipment yet. Scan all shipment items first.");
         setInterventionAlert("Close blocked: shipment still has remaining unscanned orders.");
       } else {
-        setError("Cannot close shipment. Every auction number must have at least one linked product.");
+        setError("Cannot close shipment. Every scanned order context must have at least one linked product.");
         setInterventionAlert(
-          "Close blocked: one or more auction numbers do not have any linked product scan yet."
+          "Close blocked: one or more scanned order contexts do not have any linked product scan yet."
         );
       }
       playInterventionSound();
@@ -821,7 +855,7 @@ const WhatnotFulfillment = () => {
     if (!activeShipment) return;
     const hasUnfinishedWork =
       Number(activeShipment.remainingItems || 0) > 0 ||
-      activeShipment.checklist.some((item) => Number(item.linkedProductScans || 0) < 1);
+      activeShipment.checklist.some((item) => Number(item.pendingProductLinks || 0) > 0);
     if (hasUnfinishedWork) {
       const shouldClose = window.confirm(
         "This shipment is not complete yet. Exit shipment view and continue later?"
@@ -829,7 +863,7 @@ const WhatnotFulfillment = () => {
       if (!shouldClose) return;
     }
     const unlinkedScannedStickers = activeShipment.checklist
-      .filter((item) => Number(item.scannedQty || 0) > 0 && Number(item.linkedProductScans || 0) < 1)
+      .filter((item) => Number(item.scannedQty || 0) > 0 && Number(item.pendingProductLinks || 0) > 0)
       .map((item) => String(item.stickerNumber).trim().replace(/^#/, ""))
       .filter(Boolean);
     if (selectedShowId && unlinkedScannedStickers.length > 0) {
@@ -840,7 +874,7 @@ const WhatnotFulfillment = () => {
         });
         const resetList: string[] = response?.data?.resetAuctionStickers || [];
         if (resetList.length > 0) {
-          setSuccess(`Reset scanned status for unlinked auction #: ${resetList.join(", ")}.`);
+          setSuccess(`Reset unlinked order contexts: ${resetList.join(", ")}.`);
         }
       } catch (resetError: any) {
         const message =
@@ -911,7 +945,10 @@ const WhatnotFulfillment = () => {
       } else {
         setSuccess(response.data?.message || "Product linked to selected order.");
       }
-      if (Boolean(getSpecialNonAuctionContext(activeAuctionSticker)) || productFocusPinned) {
+      const isStickyNonAuctionContext =
+        Boolean(getSpecialNonAuctionContext(activeAuctionSticker)) ||
+        activeAuctionSticker.startsWith(NON_AUCTION_INSTANCE_PREFIX);
+      if (isStickyNonAuctionContext || productFocusPinned) {
         suppressNextProductFocusPinRef.current = true;
         setTimeout(() => productInputRef.current?.focus(), 80);
       } else if (autoReturnToAuction) {
@@ -989,6 +1026,16 @@ const WhatnotFulfillment = () => {
           checklist: payload.checklist || prev.checklist,
         };
       });
+      if (
+        activeAuctionSticker &&
+        !((payload.checklist || []).some(
+          (item: ShipmentChecklistItem) => String(item.stickerNumber || "") === activeAuctionSticker
+        ))
+      ) {
+        setActiveAuctionSticker("");
+        setAutoReturnToAuction(false);
+        setProductFocusPinned(false);
+      }
       setSuccess(payload.message || `Removed one linked scan for ${sku}.`);
     } catch (deleteError: any) {
       const message =
@@ -1330,8 +1377,9 @@ const WhatnotFulfillment = () => {
                     required
                   />
                   <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
-                    For non-auction items, scan special code in this box: {FLASH_SALE_STICKER} or{" "}
-                    {BUYERS_GIVEAWAY_STICKER}
+                    For non-auction items, scan special code in this box: {FLASH_SALE_STICKER},{" "}
+                    {RAID_GIVEAWAY_STICKER}, {BUYERS_GIVEAWAY_STICKER}, {COFFEE_STICKER},{" "}
+                    {SPONSORED_GIVEAWAY_STICKER}, or {OTHERS_STICKER}. [GVY] random giveaway rows are auto-approved.
                   </Typography>
                 </Grid>
                 <Grid item>
@@ -1395,8 +1443,10 @@ const WhatnotFulfillment = () => {
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Scan an order context first. Then scan UPC/SKU for the product(s) in that order.
-              For non-auction shipment orders, scan either {FLASH_SALE_STICKER} or{" "}
-              {BUYERS_GIVEAWAY_STICKER} and then scan UPC/SKU. Bundles are supported by
+              For non-auction shipment orders, scan {FLASH_SALE_STICKER}, {RAID_GIVEAWAY_STICKER},{" "}
+              {BUYERS_GIVEAWAY_STICKER}, {COFFEE_STICKER}, {SPONSORED_GIVEAWAY_STICKER}, or{" "}
+              {OTHERS_STICKER} and then scan UPC/SKU. [GVY] random giveaway rows are auto-approved.
+              Bundles are supported by
               scanning multiple products under the same context.
             </Typography>
             <form
@@ -1437,20 +1487,6 @@ const WhatnotFulfillment = () => {
                     sx={{ height: 56 }}
                   >
                     {productLoading ? <CircularProgress size={22} /> : "Link Product"}
-                  </Button>
-                </Grid>
-                <Grid item>
-                  <Button
-                    variant="outlined"
-                    onClick={() => {
-                      setActiveAuctionSticker("");
-                      setProductCandidates([]);
-                      setProductInput("");
-                    }}
-                    disabled={!activeAuctionSticker}
-                    sx={{ height: 56 }}
-                  >
-                    Clear Context
                   </Button>
                 </Grid>
               </Grid>
