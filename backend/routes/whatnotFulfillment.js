@@ -2221,7 +2221,7 @@ router.post('/close-shipment', auth, checkPermission('whatnot', 'view'), async (
       }
     );
     const missingOrderContexts = summary.checklist
-      .filter((item) => Number(item.scannedQty || 0) > 0 && Number(item.linkedProductScans || 0) < 1)
+      .filter((item) => Number(item.pendingProductLinks || 0) > 0)
       .map((item) => {
         if (item.nonAuctionContext && isNonAuctionInstanceKey(item.stickerNumber)) {
           return `${item.nonAuctionContext}`;
