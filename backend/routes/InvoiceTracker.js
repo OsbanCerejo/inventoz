@@ -1118,51 +1118,14 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
     const shippingAmount = toMoneyNumber(req.body?.shippingAmount);
     const notes = sanitizeString(req.body?.notes) || null;
     const items = await buildItems(req.body?.items);
-
-    const isPaymentOnlyEdit = invoice.inboundStatus !== "pending";
-    if (isPaymentOnlyEdit) {
-      const existingItems = await InvoiceTrackerInvoiceItem.findAll({
-        where: { invoiceId: invoice.id },
-        order: [["createdAt", "ASC"], ["id", "ASC"]],
-        transaction,
-      });
-      const normalizedExistingItems = existingItems.map((item) => ({
-        sku: sanitizeString(item.sku),
-        quantity: Number(item.quantity || 0),
-        unitPrice: Number(Number(item.unitPrice || 0).toFixed(2)),
-      }));
-      const normalizedIncomingItems = items.map((item) => ({
-        sku: sanitizeString(item.sku),
-        quantity: Number(item.quantity || 0),
-        unitPrice: Number(Number(item.unitPrice || 0).toFixed(2)),
-      }));
-      const paymentOnlyFieldsChanged =
-        sanitizeString(invoice.vendorName) !== resolvedVendor.vendorName ||
-        sanitizeString(invoice.invoiceNumber) !== invoiceNumber ||
-        sanitizeString(invoice.orderDate) !== orderDate ||
-        sanitizeString(invoice.shipmentStatus) !== shipmentStatus ||
-        sanitizeString(invoice.itemCheckStatus) !== itemCheckStatus ||
-        sanitizeString(invoice.receivedDate) !== receivedDate ||
-        sanitizeString(invoice.trackingInfo) !== trackingInfo ||
-        Number(Number(invoice.miscellaneousAmount || 0).toFixed(2)) !== Number(Number(miscellaneousAmount || 0).toFixed(2)) ||
-        Number(Number(invoice.shippingAmount || 0).toFixed(2)) !== Number(Number(shippingAmount || 0).toFixed(2)) ||
-        sanitizeString(invoice.notes) !== notes ||
-        JSON.stringify(normalizedExistingItems) !== JSON.stringify(normalizedIncomingItems);
-
-      if (paymentOnlyFieldsChanged) {
-        await transaction.rollback();
-        return res.status(400).json({
-          error: "Inbound has already started for this invoice. Only payment status fields can be edited now.",
-        });
-      }
-    }
-
     const resolvedVendor = await resolveInvoiceVendor({
       vendorId: vendorIdInput,
       vendorName,
       actorUserId: req.user?.id || null,
       transaction,
     });
+
+    const isPaymentOnlyEdit = invoice.inboundStatus !== "pending";
 
     const validationError = validateHeaderFields({
       vendorId: resolvedVendor.vendorId,
