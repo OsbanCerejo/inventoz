@@ -636,11 +636,6 @@ const ensureInboundEligibility = async (invoice, transaction) => {
     error.status = 400;
     throw error;
   }
-  if (invoice.paymentStatus !== "paid") {
-    const error = new Error("Invoice is not eligible for inbound until payment status is marked Paid");
-    error.status = 400;
-    throw error;
-  }
   if (invoice.itemCheckStatus !== "verified") {
     const error = new Error("Invoice is not eligible for inbound until Items Check status is marked Verified");
     error.status = 400;
@@ -1098,13 +1093,6 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
       return res.status(404).json({ error: "Invoice not found" });
     }
 
-    if (invoice.inboundStatus !== "pending") {
-      await transaction.rollback();
-      return res.status(400).json({
-        error: "This invoice already has inbound activity and can no longer be edited. Create a new invoice instead.",
-      });
-    }
-
     const expectedUpdatedAt = parseExpectedUpdatedAt(req.body?.expectedUpdatedAt);
     if (sanitizeString(req.body?.expectedUpdatedAt) && !expectedUpdatedAt) {
       await transaction.rollback();
@@ -1130,6 +1118,44 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
     const shippingAmount = toMoneyNumber(req.body?.shippingAmount);
     const notes = sanitizeString(req.body?.notes) || null;
     const items = await buildItems(req.body?.items);
+
+    const isPaymentOnlyEdit = invoice.inboundStatus !== "pending";
+    if (isPaymentOnlyEdit) {
+      const existingItems = await InvoiceTrackerInvoiceItem.findAll({
+        where: { invoiceId: invoice.id },
+        order: [["createdAt", "ASC"], ["id", "ASC"]],
+        transaction,
+      });
+      const normalizedExistingItems = existingItems.map((item) => ({
+        sku: sanitizeString(item.sku),
+        quantity: Number(item.quantity || 0),
+        unitPrice: Number(Number(item.unitPrice || 0).toFixed(2)),
+      }));
+      const normalizedIncomingItems = items.map((item) => ({
+        sku: sanitizeString(item.sku),
+        quantity: Number(item.quantity || 0),
+        unitPrice: Number(Number(item.unitPrice || 0).toFixed(2)),
+      }));
+      const paymentOnlyFieldsChanged =
+        sanitizeString(invoice.vendorName) !== resolvedVendor.vendorName ||
+        sanitizeString(invoice.invoiceNumber) !== invoiceNumber ||
+        sanitizeString(invoice.orderDate) !== orderDate ||
+        sanitizeString(invoice.shipmentStatus) !== shipmentStatus ||
+        sanitizeString(invoice.itemCheckStatus) !== itemCheckStatus ||
+        sanitizeString(invoice.receivedDate) !== receivedDate ||
+        sanitizeString(invoice.trackingInfo) !== trackingInfo ||
+        Number(Number(invoice.miscellaneousAmount || 0).toFixed(2)) !== Number(Number(miscellaneousAmount || 0).toFixed(2)) ||
+        Number(Number(invoice.shippingAmount || 0).toFixed(2)) !== Number(Number(shippingAmount || 0).toFixed(2)) ||
+        sanitizeString(invoice.notes) !== notes ||
+        JSON.stringify(normalizedExistingItems) !== JSON.stringify(normalizedIncomingItems);
+
+      if (paymentOnlyFieldsChanged) {
+        await transaction.rollback();
+        return res.status(400).json({
+          error: "Inbound has already started for this invoice. Only payment status fields can be edited now.",
+        });
+      }
+    }
 
     const resolvedVendor = await resolveInvoiceVendor({
       vendorId: vendorIdInput,
@@ -1172,42 +1198,52 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
       return res.status(409).json({ error: "An invoice with this vendor and invoice number already exists" });
     }
 
-    await invoice.update(
-      {
-        vendorId: resolvedVendor.vendorId,
-        vendorName: resolvedVendor.vendorName,
-        invoiceNumber,
-        orderDate,
-        shipmentStatus,
-        itemCheckStatus,
-        paymentStatus,
-        paymentDueBy: paymentStatus === "credit" ? paymentDueBy : null,
-        paymentDate: paymentStatus === "paid" ? paymentDate : null,
-        receivedDate: shipmentStatus === "received" ? receivedDate : null,
-        trackingInfo,
-        miscellaneousAmount,
-        shippingAmount,
-        notes,
-        lastUpdatedBy: req.user?.id || null,
-      },
-      { transaction }
-    );
-
-    await InvoiceTrackerInvoiceItem.destroy({
-      where: { invoiceId: invoice.id },
-      transaction,
-    });
-    if (items.length) {
-      await InvoiceTrackerInvoiceItem.bulkCreate(
-        items.map((item) => ({
-          ...item,
-          invoiceId: invoice.id,
-        })),
+    if (isPaymentOnlyEdit) {
+      await invoice.update(
+        {
+          paymentStatus,
+          paymentDueBy: paymentStatus === "credit" ? paymentDueBy : null,
+          paymentDate: paymentStatus === "paid" ? paymentDate : null,
+          lastUpdatedBy: req.user?.id || null,
+        },
         { transaction }
       );
-    }
+    } else {
+      await invoice.update(
+        {
+          vendorId: resolvedVendor.vendorId,
+          vendorName: resolvedVendor.vendorName,
+          invoiceNumber,
+          orderDate,
+          shipmentStatus,
+          itemCheckStatus,
+          paymentStatus,
+          paymentDueBy: paymentStatus === "credit" ? paymentDueBy : null,
+          paymentDate: paymentStatus === "paid" ? paymentDate : null,
+          receivedDate: shipmentStatus === "received" ? receivedDate : null,
+          trackingInfo,
+          miscellaneousAmount,
+          shippingAmount,
+          notes,
+          lastUpdatedBy: req.user?.id || null,
+        },
+        { transaction }
+      );
 
-    if (invoice.inboundStatus === "pending") {
+      await InvoiceTrackerInvoiceItem.destroy({
+        where: { invoiceId: invoice.id },
+        transaction,
+      });
+      if (items.length) {
+        await InvoiceTrackerInvoiceItem.bulkCreate(
+          items.map((item) => ({
+            ...item,
+            invoiceId: invoice.id,
+          })),
+          { transaction }
+        );
+      }
+
       await syncInvoiceInboundRows(invoice, transaction);
       await recomputeInvoiceInboundStatus(invoice.id, transaction, req.user?.id || null);
     }

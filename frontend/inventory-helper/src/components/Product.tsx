@@ -134,14 +134,9 @@ function Product() {
 
   // Handle the edit button click and redirect with the product to edit page
   const handleEditOnClick = useCallback(() => {
-    if (
-      !productObject.verified ||
-      window.confirm("This is a verified entry. Do you want to edit?")
-    ) {
-      navigate("/editProduct", {
-        state: { productObject, productDetails, productListings },
-      });
-    }
+    navigate("/editProduct", {
+      state: { productObject, productDetails, productListings },
+    });
   }, [navigate, productObject, productDetails, productListings]);
 
   // Function to handle product deletion with password confirmation
@@ -721,4 +716,3 @@ function Product() {
 }
 
 export default Product;
-

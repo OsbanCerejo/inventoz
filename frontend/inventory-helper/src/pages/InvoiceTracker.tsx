@@ -228,6 +228,8 @@ function InvoiceTracker() {
   const canEdit = hasPermission("invoiceTracker", "edit");
   const canDelete = hasPermission("invoiceTracker", "delete");
   const isReadOnly = dialogMode === "view";
+  const isPaymentOnlyEdit = dialogMode === "edit" && form.inboundStatus !== "pending";
+  const disableNonPaymentEdits = isReadOnly || isPaymentOnlyEdit;
 
   const invoiceTotal = useMemo(
     () =>
@@ -372,7 +374,7 @@ function InvoiceTracker() {
     if (!detail) return;
 
     setSelectedInvoiceId(invoiceId);
-    setDialogMode(canEdit && detail.inboundStatus === "pending" ? "edit" : "view");
+    setDialogMode(canEdit ? "edit" : "view");
     const normalizedForm = {
       id: detail.id,
       updatedAt: detail.updatedAt,
@@ -748,7 +750,6 @@ function InvoiceTracker() {
 
   const canStartInbound =
     !!form.id &&
-    form.paymentStatus === "paid" &&
     form.shipmentStatus === "received" &&
     form.itemCheckStatus === "verified" &&
     !!form.receivedDate &&
@@ -757,7 +758,6 @@ function InvoiceTracker() {
     !form.isArchived;
 
   const wouldBeInboundEligibleAfterSave =
-    form.paymentStatus === "paid" &&
     form.shipmentStatus === "received" &&
     form.itemCheckStatus === "verified" &&
     !!form.receivedDate &&
@@ -1233,7 +1233,7 @@ function InvoiceTracker() {
                             setForm((prev) => ({ ...prev, vendorId: null, vendorName: value }));
                           }
                         }}
-                        disabled={isReadOnly}
+                        disabled={disableNonPaymentEdits}
                         sx={{ flex: 1 }}
                         renderInput={(params) => (
                           <TextField
@@ -1244,7 +1244,7 @@ function InvoiceTracker() {
                           />
                         )}
                       />
-                      {!isReadOnly && (
+                      {!disableNonPaymentEdits && (
                         <Button variant="outlined" onClick={openAddVendorDialog} sx={{ minWidth: 110 }}>
                           Add Vendor
                         </Button>
@@ -1257,7 +1257,7 @@ function InvoiceTracker() {
                       label="Invoice Number *"
                       value={form.invoiceNumber}
                       onChange={(e) => setForm((prev) => ({ ...prev, invoiceNumber: e.target.value }))}
-                      disabled={isReadOnly}
+                      disabled={disableNonPaymentEdits}
                     />
                   </Grid>
                   <Grid item xs={12} md={3}>
@@ -1268,7 +1268,7 @@ function InvoiceTracker() {
                       value={form.orderDate}
                       onChange={(e) => setForm((prev) => ({ ...prev, orderDate: e.target.value }))}
                       InputLabelProps={{ shrink: true }}
-                      disabled={isReadOnly}
+                      disabled={disableNonPaymentEdits}
                     />
                   </Grid>
                 </Grid>
@@ -1324,7 +1324,7 @@ function InvoiceTracker() {
                     </Grid>
                   )}
                   <Grid item xs={12} md={3}>
-                    <FormControl fullWidth disabled={isReadOnly}>
+                    <FormControl fullWidth disabled={disableNonPaymentEdits}>
                       <InputLabel>Shipment Status</InputLabel>
                       <Select
                         value={form.shipmentStatus}
@@ -1348,7 +1348,7 @@ function InvoiceTracker() {
                         value={form.receivedDate}
                         onChange={(e) => setForm((prev) => ({ ...prev, receivedDate: e.target.value }))}
                         InputLabelProps={{ shrink: true }}
-                        disabled={isReadOnly}
+                        disabled={disableNonPaymentEdits}
                       />
                     </Grid>
                   )}
@@ -1360,13 +1360,13 @@ function InvoiceTracker() {
                         placeholder="Tracking number or shipping link"
                         value={form.trackingInfo}
                         onChange={(e) => setForm((prev) => ({ ...prev, trackingInfo: e.target.value }))}
-                        disabled={isReadOnly}
+                        disabled={disableNonPaymentEdits}
                         helperText="Optional. Add tracking number or shipping link."
                       />
                     </Grid>
                   )}
                   <Grid item xs={12} md={3}>
-                    <FormControl fullWidth disabled={isReadOnly}>
+                    <FormControl fullWidth disabled={disableNonPaymentEdits}>
                       <InputLabel>Items Check Status</InputLabel>
                       <Select
                         value={form.itemCheckStatus}
@@ -1430,7 +1430,7 @@ function InvoiceTracker() {
                         ? `Fully inbounded${form.inboundCompletedAt ? ` on ${new Date(form.inboundCompletedAt).toLocaleString()}` : ""}${form.inboundCompleterDisplay ? ` by ${form.inboundCompleterDisplay}` : ""}.`
                         : form.inboundStatus === "partial"
                           ? "Partially inbounded. You can reopen the inbound review and continue with the remaining rows."
-                          : "Not inbounded yet. Start inbound only after Payment is Paid, Shipment is Received with a date, and Items Check is Verified."}
+                          : "Not inbounded yet. Start inbound only after Shipment is Received with a date, and Items Check is Verified."}
                     </Typography>
                   </Box>
                     <Button
@@ -1462,7 +1462,7 @@ function InvoiceTracker() {
                 label="Notes"
                 value={form.notes}
                 onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-                disabled={isReadOnly}
+                disabled={disableNonPaymentEdits}
               />
             </Grid>
 
@@ -1480,7 +1480,7 @@ function InvoiceTracker() {
                       inputProps={{ min: 0, step: "0.01" }}
                       value={form.miscellaneousAmount}
                       onChange={(e) => setForm((prev) => ({ ...prev, miscellaneousAmount: Number(e.target.value) || 0 }))}
-                      disabled={isReadOnly}
+                      disabled={disableNonPaymentEdits}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -1491,7 +1491,7 @@ function InvoiceTracker() {
                       inputProps={{ min: 0, step: "0.01" }}
                       value={form.shippingAmount}
                       onChange={(e) => setForm((prev) => ({ ...prev, shippingAmount: Number(e.target.value) || 0 }))}
-                      disabled={isReadOnly}
+                      disabled={disableNonPaymentEdits}
                     />
                   </Grid>
                 </Grid>
@@ -1511,7 +1511,7 @@ function InvoiceTracker() {
                 </Typography>
                 {form.inboundStatus !== "pending" && (
                   <Typography variant="body2" color="text.secondary">
-                    Inbound has already started for this invoice. This document is view-only now. If something else needs to be received, create a new invoice.
+                    Inbound has already started for this invoice. Only payment status fields can be edited now. If something else needs to be received, create a new invoice.
                   </Typography>
                 )}
               </Stack>
@@ -1539,7 +1539,7 @@ function InvoiceTracker() {
                             value={item.sku}
                             onChange={(e) => updateItemRow(index, "sku", e.target.value)}
                             onBlur={() => lookupSku(index, item.sku)}
-                            disabled={isReadOnly}
+                            disabled={disableNonPaymentEdits}
                             helperText={skuLookupLoading[index] ? "Looking up SKU..." : " "}
                           />
                         </Box>
@@ -1561,7 +1561,7 @@ function InvoiceTracker() {
                             inputProps={{ min: 1, step: 1 }}
                             value={item.quantity}
                             onChange={(e) => updateItemRow(index, "quantity", Number(e.target.value) || 1)}
-                            disabled={isReadOnly}
+                            disabled={disableNonPaymentEdits}
                           />
                         </Box>
                         <Box>
@@ -1573,7 +1573,7 @@ function InvoiceTracker() {
                             inputProps={{ min: 0, step: "0.01" }}
                             value={item.unitPrice}
                             onChange={(e) => updateItemRow(index, "unitPrice", Number(e.target.value) || 0)}
-                            disabled={isReadOnly}
+                            disabled={disableNonPaymentEdits}
                           />
                         </Box>
                         <Box>
@@ -1593,7 +1593,7 @@ function InvoiceTracker() {
                             pt: { xs: 0, lg: "4px" },
                           }}
                         >
-                          {!isReadOnly && (
+                          {!disableNonPaymentEdits && (
                             <IconButton
                               color="error"
                               onClick={() => removeItemRow(index)}
@@ -1607,7 +1607,7 @@ function InvoiceTracker() {
                     </Paper>
                   );
                 })}
-                {!isReadOnly && (
+                {!disableNonPaymentEdits && (
                   <Box>
                     <Button startIcon={<AddIcon />} variant="outlined" onClick={addItemRow}>
                       Add Item Row
