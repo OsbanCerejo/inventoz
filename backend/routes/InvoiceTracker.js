@@ -13,6 +13,9 @@ const {
   sequelize,
 } = require("../models");
 const PricingService = require("../Services/PricingService");
+const {
+  sendReminderForInvoice,
+} = require("../Services/InvoiceTrackerPaymentReminderService");
 const { auth } = require("../middleware/auth");
 const { checkPermission } = require("../middleware/permissions");
 
@@ -392,6 +395,17 @@ const validateHeaderFields = ({
   }
   if (miscellaneousAmount === null || shippingAmount === null) {
     return "Miscellaneous and Shipping must be valid amounts";
+  }
+  return null;
+};
+
+const validatePaymentFields = ({ paymentStatus, paymentDueBy, paymentDate }) => {
+  if (!VALID_PAYMENT_STATUSES.includes(paymentStatus)) return "Invalid payment status";
+  if (paymentStatus === "paid" && !paymentDate) {
+    return "Payment Date is required when payment status is Paid";
+  }
+  if (paymentStatus === "credit" && !paymentDueBy) {
+    return "Payment Due By date is required for credit invoices";
   }
   return null;
 };
@@ -936,6 +950,44 @@ router.get("/:id", auth, checkPermission("invoiceTracker", "view"), async (req, 
   }
 });
 
+router.post("/:id/send-payment-reminder", auth, checkPermission("invoiceTracker", "edit"), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: "Invalid invoice id" });
+    }
+
+    const invoice = await InvoiceTrackerInvoice.findOne({
+      where: { id, isArchived: false },
+      include: detailInvoiceIncludes,
+    });
+    if (!invoice) {
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+    if (sanitizeString(invoice.paymentStatus) !== "credit") {
+      return res.status(400).json({ error: "Reminder emails can only be sent for credit invoices." });
+    }
+    if (!sanitizeString(invoice.paymentDueBy)) {
+      return res.status(400).json({ error: "Payment due date is required before sending a reminder." });
+    }
+
+    const result = await sendReminderForInvoice(invoice, {
+      triggerSource: "manual",
+      initiatedBy: req.user?.id || null,
+    });
+    return res.json({
+      success: true,
+      recipientCount: result.sentCount,
+      recipients: result.results.filter((entry) => entry.status === "sent").map((entry) => entry.recipientEmail),
+      failedRecipients: result.results.filter((entry) => entry.status === "failed").map((entry) => entry.recipientEmail),
+      message: `Reminder email sent to ${result.sentCount} recipient${result.sentCount === 1 ? "" : "s"}.`,
+    });
+  } catch (error) {
+    console.error("Error sending invoice tracker payment reminder:", error);
+    return res.status(error.status || 500).json({ error: error.message || "Failed to send reminder email" });
+  }
+});
+
 router.get("/:id/inbound-review", auth, checkPermission("invoiceTracker", "view"), async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
@@ -1078,7 +1130,6 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
   const transaction = await sequelize.transaction();
   try {
     const id = Number(req.params.id);
-    const vendorIdInput = parseOptionalInteger(req.body?.vendorId);
     if (!Number.isInteger(id) || id <= 0) {
       await transaction.rollback();
       return res.status(400).json({ error: "Invalid invoice id" });
@@ -1104,14 +1155,47 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
       return res.status(lockError.status).json(lockError.body);
     }
 
+    const paymentStatus = sanitizeString(req.body?.paymentStatus) || "unpaid";
+    const paymentDueBy = sanitizeString(req.body?.paymentDueBy) || null;
+    const paymentDate = sanitizeString(req.body?.paymentDate) || null;
+    const isPaymentOnlyEdit = invoice.inboundStatus !== "pending";
+
+    if (isPaymentOnlyEdit) {
+      const paymentValidationError = validatePaymentFields({
+        paymentStatus,
+        paymentDueBy,
+        paymentDate,
+      });
+      if (paymentValidationError) {
+        await transaction.rollback();
+        return res.status(400).json({ error: paymentValidationError });
+      }
+
+      await invoice.update(
+        {
+          paymentStatus,
+          paymentDueBy: paymentStatus === "credit" ? paymentDueBy : null,
+          paymentDate: paymentStatus === "paid" ? paymentDate : null,
+          lastUpdatedBy: req.user?.id || null,
+        },
+        { transaction }
+      );
+
+      await transaction.commit();
+
+      const updated = await InvoiceTrackerInvoice.findOne({
+        where: { id: invoice.id, isArchived: false },
+        include: detailInvoiceIncludes,
+      });
+      return res.json(serializeInvoice(updated));
+    }
+
+    const vendorIdInput = parseOptionalInteger(req.body?.vendorId);
     const vendorName = sanitizeString(req.body?.vendorName);
     const invoiceNumber = sanitizeString(req.body?.invoiceNumber);
     const orderDate = sanitizeString(req.body?.orderDate);
     const shipmentStatus = sanitizeString(req.body?.shipmentStatus) || "order_placed";
     const itemCheckStatus = sanitizeString(req.body?.itemCheckStatus) || "not_checked";
-    const paymentStatus = sanitizeString(req.body?.paymentStatus) || "unpaid";
-    const paymentDueBy = sanitizeString(req.body?.paymentDueBy) || null;
-    const paymentDate = sanitizeString(req.body?.paymentDate) || null;
     const receivedDate = sanitizeString(req.body?.receivedDate) || null;
     const trackingInfo = sanitizeString(req.body?.trackingInfo) || null;
     const miscellaneousAmount = toMoneyNumber(req.body?.miscellaneousAmount);
@@ -1124,8 +1208,6 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
       actorUserId: req.user?.id || null,
       transaction,
     });
-
-    const isPaymentOnlyEdit = invoice.inboundStatus !== "pending";
 
     const validationError = validateHeaderFields({
       vendorId: resolvedVendor.vendorId,
@@ -1161,55 +1243,43 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
       return res.status(409).json({ error: "An invoice with this vendor and invoice number already exists" });
     }
 
-    if (isPaymentOnlyEdit) {
-      await invoice.update(
-        {
-          paymentStatus,
-          paymentDueBy: paymentStatus === "credit" ? paymentDueBy : null,
-          paymentDate: paymentStatus === "paid" ? paymentDate : null,
-          lastUpdatedBy: req.user?.id || null,
-        },
+    await invoice.update(
+      {
+        vendorId: resolvedVendor.vendorId,
+        vendorName: resolvedVendor.vendorName,
+        invoiceNumber,
+        orderDate,
+        shipmentStatus,
+        itemCheckStatus,
+        paymentStatus,
+        paymentDueBy: paymentStatus === "credit" ? paymentDueBy : null,
+        paymentDate: paymentStatus === "paid" ? paymentDate : null,
+        receivedDate: shipmentStatus === "received" ? receivedDate : null,
+        trackingInfo,
+        miscellaneousAmount,
+        shippingAmount,
+        notes,
+        lastUpdatedBy: req.user?.id || null,
+      },
+      { transaction }
+    );
+
+    await InvoiceTrackerInvoiceItem.destroy({
+      where: { invoiceId: invoice.id },
+      transaction,
+    });
+    if (items.length) {
+      await InvoiceTrackerInvoiceItem.bulkCreate(
+        items.map((item) => ({
+          ...item,
+          invoiceId: invoice.id,
+        })),
         { transaction }
       );
-    } else {
-      await invoice.update(
-        {
-          vendorId: resolvedVendor.vendorId,
-          vendorName: resolvedVendor.vendorName,
-          invoiceNumber,
-          orderDate,
-          shipmentStatus,
-          itemCheckStatus,
-          paymentStatus,
-          paymentDueBy: paymentStatus === "credit" ? paymentDueBy : null,
-          paymentDate: paymentStatus === "paid" ? paymentDate : null,
-          receivedDate: shipmentStatus === "received" ? receivedDate : null,
-          trackingInfo,
-          miscellaneousAmount,
-          shippingAmount,
-          notes,
-          lastUpdatedBy: req.user?.id || null,
-        },
-        { transaction }
-      );
-
-      await InvoiceTrackerInvoiceItem.destroy({
-        where: { invoiceId: invoice.id },
-        transaction,
-      });
-      if (items.length) {
-        await InvoiceTrackerInvoiceItem.bulkCreate(
-          items.map((item) => ({
-            ...item,
-            invoiceId: invoice.id,
-          })),
-          { transaction }
-        );
-      }
-
-      await syncInvoiceInboundRows(invoice, transaction);
-      await recomputeInvoiceInboundStatus(invoice.id, transaction, req.user?.id || null);
     }
+
+    await syncInvoiceInboundRows(invoice, transaction);
+    await recomputeInvoiceInboundStatus(invoice.id, transaction, req.user?.id || null);
 
     await transaction.commit();
 

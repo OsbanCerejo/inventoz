@@ -7,6 +7,7 @@ const { Sequelize } = require("sequelize");
 const db = require("./models");
 const stockUpdateCron = require("./cron/stockUpdate");
 const orderProcessingCron = require("./cron/orderProcessing");
+const invoiceTrackerPaymentReminderCron = require("./cron/invoiceTrackerPaymentReminders");
 const path = require("path");
 
 app.use(express.json());
@@ -205,6 +206,7 @@ sequelize
     console.log("Initializing cron jobs...");
     // stockUpdateCron;
     // orderProcessingCron;
+    // invoiceTrackerPaymentReminderCron;
     
     startServer();
   })

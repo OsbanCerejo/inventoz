@@ -9,6 +9,7 @@ import {
   Refresh as RefreshIcon,
   Save as SaveIcon,
   Inventory2 as InventoryIcon,
+  Email as EmailIcon,
 } from "@mui/icons-material";
 import {
   Autocomplete,
@@ -215,6 +216,7 @@ function InvoiceTracker() {
   const [addVendorDialogOpen, setAddVendorDialogOpen] = useState(false);
   const [newVendorName, setNewVendorName] = useState("");
   const [creatingVendor, setCreatingVendor] = useState(false);
+  const [sendingReminder, setSendingReminder] = useState(false);
   const [skuLookupLoading, setSkuLookupLoading] = useState<Record<number, boolean>>({});
   const [inboundDialogOpen, setInboundDialogOpen] = useState(false);
   const [startInboundConfirmOpen, setStartInboundConfirmOpen] = useState(false);
@@ -472,6 +474,24 @@ function InvoiceTracker() {
       return;
     }
     openInboundDialog();
+  };
+
+  const sendPaymentReminder = async () => {
+    if (!token || !form.id || !canSendPaymentReminder) return;
+    try {
+      setSendingReminder(true);
+      const response = await axios.post(
+        getApiUrl(`invoice-tracker/${form.id}/send-payment-reminder`),
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success(response.data?.message || "Reminder email sent");
+    } catch (error: any) {
+      console.error("Failed to send payment reminder:", error);
+      toast.error(error?.response?.data?.error || "Failed to send reminder email");
+    } finally {
+      setSendingReminder(false);
+    }
   };
 
   const updateInboundRowDraft = (rowId: number, updates: Partial<InboundRow>) => {
@@ -748,6 +768,33 @@ function InvoiceTracker() {
     return "default";
   };
 
+  const getPaymentReminderDayOffset = (paymentStatus: string, paymentDueBy?: string | null) => {
+    if (paymentStatus !== "credit" || !paymentDueBy) return null;
+    const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const dueDate = new Date(`${paymentDueBy}T00:00:00`);
+    if (Number.isNaN(dueDate.getTime())) return null;
+    const millisecondsPerDay = 1000 * 60 * 60 * 24;
+    return Math.round((dueDate.getTime() - startOfToday.getTime()) / millisecondsPerDay);
+  };
+
+  const getPaymentReminderLabel = (paymentStatus: string, paymentDueBy?: string | null) => {
+    const dayOffset = getPaymentReminderDayOffset(paymentStatus, paymentDueBy);
+    if (dayOffset === null) return null;
+    if (dayOffset > 1) return `Due in ${dayOffset}d`;
+    if (dayOffset === 1) return "Due Tomorrow";
+    if (dayOffset === 0) return "Due Today";
+    return `Overdue ${Math.abs(dayOffset)}d`;
+  };
+
+  const getPaymentReminderChipColor = (paymentStatus: string, paymentDueBy?: string | null) => {
+    const dayOffset = getPaymentReminderDayOffset(paymentStatus, paymentDueBy);
+    if (dayOffset === null) return "default";
+    if (dayOffset < 0) return "error";
+    if (dayOffset <= 3) return "warning";
+    return "default";
+  };
+
   const canStartInbound =
     !!form.id &&
     form.shipmentStatus === "received" &&
@@ -763,6 +810,12 @@ function InvoiceTracker() {
     !!form.receivedDate &&
     form.items.length > 0 &&
     !form.isArchived;
+
+  const canSendPaymentReminder =
+    !!form.id &&
+    !form.isArchived &&
+    form.paymentStatus === "credit" &&
+    !!form.paymentDueBy;
 
   const canSelectInboundRow = (row: InboundRow) => row.resolutionStatus === "resolved";
 
@@ -1110,14 +1163,24 @@ function InvoiceTracker() {
                       <TableCell>{invoice.invoiceNumber}</TableCell>
                       <TableCell>{new Date(`${invoice.orderDate}T00:00:00`).toLocaleDateString()}</TableCell>
                       <TableCell>
-                        <Chip
-                          size="small"
-                          color={getPaymentChipColor(invoice.paymentStatus) as any}
-                          label={
-                            PAYMENT_STATUS_OPTIONS.find((option) => option.value === invoice.paymentStatus)?.label ||
-                            invoice.paymentStatus
-                          }
-                        />
+                        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                          <Chip
+                            size="small"
+                            color={getPaymentChipColor(invoice.paymentStatus) as any}
+                            label={
+                              PAYMENT_STATUS_OPTIONS.find((option) => option.value === invoice.paymentStatus)?.label ||
+                              invoice.paymentStatus
+                            }
+                          />
+                          {getPaymentReminderLabel(invoice.paymentStatus, invoice.paymentDueBy) && (
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              color={getPaymentReminderChipColor(invoice.paymentStatus, invoice.paymentDueBy) as any}
+                              label={getPaymentReminderLabel(invoice.paymentStatus, invoice.paymentDueBy)}
+                            />
+                          )}
+                        </Stack>
                       </TableCell>
                       <TableCell>
                         <Chip
@@ -1280,6 +1343,16 @@ function InvoiceTracker() {
                 <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2 }}>
                   Status Tracking
                 </Typography>
+                {getPaymentReminderLabel(form.paymentStatus, form.paymentDueBy) && (
+                  <Box sx={{ mb: 2 }}>
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      color={getPaymentReminderChipColor(form.paymentStatus, form.paymentDueBy) as any}
+                      label={getPaymentReminderLabel(form.paymentStatus, form.paymentDueBy)}
+                    />
+                  </Box>
+                )}
                 <Grid container spacing={2}>
             <Grid item xs={12} md={3}>
               <FormControl fullWidth disabled={isReadOnly}>
@@ -1594,13 +1667,12 @@ function InvoiceTracker() {
                           }}
                         >
                           {!disableNonPaymentEdits && (
-                            <IconButton
-                              color="error"
-                              onClick={() => removeItemRow(index)}
-                              disabled={form.items.length === 1}
-                            >
-                              <DeleteIcon />
-                            </IconButton>
+                              <IconButton
+                                color="error"
+                                onClick={() => removeItemRow(index)}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
                           )}
                         </Box>
                       </Box>
@@ -1646,6 +1718,16 @@ function InvoiceTracker() {
         </DialogContent>
         <DialogActions>
           <Button onClick={closeDialog}>{isReadOnly ? "Close" : "Cancel"}</Button>
+          {canSendPaymentReminder && (
+            <Button
+              variant="outlined"
+              startIcon={<EmailIcon />}
+              onClick={sendPaymentReminder}
+              disabled={sendingReminder || hasUnsavedChanges || saving}
+            >
+              {sendingReminder ? "Sending..." : "Send Reminder Email"}
+            </Button>
+          )}
           {!isReadOnly && hasUnsavedChanges && (
             <Button
               variant="contained"

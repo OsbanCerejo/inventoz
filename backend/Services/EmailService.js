@@ -15,6 +15,7 @@ class EmailService {
     const smtpPort = parseInt(process.env.SMTP_PORT || '465');
     const smtpUser = process.env.SMTP_USER;
     const smtpPass = process.env.SMTP_PASS;
+    const smtpSecure = String(process.env.SMTP_SECURE || '').trim().toLowerCase();
 
     if (!smtpUser || !smtpPass) {
       console.warn('Email service not configured. SMTP credentials missing.');
@@ -24,7 +25,7 @@ class EmailService {
     this.transporter = nodemailer.createTransport({
       host: smtpHost,
       port: smtpPort,
-      secure: true, // true for 465, false for other ports
+      secure: smtpSecure ? smtpSecure === 'true' : smtpPort === 465,
       auth: {
         user: smtpUser,
         pass: smtpPass
@@ -53,6 +54,46 @@ class EmailService {
       return true;
     } catch (error) {
       console.error('❌ SMTP server connection failed:', error.message);
+      return false;
+    }
+  }
+
+  static getFromAddress() {
+    const emailFrom = process.env.EMAIL_FROM || process.env.SMTP_USER;
+    const emailFromName = process.env.EMAIL_FROM_NAME || 'Inventoz Inventory System';
+    return { emailFrom, emailFromName };
+  }
+
+  static async sendEmail({ to, subject, html, text }) {
+    try {
+      const transporter = this.initializeTransporter();
+      if (!transporter) {
+        console.warn('Email transporter not initialized. Skipping email send.');
+        return false;
+      }
+
+      const recipients = (Array.isArray(to) ? to : [to]).filter(Boolean);
+      if (recipients.length < 1) {
+        console.warn('No email recipients provided. Skipping email send.');
+        return false;
+      }
+
+      const { emailFrom, emailFromName } = this.getFromAddress();
+      await transporter.sendMail({
+        from: `"${emailFromName}" <${emailFrom}>`,
+        to: recipients.join(', '),
+        subject,
+        html,
+        text
+      });
+      return true;
+    } catch (error) {
+      console.error('Error sending email:', error.message);
+      console.error('Full error:', {
+        code: error.code,
+        command: error.command,
+        response: error.response
+      });
       return false;
     }
   }

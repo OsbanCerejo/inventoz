@@ -129,6 +129,11 @@ module.exports = (sequelize, DataTypes) => {
       as: "inboundBatches",
       onDelete: "CASCADE",
     });
+    InvoiceTrackerInvoice.hasMany(models.InvoiceTrackerPaymentReminderLog, {
+      foreignKey: "invoiceId",
+      as: "paymentReminderLogs",
+      onDelete: "CASCADE",
+    });
     InvoiceTrackerInvoice.belongsTo(models.User, {
       foreignKey: "createdBy",
       as: "creator",
