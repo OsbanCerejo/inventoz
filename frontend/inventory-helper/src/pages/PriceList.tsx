@@ -108,6 +108,7 @@ const PriceList = () => {
 
   const canCreate = hasPermission("pricelist", "create");
   const canEdit = hasPermission("pricelist", "edit");
+  const canDelete = hasPermission("pricelist", "delete");
 
   const loadDashboard = async () => {
     if (!token) return;
@@ -386,6 +387,30 @@ const PriceList = () => {
     }
   };
 
+  const handleDeleteUpload = async (upload: UploadSummary) => {
+    try {
+      const response = await axios.delete<DashboardResponse & { message?: string }>(
+        getApiUrl(`api/price-list/uploads/${upload.id}`),
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setUploads(response.data.uploads || []);
+      setCartItems(response.data.cartItems || []);
+      setCartFrozen(Boolean(response.data.cartFrozen));
+      setCartMessage(response.data.cartMessage || null);
+      setCartQuantities(
+        (response.data.cartItems || []).reduce<Record<number, string>>((acc, item) => {
+          acc[item.id] = String(item.quantity || 1);
+          return acc;
+        }, {})
+      );
+      toast.success(response.data.message || "Vendor pricelist removed.");
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "Failed to delete vendor pricelist.");
+    }
+  };
+
   return (
     <Box sx={{ mt: 3, mb: 4, px: 3 }}>
       <Stack spacing={3}>
@@ -455,6 +480,7 @@ const PriceList = () => {
                           <TableCell>File</TableCell>
                           <TableCell>Offers</TableCell>
                           <TableCell>Uploaded</TableCell>
+                          <TableCell align="right">Action</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -464,6 +490,15 @@ const PriceList = () => {
                             <TableCell>{upload.originalName}</TableCell>
                             <TableCell>{upload.productCount}</TableCell>
                             <TableCell>{new Date(upload.createdAt).toLocaleString()}</TableCell>
+                            <TableCell align="right">
+                              <IconButton
+                                color="error"
+                                disabled={!canDelete}
+                                onClick={() => handleDeleteUpload(upload)}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

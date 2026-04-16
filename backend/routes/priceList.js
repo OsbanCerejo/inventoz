@@ -378,6 +378,61 @@ router.post(
   }
 );
 
+router.delete("/uploads/:id", auth, checkPermission("pricelist", "delete"), async (req, res) => {
+  try {
+    const uploadId = Number(req.params.id);
+    const upload = await PriceListUpload.findByPk(uploadId);
+
+    if (!upload || !upload.isActive) {
+      return res.status(404).json({ error: "Active vendor pricelist not found." });
+    }
+
+    const vendorCartCount = await PriceListCartItem.count({
+      where: { vendorName: upload.vendorName },
+    });
+
+    if (vendorCartCount > 0) {
+      return res.status(409).json({
+        error: `Cannot remove ${upload.vendorName} while that vendor still has items in the shared cart. Please clear or save those cart lines first.`,
+      });
+    }
+
+    const filePath = upload.filePath;
+
+    await sequelize.transaction(async (transaction) => {
+      await PriceListOffer.destroy({
+        where: { priceListUploadId: upload.id },
+        transaction,
+      });
+
+      await upload.destroy({ transaction });
+
+      const cartState = await getOrCreateCartState(transaction);
+      cartState.activeCatalogVersion = Number(cartState.activeCatalogVersion || 0) + 1;
+
+      const cartCount = await PriceListCartItem.count({ transaction });
+      if (cartCount === 0) {
+        cartState.cartCatalogVersion = null;
+      }
+
+      await cartState.save({ transaction });
+    });
+
+    if (filePath && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    const summary = await getCartSummary();
+    res.json({
+      message: `${upload.vendorName} pricelist removed.`,
+      ...summary,
+    });
+  } catch (error) {
+    console.error("Error deleting vendor pricelist:", error);
+    res.status(500).json({ error: "Failed to delete vendor pricelist" });
+  }
+});
+
 router.post("/cart/items", auth, checkPermission("pricelist", "edit"), async (req, res) => {
   try {
     const offerId = Number(req.body.offerId);
