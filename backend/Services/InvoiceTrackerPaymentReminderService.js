@@ -117,7 +117,6 @@ const buildReminderEmailContent = (invoice, reminderLabel, dayOffset, triggerSou
           <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${item.sku}</td>
           <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${item.itemName}</td>
           <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${item.quantity}</td>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">$${Number(item.unitPrice || 0).toFixed(2)}</td>
         </tr>`
     )
     .join("");
@@ -148,7 +147,6 @@ const buildReminderEmailContent = (invoice, reminderLabel, dayOffset, triggerSou
                      <th style="padding:8px;text-align:left;border-bottom:1px solid #e5e7eb;">SKU</th>
                      <th style="padding:8px;text-align:left;border-bottom:1px solid #e5e7eb;">Item Name</th>
                      <th style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;">Qty</th>
-                     <th style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;">Price</th>
                    </tr>
                  </thead>
                  <tbody>${itemRowsHtml}</tbody>
@@ -174,7 +172,7 @@ const buildReminderEmailContent = (invoice, reminderLabel, dayOffset, triggerSou
     "",
     "Items:",
     ...(invoice.items || []).map(
-      (item) => `- ${item.sku} | ${item.itemName} | Qty ${item.quantity} | $${Number(item.unitPrice || 0).toFixed(2)}`
+      (item) => `- ${item.sku} | ${item.itemName} | Qty ${item.quantity}`
     ),
   ].join("\n");
 
