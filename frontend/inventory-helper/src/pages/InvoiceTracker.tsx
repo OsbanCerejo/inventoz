@@ -10,6 +10,7 @@ import {
   Save as SaveIcon,
   Inventory2 as InventoryIcon,
   Email as EmailIcon,
+  Upload as UploadIcon,
 } from "@mui/icons-material";
 import {
   Autocomplete,
@@ -74,6 +75,10 @@ type Invoice = {
   paymentStatus: string;
   paymentDueBy?: string | null;
   paymentDate?: string | null;
+  paymentProofImageAvailable?: boolean;
+  paymentProofOriginalName?: string | null;
+  paymentProofUploadedAt?: string | null;
+  paymentProofUploaderDisplay?: string | null;
   receivedDate?: string | null;
   miscellaneousAmount?: number;
   shippingAmount?: number;
@@ -183,6 +188,10 @@ const emptyForm = {
   paymentStatus: "unpaid",
   paymentDueBy: "",
   paymentDate: "",
+  paymentProofImageAvailable: false,
+  paymentProofOriginalName: "",
+  paymentProofUploadedAt: "",
+  paymentProofUploaderDisplay: "",
   receivedDate: "",
   miscellaneousAmount: 0,
   shippingAmount: 0,
@@ -217,6 +226,10 @@ function InvoiceTracker() {
   const [newVendorName, setNewVendorName] = useState("");
   const [creatingVendor, setCreatingVendor] = useState(false);
   const [sendingReminder, setSendingReminder] = useState(false);
+  const [uploadingPaymentProof, setUploadingPaymentProof] = useState(false);
+  const [removingPaymentProof, setRemovingPaymentProof] = useState(false);
+  const [paymentProofPreviewUrl, setPaymentProofPreviewUrl] = useState("");
+  const [paymentProofDialogOpen, setPaymentProofDialogOpen] = useState(false);
   const [skuLookupLoading, setSkuLookupLoading] = useState<Record<number, boolean>>({});
   const [inboundDialogOpen, setInboundDialogOpen] = useState(false);
   const [startInboundConfirmOpen, setStartInboundConfirmOpen] = useState(false);
@@ -261,6 +274,10 @@ function InvoiceTracker() {
       paymentStatus: target.paymentStatus,
       paymentDueBy: target.paymentDueBy,
       paymentDate: target.paymentDate,
+      paymentProofImageAvailable: target.paymentProofImageAvailable,
+      paymentProofOriginalName: target.paymentProofOriginalName,
+      paymentProofUploadedAt: target.paymentProofUploadedAt,
+      paymentProofUploaderDisplay: target.paymentProofUploaderDisplay,
       receivedDate: target.receivedDate,
       miscellaneousAmount: Number(target.miscellaneousAmount || 0),
       shippingAmount: Number(target.shippingAmount || 0),
@@ -362,6 +379,90 @@ function InvoiceTracker() {
     loadVendorOptions();
   }, [token]);
 
+  useEffect(() => {
+    return () => {
+      if (paymentProofPreviewUrl) {
+        window.URL.revokeObjectURL(paymentProofPreviewUrl);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadPaymentProofPreview = async () => {
+      if (!token || !dialogOpen || !form.id || !form.paymentProofImageAvailable) {
+        setPaymentProofPreviewUrl((prev) => {
+          if (prev) {
+            window.URL.revokeObjectURL(prev);
+          }
+          return "";
+        });
+        return;
+      }
+
+      try {
+        const response = await axios.get(getApiUrl(`invoice-tracker/${form.id}/payment-proof`), {
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: "blob",
+        });
+        const nextUrl = window.URL.createObjectURL(response.data);
+        setPaymentProofPreviewUrl((prev) => {
+          if (prev) {
+            window.URL.revokeObjectURL(prev);
+          }
+          return nextUrl;
+        });
+      } catch (error) {
+        console.error("Failed to load payment proof preview:", error);
+        setPaymentProofPreviewUrl((prev) => {
+          if (prev) {
+            window.URL.revokeObjectURL(prev);
+          }
+          return "";
+        });
+      }
+    };
+
+    loadPaymentProofPreview();
+  }, [dialogOpen, form.id, form.paymentProofImageAvailable, token]);
+
+  const normalizeInvoiceToForm = (detail: Invoice) => ({
+    id: detail.id,
+    updatedAt: detail.updatedAt,
+    isArchived: !!detail.isArchived,
+    vendorId: detail.vendorId || null,
+    vendorName: detail.vendorName,
+    invoiceNumber: detail.invoiceNumber,
+    orderDate: detail.orderDate,
+    shipmentStatus: detail.shipmentStatus,
+    trackingInfo: detail.trackingInfo || "",
+    itemCheckStatus: detail.itemCheckStatus,
+    inboundStatus: detail.inboundStatus,
+    paymentStatus: detail.paymentStatus,
+    paymentDueBy: detail.paymentDueBy || "",
+    paymentDate: detail.paymentDate || "",
+    paymentProofImageAvailable: !!detail.paymentProofImageAvailable,
+    paymentProofOriginalName: detail.paymentProofOriginalName || "",
+    paymentProofUploadedAt: detail.paymentProofUploadedAt || "",
+    paymentProofUploaderDisplay: detail.paymentProofUploaderDisplay || "",
+    receivedDate: detail.receivedDate || "",
+    inboundCompletedAt: detail.inboundCompletedAt || "",
+    inboundCompletedBy: detail.inboundCompletedBy || null,
+    inboundCompleterDisplay: detail.inboundCompleterDisplay || "",
+    miscellaneousAmount: Number(detail.miscellaneousAmount || 0),
+    shippingAmount: Number(detail.shippingAmount || 0),
+    notes: detail.notes || "",
+    items:
+      detail.items.length > 0
+        ? detail.items.map((item) => ({
+            id: item.id,
+            sku: item.sku,
+            itemName: item.itemName,
+            unitPrice: Number(item.unitPrice || 0),
+            quantity: Number(item.quantity || 0),
+          }))
+        : [],
+  });
+
   const openCreateDialog = () => {
     setDialogMode("create");
     setForm(emptyForm);
@@ -377,39 +478,7 @@ function InvoiceTracker() {
 
     setSelectedInvoiceId(invoiceId);
     setDialogMode(canEdit ? "edit" : "view");
-    const normalizedForm = {
-      id: detail.id,
-      updatedAt: detail.updatedAt,
-      isArchived: !!detail.isArchived,
-      vendorId: detail.vendorId || null,
-      vendorName: detail.vendorName,
-      invoiceNumber: detail.invoiceNumber,
-      orderDate: detail.orderDate,
-      shipmentStatus: detail.shipmentStatus,
-      trackingInfo: detail.trackingInfo || "",
-      itemCheckStatus: detail.itemCheckStatus,
-      inboundStatus: detail.inboundStatus,
-      paymentStatus: detail.paymentStatus,
-      paymentDueBy: detail.paymentDueBy || "",
-      paymentDate: detail.paymentDate || "",
-      receivedDate: detail.receivedDate || "",
-      inboundCompletedAt: detail.inboundCompletedAt || "",
-      inboundCompletedBy: detail.inboundCompletedBy || null,
-      inboundCompleterDisplay: detail.inboundCompleterDisplay || "",
-      miscellaneousAmount: Number(detail.miscellaneousAmount || 0),
-      shippingAmount: Number(detail.shippingAmount || 0),
-      notes: detail.notes || "",
-      items:
-        detail.items.length > 0
-          ? detail.items.map((item) => ({
-              id: item.id,
-              sku: item.sku,
-              itemName: item.itemName,
-              unitPrice: Number(item.unitPrice || 0),
-              quantity: Number(item.quantity || 0),
-            }))
-          : [],
-    };
+    const normalizedForm = normalizeInvoiceToForm(detail);
     setForm(normalizedForm);
     setVendorInputValue(detail.vendorName || "");
     setNewVendorName("");
@@ -426,6 +495,11 @@ function InvoiceTracker() {
     setNewVendorName("");
     setAddVendorDialogOpen(false);
     setSavedFormSnapshot(buildFormSnapshot(emptyForm));
+    if (paymentProofPreviewUrl) {
+      window.URL.revokeObjectURL(paymentProofPreviewUrl);
+    }
+    setPaymentProofPreviewUrl("");
+    setPaymentProofDialogOpen(false);
     setInboundDialogOpen(false);
     setInboundRows([]);
     setInboundSummary(null);
@@ -491,6 +565,68 @@ function InvoiceTracker() {
       toast.error(error?.response?.data?.error || "Failed to send reminder email");
     } finally {
       setSendingReminder(false);
+    }
+  };
+
+  const handleUploadPaymentProof = async (file?: File | null) => {
+    if (!token || !form.id || !file) return;
+    if (hasUnsavedChanges) {
+      toast.error("Save invoice changes before uploading payment proof.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setUploadingPaymentProof(true);
+      const response = await axios.post<Invoice>(
+        getApiUrl(`invoice-tracker/${form.id}/payment-proof`),
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+      const normalizedForm = normalizeInvoiceToForm(response.data);
+      setForm(normalizedForm);
+      setSavedFormSnapshot(buildFormSnapshot(normalizedForm));
+      toast.success("Payment proof uploaded.");
+    } catch (error: any) {
+      console.error("Failed to upload payment proof:", error);
+      toast.error(error?.response?.data?.error || "Failed to upload payment proof");
+    } finally {
+      setUploadingPaymentProof(false);
+    }
+  };
+
+  const handleDeletePaymentProof = async () => {
+    if (!token || !form.id || !form.paymentProofImageAvailable) return;
+    if (hasUnsavedChanges) {
+      toast.error("Save invoice changes before deleting payment proof.");
+      return;
+    }
+
+    try {
+      setRemovingPaymentProof(true);
+      const response = await axios.delete<Invoice>(getApiUrl(`invoice-tracker/${form.id}/payment-proof`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const normalizedForm = normalizeInvoiceToForm(response.data);
+      setForm(normalizedForm);
+      setSavedFormSnapshot(buildFormSnapshot(normalizedForm));
+      if (paymentProofPreviewUrl) {
+        window.URL.revokeObjectURL(paymentProofPreviewUrl);
+      }
+      setPaymentProofPreviewUrl("");
+      toast.success("Payment proof removed.");
+    } catch (error: any) {
+      console.error("Failed to delete payment proof:", error);
+      toast.error(error?.response?.data?.error || "Failed to delete payment proof");
+    } finally {
+      setRemovingPaymentProof(false);
     }
   };
 
@@ -1396,6 +1532,125 @@ function InvoiceTracker() {
                       />
                     </Grid>
                   )}
+                  {(form.paymentStatus === "paid" || form.paymentProofImageAvailable) && (
+                    <Grid item xs={12}>
+                      <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#fcfcfd" }}>
+                        <Stack spacing={1.5}>
+                          <Box>
+                            <Typography variant="subtitle2" fontWeight={700}>
+                              Payment Proof
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Upload a screenshot or image as proof of payment.
+                            </Typography>
+                          </Box>
+
+                              {form.paymentProofImageAvailable ? (
+                            <Stack spacing={1.5}>
+                              {paymentProofPreviewUrl ? (
+                                <Box
+                                  component="button"
+                                  type="button"
+                                  onClick={() => setPaymentProofDialogOpen(true)}
+                                  sx={{
+                                    p: 0,
+                                    border: "none",
+                                    background: "transparent",
+                                    cursor: "zoom-in",
+                                    textAlign: "left",
+                                    width: "fit-content",
+                                  }}
+                                >
+                                  <Box
+                                    component="img"
+                                    src={paymentProofPreviewUrl}
+                                    alt="Payment proof"
+                                    sx={{
+                                      width: "100%",
+                                      maxWidth: 420,
+                                      borderRadius: 1,
+                                      border: "1px solid #e5e7eb",
+                                      objectFit: "contain",
+                                      backgroundColor: "#fff",
+                                      display: "block",
+                                    }}
+                                  />
+                                </Box>
+                              ) : (
+                                <Box display="flex" alignItems="center" gap={1}>
+                                  <CircularProgress size={18} />
+                                  <Typography variant="body2" color="text.secondary">
+                                    Loading payment proof preview...
+                                  </Typography>
+                                </Box>
+                              )}
+                              <Typography variant="body2" color="text.secondary">
+                                {form.paymentProofOriginalName || "Payment proof image"}
+                                {form.paymentProofUploadedAt
+                                  ? ` · Uploaded ${new Date(form.paymentProofUploadedAt).toLocaleString()}`
+                                  : ""}
+                                {form.paymentProofUploaderDisplay
+                                  ? ` · By ${form.paymentProofUploaderDisplay}`
+                                  : ""}
+                              </Typography>
+                            </Stack>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary">
+                              No payment proof uploaded yet.
+                            </Typography>
+                          )}
+
+                          {!isReadOnly && form.id && (
+                            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                              <Button
+                                component="label"
+                                variant="outlined"
+                                startIcon={<UploadIcon />}
+                                disabled={uploadingPaymentProof || removingPaymentProof || hasUnsavedChanges || saving}
+                              >
+                                {uploadingPaymentProof
+                                  ? "Uploading..."
+                                  : form.paymentProofImageAvailable
+                                    ? "Replace Image"
+                                    : "Upload Image"}
+                                <input
+                                  type="file"
+                                  hidden
+                                  accept="image/png,image/jpeg,image/jpg,image/webp"
+                                  onChange={(event) => {
+                                    const file = event.target.files?.[0] || null;
+                                    handleUploadPaymentProof(file);
+                                    event.currentTarget.value = "";
+                                  }}
+                                />
+                              </Button>
+                              {form.paymentProofImageAvailable && (
+                                <Button
+                                  color="error"
+                                  variant="outlined"
+                                  onClick={handleDeletePaymentProof}
+                                  disabled={uploadingPaymentProof || removingPaymentProof || hasUnsavedChanges || saving}
+                                >
+                                  {removingPaymentProof ? "Removing..." : "Remove Image"}
+                                </Button>
+                              )}
+                            </Stack>
+                          )}
+
+                          {!isReadOnly && hasUnsavedChanges && (
+                            <Typography variant="caption" color="text.secondary">
+                              Save invoice changes first before uploading or removing payment proof.
+                            </Typography>
+                          )}
+                          {form.paymentProofImageAvailable && paymentProofPreviewUrl && (
+                            <Typography variant="caption" color="text.secondary">
+                              Click the preview to open the full-size image.
+                            </Typography>
+                          )}
+                        </Stack>
+                      </Paper>
+                    </Grid>
+                  )}
                   <Grid item xs={12} md={3}>
                     <FormControl fullWidth disabled={disableNonPaymentEdits}>
                       <InputLabel>Shipment Status</InputLabel>
@@ -1767,6 +2022,53 @@ function InvoiceTracker() {
           <Button variant="contained" onClick={handleCreateVendor} disabled={creatingVendor}>
             {creatingVendor ? "Saving..." : "Save Vendor"}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={paymentProofDialogOpen}
+        onClose={() => setPaymentProofDialogOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Box component="span">Payment Proof Preview</Box>
+          <IconButton onClick={() => setPaymentProofDialogOpen(false)} size="small">
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            {paymentProofPreviewUrl ? (
+              <Box
+                component="img"
+                src={paymentProofPreviewUrl}
+                alt="Payment proof full size"
+                sx={{
+                  width: "100%",
+                  maxHeight: "75vh",
+                  objectFit: "contain",
+                  borderRadius: 1,
+                  backgroundColor: "#fff",
+                }}
+              />
+            ) : (
+              <Box display="flex" alignItems="center" gap={1}>
+                <CircularProgress size={20} />
+                <Typography color="text.secondary">Loading payment proof...</Typography>
+              </Box>
+            )}
+            <Typography variant="body2" color="text.secondary">
+              {form.paymentProofOriginalName || "Payment proof image"}
+              {form.paymentProofUploadedAt
+                ? ` · Uploaded ${new Date(form.paymentProofUploadedAt).toLocaleString()}`
+                : ""}
+              {form.paymentProofUploaderDisplay ? ` · By ${form.paymentProofUploaderDisplay}` : ""}
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPaymentProofDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
 

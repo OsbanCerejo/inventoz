@@ -1,4 +1,7 @@
 const express = require("express");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 const { Op } = require("sequelize");
 const {
   InvoiceTrackerInvoice,
@@ -20,6 +23,37 @@ const { auth } = require("../middleware/auth");
 const { checkPermission } = require("../middleware/permissions");
 
 const router = express.Router();
+
+const PAYMENT_PROOF_UPLOAD_DIR = path.join(__dirname, "../uploads/invoice-payment-proofs");
+const PAYMENT_PROOF_MAX_FILE_SIZE = 5 * 1024 * 1024;
+const VALID_PAYMENT_PROOF_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+
+const paymentProofStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    if (!fs.existsSync(PAYMENT_PROOF_UPLOAD_DIR)) {
+      fs.mkdirSync(PAYMENT_PROOF_UPLOAD_DIR, { recursive: true });
+    }
+    cb(null, PAYMENT_PROOF_UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || ".png";
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `invoice-${req.params.id}-${uniqueSuffix}${ext}`);
+  },
+});
+
+const paymentProofUpload = multer({
+  storage: paymentProofStorage,
+  limits: { fileSize: PAYMENT_PROOF_MAX_FILE_SIZE },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!VALID_PAYMENT_PROOF_EXTENSIONS.has(ext)) {
+      cb(new Error("Only PNG, JPG, JPEG, and WEBP images are allowed"));
+      return;
+    }
+    cb(null, true);
+  },
+});
 
 const VALID_SHIPMENT_STATUSES = ["order_placed", "shipped", "received"];
 const VALID_ITEM_CHECK_STATUSES = ["not_checked", "working_on_it", "verified", "missing_items"];
@@ -116,6 +150,12 @@ const detailInvoiceIncludes = [
   {
     model: User,
     as: "inboundCompleter",
+    attributes: ["id", "name", "username"],
+    required: false,
+  },
+  {
+    model: User,
+    as: "paymentProofUploader",
     attributes: ["id", "name", "username"],
     required: false,
   },
@@ -273,6 +313,10 @@ const serializeInvoice = (invoice) => {
     itemsTotal: Number(itemsTotal.toFixed(2)),
     totalAmount: Number(totalAmount.toFixed(2)),
     itemCount: serializedItems.length,
+    paymentProofImageAvailable: Boolean(plain.paymentProofImagePath),
+    paymentProofOriginalName: plain.paymentProofOriginalName || null,
+    paymentProofUploadedAt: plain.paymentProofUploadedAt || null,
+    paymentProofUploaderDisplay: getDisplayUser(plain.paymentProofUploader),
     inboundRows: serializedInboundRows,
     inboundSummary: summarizeInboundRows(serializedInboundRows),
     inboundCompleterDisplay: getDisplayUser(plain.inboundCompleter),
@@ -285,6 +329,22 @@ const serializeInvoice = (invoice) => {
     }),
   };
 };
+
+const removeFileIfExists = (filePath) => {
+  const normalized = sanitizeString(filePath);
+  if (!normalized) return;
+  if (fs.existsSync(normalized)) {
+    fs.unlinkSync(normalized);
+  }
+};
+
+const loadInvoiceById = async (id, { transaction = null, include = detailInvoiceIncludes, lock = false } = {}) =>
+  InvoiceTrackerInvoice.findOne({
+    where: { id },
+    include,
+    transaction,
+    ...(lock ? { lock: transaction.LOCK.UPDATE } : {}),
+  });
 
 const resolveProductBySku = async (rawSku) => {
   const sku = sanitizeString(rawSku);
@@ -947,6 +1007,142 @@ router.get("/:id", auth, checkPermission("invoiceTracker", "view"), async (req, 
   } catch (error) {
     console.error("Error fetching invoice tracker invoice detail:", error);
     return res.status(500).json({ error: "Failed to fetch invoice details" });
+  }
+});
+
+router.get("/:id/payment-proof", auth, checkPermission("invoiceTracker", "view"), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: "Invalid invoice id" });
+    }
+
+    const invoice = await loadInvoiceById(id, { include: [] });
+    if (!invoice) {
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+    if (!invoice.paymentProofImagePath || !fs.existsSync(invoice.paymentProofImagePath)) {
+      return res.status(404).json({ error: "Payment proof image not found" });
+    }
+
+    const downloadName = sanitizeString(invoice.paymentProofOriginalName) || path.basename(invoice.paymentProofImagePath);
+    return res.sendFile(path.resolve(invoice.paymentProofImagePath), {
+      headers: {
+        "Content-Disposition": `inline; filename="${downloadName.replace(/"/g, "")}"`,
+      },
+    });
+  } catch (error) {
+    console.error("Error serving payment proof image:", error);
+    return res.status(500).json({ error: "Failed to load payment proof image" });
+  }
+});
+
+router.post(
+  "/:id/payment-proof",
+  auth,
+  checkPermission("invoiceTracker", "edit"),
+  (req, res) => {
+    paymentProofUpload.single("file")(req, res, async (uploadError) => {
+      const uploadedPath = req.file?.path || null;
+      if (uploadError) {
+        console.error("Error uploading payment proof:", uploadError);
+        return res.status(400).json({ error: uploadError.message || "Failed to upload payment proof image" });
+      }
+
+      const transaction = await sequelize.transaction();
+      try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) {
+          if (uploadedPath) removeFileIfExists(uploadedPath);
+          await transaction.rollback();
+          return res.status(400).json({ error: "Invalid invoice id" });
+        }
+        if (!req.file) {
+          await transaction.rollback();
+          return res.status(400).json({ error: "No image file uploaded" });
+        }
+
+        const invoice = await loadInvoiceById(id, {
+          transaction,
+          include: [],
+          lock: true,
+        });
+        if (!invoice) {
+          if (uploadedPath) removeFileIfExists(uploadedPath);
+          await transaction.rollback();
+          return res.status(404).json({ error: "Invoice not found" });
+        }
+        if (invoice.isArchived) {
+          if (uploadedPath) removeFileIfExists(uploadedPath);
+          await transaction.rollback();
+          return res.status(400).json({ error: "Archived invoices cannot be updated" });
+        }
+
+        const previousPath = invoice.paymentProofImagePath;
+        invoice.paymentProofImagePath = req.file.path;
+        invoice.paymentProofOriginalName = req.file.originalname;
+        invoice.paymentProofUploadedAt = new Date();
+        invoice.paymentProofUploadedBy = req.user?.id || null;
+        invoice.lastUpdatedBy = req.user?.id || invoice.lastUpdatedBy;
+        await invoice.save({ transaction });
+        await transaction.commit();
+
+        if (previousPath && previousPath !== req.file.path) {
+          removeFileIfExists(previousPath);
+        }
+
+        const updated = await loadInvoiceById(id);
+        return res.json(serializeInvoice(updated));
+      } catch (error) {
+        if (uploadedPath) removeFileIfExists(uploadedPath);
+        await transaction.rollback();
+        console.error("Error saving payment proof image:", error);
+        return res.status(error.status || 500).json({ error: error.message || "Failed to save payment proof image" });
+      }
+    });
+  }
+);
+
+router.delete("/:id/payment-proof", auth, checkPermission("invoiceTracker", "edit"), async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      await transaction.rollback();
+      return res.status(400).json({ error: "Invalid invoice id" });
+    }
+
+    const invoice = await loadInvoiceById(id, {
+      transaction,
+      include: [],
+      lock: true,
+    });
+    if (!invoice) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+    if (!invoice.paymentProofImagePath) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Payment proof image not found" });
+    }
+
+    const previousPath = invoice.paymentProofImagePath;
+    invoice.paymentProofImagePath = null;
+    invoice.paymentProofOriginalName = null;
+    invoice.paymentProofUploadedAt = null;
+    invoice.paymentProofUploadedBy = null;
+    invoice.lastUpdatedBy = req.user?.id || invoice.lastUpdatedBy;
+    await invoice.save({ transaction });
+    await transaction.commit();
+
+    removeFileIfExists(previousPath);
+
+    const updated = await loadInvoiceById(id);
+    return res.json(serializeInvoice(updated));
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error deleting payment proof image:", error);
+    return res.status(error.status || 500).json({ error: error.message || "Failed to delete payment proof image" });
   }
 });
 

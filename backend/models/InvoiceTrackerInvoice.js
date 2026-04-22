@@ -69,6 +69,22 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.DATEONLY,
         allowNull: true,
       },
+      paymentProofImagePath: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      paymentProofOriginalName: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      paymentProofUploadedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      paymentProofUploadedBy: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
       isArchived: {
         type: DataTypes.BOOLEAN,
         allowNull: false,
@@ -149,6 +165,10 @@ module.exports = (sequelize, DataTypes) => {
     InvoiceTrackerInvoice.belongsTo(models.User, {
       foreignKey: "inboundCompletedBy",
       as: "inboundCompleter",
+    });
+    InvoiceTrackerInvoice.belongsTo(models.User, {
+      foreignKey: "paymentProofUploadedBy",
+      as: "paymentProofUploader",
     });
   };
 
