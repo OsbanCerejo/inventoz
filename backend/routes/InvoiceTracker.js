@@ -26,7 +26,10 @@ const router = express.Router();
 
 const PAYMENT_PROOF_UPLOAD_DIR = path.join(__dirname, "../uploads/invoice-payment-proofs");
 const PAYMENT_PROOF_MAX_FILE_SIZE = 5 * 1024 * 1024;
-const VALID_PAYMENT_PROOF_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+const VALID_PAYMENT_PROOF_EXTENSIONS = new Set([".pdf", ".png", ".jpg", ".jpeg", ".webp"]);
+const INVOICE_ATTACHMENT_UPLOAD_DIR = path.join(__dirname, "../uploads/invoice-tracker-attachments");
+const INVOICE_ATTACHMENT_MAX_FILE_SIZE = 10 * 1024 * 1024;
+const VALID_INVOICE_ATTACHMENT_EXTENSIONS = new Set([".pdf", ".png", ".jpg", ".jpeg", ".webp"]);
 
 const paymentProofStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -48,7 +51,34 @@ const paymentProofUpload = multer({
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (!VALID_PAYMENT_PROOF_EXTENSIONS.has(ext)) {
-      cb(new Error("Only PNG, JPG, JPEG, and WEBP images are allowed"));
+      cb(new Error("Only PDF, PNG, JPG, JPEG, and WEBP files are allowed"));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+const invoiceAttachmentStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    if (!fs.existsSync(INVOICE_ATTACHMENT_UPLOAD_DIR)) {
+      fs.mkdirSync(INVOICE_ATTACHMENT_UPLOAD_DIR, { recursive: true });
+    }
+    cb(null, INVOICE_ATTACHMENT_UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || ".pdf";
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `invoice-source-${req.params.id}-${uniqueSuffix}${ext}`);
+  },
+});
+
+const invoiceAttachmentUpload = multer({
+  storage: invoiceAttachmentStorage,
+  limits: { fileSize: INVOICE_ATTACHMENT_MAX_FILE_SIZE },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!VALID_INVOICE_ATTACHMENT_EXTENSIONS.has(ext)) {
+      cb(new Error("Only PDF, PNG, JPG, JPEG, and WEBP files are allowed"));
       return;
     }
     cb(null, true);
@@ -156,6 +186,12 @@ const detailInvoiceIncludes = [
   {
     model: User,
     as: "paymentProofUploader",
+    attributes: ["id", "name", "username"],
+    required: false,
+  },
+  {
+    model: User,
+    as: "invoiceAttachmentUploader",
     attributes: ["id", "name", "username"],
     required: false,
   },
@@ -317,6 +353,11 @@ const serializeInvoice = (invoice) => {
     paymentProofOriginalName: plain.paymentProofOriginalName || null,
     paymentProofUploadedAt: plain.paymentProofUploadedAt || null,
     paymentProofUploaderDisplay: getDisplayUser(plain.paymentProofUploader),
+    invoiceAttachmentAvailable: Boolean(plain.invoiceAttachmentPath),
+    invoiceAttachmentOriginalName: plain.invoiceAttachmentOriginalName || null,
+    invoiceAttachmentMimeType: plain.invoiceAttachmentMimeType || null,
+    invoiceAttachmentUploadedAt: plain.invoiceAttachmentUploadedAt || null,
+    invoiceAttachmentUploaderDisplay: getDisplayUser(plain.invoiceAttachmentUploader),
     inboundRows: serializedInboundRows,
     inboundSummary: summarizeInboundRows(serializedInboundRows),
     inboundCompleterDisplay: getDisplayUser(plain.inboundCompleter),
@@ -1143,6 +1184,145 @@ router.delete("/:id/payment-proof", auth, checkPermission("invoiceTracker", "edi
     await transaction.rollback();
     console.error("Error deleting payment proof image:", error);
     return res.status(error.status || 500).json({ error: error.message || "Failed to delete payment proof image" });
+  }
+});
+
+router.get("/:id/invoice-attachment", auth, checkPermission("invoiceTracker", "view"), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: "Invalid invoice id" });
+    }
+
+    const invoice = await loadInvoiceById(id, { include: [] });
+    if (!invoice) {
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+    if (!invoice.invoiceAttachmentPath || !fs.existsSync(invoice.invoiceAttachmentPath)) {
+      return res.status(404).json({ error: "Invoice attachment not found" });
+    }
+
+    const downloadName =
+      sanitizeString(invoice.invoiceAttachmentOriginalName) || path.basename(invoice.invoiceAttachmentPath);
+    return res.sendFile(path.resolve(invoice.invoiceAttachmentPath), {
+      headers: {
+        "Content-Disposition": `inline; filename="${downloadName.replace(/"/g, "")}"`,
+      },
+    });
+  } catch (error) {
+    console.error("Error serving invoice attachment:", error);
+    return res.status(500).json({ error: "Failed to load invoice attachment" });
+  }
+});
+
+router.post(
+  "/:id/invoice-attachment",
+  auth,
+  checkPermission("invoiceTracker", "edit"),
+  (req, res) => {
+    invoiceAttachmentUpload.single("file")(req, res, async (uploadError) => {
+      const uploadedPath = req.file?.path || null;
+      if (uploadError) {
+        console.error("Error uploading invoice attachment:", uploadError);
+        return res.status(400).json({ error: uploadError.message || "Failed to upload invoice attachment" });
+      }
+
+      const transaction = await sequelize.transaction();
+      try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) {
+          if (uploadedPath) removeFileIfExists(uploadedPath);
+          await transaction.rollback();
+          return res.status(400).json({ error: "Invalid invoice id" });
+        }
+        if (!req.file) {
+          await transaction.rollback();
+          return res.status(400).json({ error: "No file uploaded" });
+        }
+
+        const invoice = await loadInvoiceById(id, {
+          transaction,
+          include: [],
+          lock: true,
+        });
+        if (!invoice) {
+          if (uploadedPath) removeFileIfExists(uploadedPath);
+          await transaction.rollback();
+          return res.status(404).json({ error: "Invoice not found" });
+        }
+        if (invoice.isArchived) {
+          if (uploadedPath) removeFileIfExists(uploadedPath);
+          await transaction.rollback();
+          return res.status(400).json({ error: "Archived invoices cannot be updated" });
+        }
+
+        const previousPath = invoice.invoiceAttachmentPath;
+        invoice.invoiceAttachmentPath = req.file.path;
+        invoice.invoiceAttachmentOriginalName = req.file.originalname;
+        invoice.invoiceAttachmentMimeType = req.file.mimetype || null;
+        invoice.invoiceAttachmentUploadedAt = new Date();
+        invoice.invoiceAttachmentUploadedBy = req.user?.id || null;
+        invoice.lastUpdatedBy = req.user?.id || invoice.lastUpdatedBy;
+        await invoice.save({ transaction });
+        await transaction.commit();
+
+        if (previousPath && previousPath !== req.file.path) {
+          removeFileIfExists(previousPath);
+        }
+
+        const updated = await loadInvoiceById(id);
+        return res.json(serializeInvoice(updated));
+      } catch (error) {
+        if (uploadedPath) removeFileIfExists(uploadedPath);
+        await transaction.rollback();
+        console.error("Error saving invoice attachment:", error);
+        return res.status(error.status || 500).json({ error: error.message || "Failed to save invoice attachment" });
+      }
+    });
+  }
+);
+
+router.delete("/:id/invoice-attachment", auth, checkPermission("invoiceTracker", "edit"), async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      await transaction.rollback();
+      return res.status(400).json({ error: "Invalid invoice id" });
+    }
+
+    const invoice = await loadInvoiceById(id, {
+      transaction,
+      include: [],
+      lock: true,
+    });
+    if (!invoice) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+    if (!invoice.invoiceAttachmentPath) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Invoice attachment not found" });
+    }
+
+    const previousPath = invoice.invoiceAttachmentPath;
+    invoice.invoiceAttachmentPath = null;
+    invoice.invoiceAttachmentOriginalName = null;
+    invoice.invoiceAttachmentMimeType = null;
+    invoice.invoiceAttachmentUploadedAt = null;
+    invoice.invoiceAttachmentUploadedBy = null;
+    invoice.lastUpdatedBy = req.user?.id || invoice.lastUpdatedBy;
+    await invoice.save({ transaction });
+    await transaction.commit();
+
+    removeFileIfExists(previousPath);
+
+    const updated = await loadInvoiceById(id);
+    return res.json(serializeInvoice(updated));
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error deleting invoice attachment:", error);
+    return res.status(error.status || 500).json({ error: error.message || "Failed to delete invoice attachment" });
   }
 });
 

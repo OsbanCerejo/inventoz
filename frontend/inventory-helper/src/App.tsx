@@ -20,6 +20,7 @@ import Whatnot from "./pages/Whatnot";
 import WhatnotFulfillment from "./pages/WhatnotFulfillment";
 import WhatnotAnalytics from "./pages/WhatnotAnalytics";
 import WhatnotFulfillmentAnalytics from "./pages/WhatnotFulfillmentAnalytics";
+import SortingAnalytics from "./pages/SortingAnalytics";
 import PriceList from "./pages/PriceList";
 import Users from "./pages/Users";
 import BarcodeScan from "./pages/BarcodeScan";
@@ -276,6 +277,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="whatnotAnalytics" action="view" menuItem="whatnotAnalytics">
                   <WhatnotFulfillmentAnalytics />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/sorting-analytics"
+              element={
+                <ProtectedRoute resource="whatnotAnalytics" action="view" menuItem="whatnotAnalytics">
+                  <SortingAnalytics />
                 </ProtectedRoute>
               }
             />

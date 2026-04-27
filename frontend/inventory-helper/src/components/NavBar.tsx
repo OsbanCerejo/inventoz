@@ -79,6 +79,7 @@ function NavBar() {
   const analyticsItems = [
     { key: 'whatnotAnalytics', label: 'Whatnot Analytics', path: '/whatnot-analytics' },
     { key: 'whatnotAnalytics', label: 'Whatnot Fulfillment Analytics', path: '/whatnot-fulfillment-analytics' },
+    { key: 'whatnotAnalytics', label: 'Sorting Analytics', path: '/sorting-analytics' },
     { key: 'packingAnalytics', label: 'Packing Analytics', path: '/packing-analytics' },
   ];
 

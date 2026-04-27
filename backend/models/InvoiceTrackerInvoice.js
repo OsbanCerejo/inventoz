@@ -85,6 +85,26 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: true,
       },
+      invoiceAttachmentPath: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      invoiceAttachmentOriginalName: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      invoiceAttachmentMimeType: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      invoiceAttachmentUploadedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      invoiceAttachmentUploadedBy: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
       isArchived: {
         type: DataTypes.BOOLEAN,
         allowNull: false,
@@ -169,6 +189,10 @@ module.exports = (sequelize, DataTypes) => {
     InvoiceTrackerInvoice.belongsTo(models.User, {
       foreignKey: "paymentProofUploadedBy",
       as: "paymentProofUploader",
+    });
+    InvoiceTrackerInvoice.belongsTo(models.User, {
+      foreignKey: "invoiceAttachmentUploadedBy",
+      as: "invoiceAttachmentUploader",
     });
   };
 

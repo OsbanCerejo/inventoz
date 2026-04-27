@@ -13,6 +13,7 @@ const {
   WhatnotShipmentItem,
   WhatnotShipmentScan,
   WhatnotShipmentImport,
+  User,
 } = require("../models");
 
 const toTableName = (model) => {
@@ -30,6 +31,7 @@ const TABLES = {
   shipmentItems: `\`${toTableName(WhatnotShipmentItem)}\``,
   shipmentScans: `\`${toTableName(WhatnotShipmentScan)}\``,
   shipmentImports: `\`${toTableName(WhatnotShipmentImport)}\``,
+  users: `\`${toTableName(User)}\``,
 };
 
 const skuJoinCondition = (leftExpr, rightExpr) =>
@@ -62,6 +64,58 @@ const SHIPMENT_CLOSE_SUMMARY_SUBQUERY = `
       MAX(createdAt) AS importedAt
     FROM ${TABLES.shipmentItems}
     GROUP BY whatnotShowId, importId, shipmentId
+  )
+`;
+
+const FULFILLMENT_SORTING_SHIPMENT_SUBQUERY = `
+  (
+    SELECT
+      wsi.whatnotShowId,
+      wsi.importId,
+      wsi.shipmentId,
+      MAX(wsi.closedAt) AS closedAt,
+      SUBSTRING_INDEX(
+        GROUP_CONCAT(
+          CASE
+            WHEN wsi.closedAt IS NOT NULL THEN COALESCE(wsi.closedBy, '')
+            ELSE NULL
+          END
+          ORDER BY wsi.closedAt DESC, wsi.id DESC
+          SEPARATOR '||'
+        ),
+        '||',
+        1
+      ) AS closedBy,
+      MAX(wsi.tracking) AS tracking,
+      MAX(COALESCE(wsi.buyer, '')) AS buyer,
+      MAX(COALESCE(wsi.orderId, '')) AS orderId,
+      MAX(COALESCE(wsi.orderNumericId, '')) AS orderNumericId,
+      MAX(wsi.createdAt) AS importedAt,
+      MAX(wsi.placedAt) AS placedAt,
+      MAX(CASE WHEN COALESCE(NULLIF(TRIM(wsi.mismatchReason), ''), NULL) IS NOT NULL THEN 1 ELSE 0 END) AS hasMismatch,
+      MAX(CASE WHEN wsi.status = 'pending_review' THEN 1 ELSE 0 END) AS hasPendingReviewStatus,
+      MAX(CASE WHEN COALESCE(wsi.itemCategory, 'others') = 'random_giveaway' THEN 1 ELSE 0 END) AS hasRandomGiveaway,
+      MAX(CASE WHEN COALESCE(wsi.itemCategory, 'others') <> 'random_giveaway' THEN 1 ELSE 0 END) AS hasNonRandomGiveaway,
+      COUNT(*) AS lineCount,
+      COUNT(DISTINCT COALESCE(wsi.itemCategory, 'others')) AS categoryTypeCount,
+      COALESCE(SUM(COALESCE(wsi.expectedQty, 0)), 0) AS totalExpectedUnits,
+      COALESCE(SUM(
+        CASE
+          WHEN wsi.isAuctionItem = 0 AND COALESCE(wsi.itemCategory, 'others') = 'others' THEN 0
+          ELSE COALESCE(wsi.expectedQty, 0)
+        END
+      ), 0) AS closeRelevantUnits,
+      COALESCE(SUM(CASE WHEN COALESCE(wsi.itemCategory, 'others') = 'auction' THEN COALESCE(wsi.expectedQty, 0) ELSE 0 END), 0) AS auctionUnits,
+      COALESCE(SUM(CASE WHEN COALESCE(wsi.itemCategory, 'others') = 'whatnot_flash_sale' THEN COALESCE(wsi.expectedQty, 0) ELSE 0 END), 0) AS flashSaleUnits,
+      COALESCE(SUM(CASE WHEN COALESCE(wsi.itemCategory, 'others') = 'raid_giveaway' THEN COALESCE(wsi.expectedQty, 0) ELSE 0 END), 0) AS raidGiveawayUnits,
+      COALESCE(SUM(CASE WHEN COALESCE(wsi.itemCategory, 'others') = 'buyers_giveaway' THEN COALESCE(wsi.expectedQty, 0) ELSE 0 END), 0) AS buyersGiveawayUnits,
+      COALESCE(SUM(CASE WHEN COALESCE(wsi.itemCategory, 'others') = 'random_giveaway' THEN COALESCE(wsi.expectedQty, 0) ELSE 0 END), 0) AS randomGiveawayUnits,
+      COALESCE(SUM(CASE WHEN COALESCE(wsi.itemCategory, 'others') = 'coffee' THEN COALESCE(wsi.expectedQty, 0) ELSE 0 END), 0) AS coffeeUnits,
+      COALESCE(SUM(CASE WHEN COALESCE(wsi.itemCategory, 'others') = 'sponsored_giveaway' THEN COALESCE(wsi.expectedQty, 0) ELSE 0 END), 0) AS sponsoredGiveawayUnits,
+      COALESCE(SUM(CASE WHEN COALESCE(wsi.itemCategory, 'others') = 'others' THEN COALESCE(wsi.expectedQty, 0) ELSE 0 END), 0) AS otherUnits,
+      GROUP_CONCAT(DISTINCT COALESCE(wsi.itemCategory, 'others') ORDER BY COALESCE(wsi.itemCategory, 'others') SEPARATOR ', ') AS categories
+    FROM ${TABLES.shipmentItems} wsi
+    GROUP BY wsi.whatnotShowId, wsi.importId, wsi.shipmentId
   )
 `;
 
@@ -2163,6 +2217,638 @@ router.get("/inventory-risk", auth, checkPermission("whatnotAnalytics", "view"),
   } catch (error) {
     console.error("Error fetching inventory risk analytics:", error);
     res.status(500).json({ error: "Failed to fetch inventory risk analytics" });
+  }
+});
+
+router.get("/fulfillment-sorting-overview", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const sorterId = req.query.sorterId ? String(req.query.sorterId).trim() : null;
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        COUNT(*) AS shipmentsClosed,
+        COALESCE(SUM(ss.totalExpectedUnits), 0) AS totalUnits,
+        COALESCE(SUM(ss.closeRelevantUnits), 0) AS closeRelevantUnits,
+        COALESCE(SUM(ss.lineCount), 0) AS totalLines,
+        COUNT(DISTINCT NULLIF(ss.closedBy, '')) AS activeSorters,
+        COALESCE(SUM(ss.hasMismatch), 0) AS mismatchShipments,
+        COALESCE(SUM(CASE WHEN ss.hasRandomGiveaway = 1 AND ss.hasNonRandomGiveaway = 1 THEN 1 ELSE 0 END), 0) AS mixedGiveawayShipments,
+        COUNT(DISTINCT DATE(ss.closedAt)) AS activeDays
+      FROM ${FULFILLMENT_SORTING_SHIPMENT_SUBQUERY} ss
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from
+        AND ss.closedAt < :to
+        AND ss.hasNonRandomGiveaway = 1
+        AND (:showId IS NULL OR ss.whatnotShowId = :showId)
+        AND (:sorterId IS NULL OR ss.closedBy = :sorterId)
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          sorterId,
+        },
+      }
+    );
+
+    const row = Array.isArray(rows) ? rows[0] || {} : rows || {};
+    const shipmentsClosed = Number(row?.shipmentsClosed || 0);
+    const totalUnits = Number(row?.totalUnits || 0);
+    const closeRelevantUnits = Number(row?.closeRelevantUnits || 0);
+    const activeSorters = Number(row?.activeSorters || 0);
+    const activeDays = Math.max(Number(row?.activeDays || 0), 0);
+    const mismatchShipments = Number(row?.mismatchShipments || 0);
+
+    return res.json({
+      shipmentsClosed,
+      totalUnits,
+      closeRelevantUnits,
+      totalLines: Number(row?.totalLines || 0),
+      activeSorters,
+      activeDays,
+      mismatchShipments,
+      mixedGiveawayShipments: Number(row?.mixedGiveawayShipments || 0),
+      avgUnitsPerShipment: shipmentsClosed > 0 ? Number((totalUnits / shipmentsClosed).toFixed(2)) : 0,
+      avgCloseRelevantUnitsPerShipment:
+        shipmentsClosed > 0 ? Number((closeRelevantUnits / shipmentsClosed).toFixed(2)) : 0,
+      avgShipmentsPerDay: activeDays > 0 ? Number((shipmentsClosed / activeDays).toFixed(2)) : 0,
+      avgShipmentsPerSorter: activeSorters > 0 ? Number((shipmentsClosed / activeSorters).toFixed(2)) : 0,
+      reviewRate: shipmentsClosed > 0 ? Number(((mismatchShipments / shipmentsClosed) * 100).toFixed(2)) : 0,
+    });
+  } catch (error) {
+    console.error("Error fetching fulfillment sorting overview analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment sorting overview analytics" });
+  }
+});
+
+router.get("/fulfillment-sorting-leaderboard", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const sorterId = req.query.sorterId ? String(req.query.sorterId).trim() : null;
+  const limit = Math.max(1, Math.min(Number(req.query.limit || 50), 200));
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        ss.closedBy AS sorterId,
+        COALESCE(u.name, u.username, CONCAT('User ', ss.closedBy), 'Unknown') AS sorterName,
+        COUNT(*) AS shipmentsClosed,
+        COALESCE(SUM(ss.totalExpectedUnits), 0) AS totalUnits,
+        COALESCE(SUM(ss.closeRelevantUnits), 0) AS closeRelevantUnits,
+        COALESCE(SUM(ss.lineCount), 0) AS totalLines,
+        COALESCE(SUM(ss.hasMismatch), 0) AS mismatchShipments,
+        COALESCE(SUM(CASE WHEN ss.hasRandomGiveaway = 1 AND ss.hasNonRandomGiveaway = 1 THEN 1 ELSE 0 END), 0) AS mixedGiveawayShipments,
+        COUNT(DISTINCT DATE(ss.closedAt)) AS activeDays,
+        MIN(ss.closedAt) AS firstClosedAt,
+        MAX(ss.closedAt) AS lastClosedAt
+      FROM ${FULFILLMENT_SORTING_SHIPMENT_SUBQUERY} ss
+      LEFT JOIN ${TABLES.users} u
+        ON CAST(u.id AS CHAR) = ss.closedBy
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from
+        AND ss.closedAt < :to
+        AND ss.hasNonRandomGiveaway = 1
+        AND (:showId IS NULL OR ss.whatnotShowId = :showId)
+        AND (:sorterId IS NULL OR ss.closedBy = :sorterId)
+      GROUP BY ss.closedBy, u.id, u.name, u.username
+      ORDER BY shipmentsClosed DESC, totalUnits DESC, sorterName ASC
+      LIMIT :limit
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          sorterId,
+          limit,
+        },
+      }
+    );
+
+    return res.json(
+      (rows || []).map((row) => {
+        const shipmentsClosed = Number(row.shipmentsClosed || 0);
+        const totalUnits = Number(row.totalUnits || 0);
+        const closeRelevantUnits = Number(row.closeRelevantUnits || 0);
+        const mismatchShipments = Number(row.mismatchShipments || 0);
+        const activeDays = Number(row.activeDays || 0);
+        return {
+          sorterId: row.sorterId || null,
+          sorterName: row.sorterName || "Unknown",
+          shipmentsClosed,
+          totalUnits,
+          closeRelevantUnits,
+          totalLines: Number(row.totalLines || 0),
+          mismatchShipments,
+          mixedGiveawayShipments: Number(row.mixedGiveawayShipments || 0),
+          activeDays,
+          avgUnitsPerShipment: shipmentsClosed > 0 ? Number((totalUnits / shipmentsClosed).toFixed(2)) : 0,
+          avgCloseRelevantUnitsPerShipment:
+            shipmentsClosed > 0 ? Number((closeRelevantUnits / shipmentsClosed).toFixed(2)) : 0,
+          avgShipmentsPerDay: activeDays > 0 ? Number((shipmentsClosed / activeDays).toFixed(2)) : 0,
+          reviewRate: shipmentsClosed > 0 ? Number(((mismatchShipments / shipmentsClosed) * 100).toFixed(2)) : 0,
+          firstClosedAt: row.firstClosedAt,
+          lastClosedAt: row.lastClosedAt,
+        };
+      })
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment sorting leaderboard analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment sorting leaderboard analytics" });
+  }
+});
+
+router.get("/fulfillment-sorting-daily", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const sorterId = req.query.sorterId ? String(req.query.sorterId).trim() : null;
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        DATE_FORMAT(ss.closedAt, '%Y-%m-%d') AS bucket,
+        COUNT(*) AS shipmentsClosed,
+        COALESCE(SUM(ss.totalExpectedUnits), 0) AS totalUnits,
+        COALESCE(SUM(ss.closeRelevantUnits), 0) AS closeRelevantUnits,
+        COALESCE(SUM(ss.hasMismatch), 0) AS mismatchShipments,
+        COUNT(DISTINCT NULLIF(ss.closedBy, '')) AS activeSorters
+      FROM ${FULFILLMENT_SORTING_SHIPMENT_SUBQUERY} ss
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from
+        AND ss.closedAt < :to
+        AND ss.hasNonRandomGiveaway = 1
+        AND (:showId IS NULL OR ss.whatnotShowId = :showId)
+        AND (:sorterId IS NULL OR ss.closedBy = :sorterId)
+      GROUP BY DATE_FORMAT(ss.closedAt, '%Y-%m-%d')
+      ORDER BY bucket ASC
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          sorterId,
+        },
+      }
+    );
+
+    return res.json(
+      (rows || []).map((row) => {
+        const shipmentsClosed = Number(row.shipmentsClosed || 0);
+        const totalUnits = Number(row.totalUnits || 0);
+        const closeRelevantUnits = Number(row.closeRelevantUnits || 0);
+        const mismatchShipments = Number(row.mismatchShipments || 0);
+        return {
+          bucket: row.bucket,
+          shipmentsClosed,
+          totalUnits,
+          closeRelevantUnits,
+          mismatchShipments,
+          activeSorters: Number(row.activeSorters || 0),
+          avgUnitsPerShipment: shipmentsClosed > 0 ? Number((totalUnits / shipmentsClosed).toFixed(2)) : 0,
+          reviewRate: shipmentsClosed > 0 ? Number(((mismatchShipments / shipmentsClosed) * 100).toFixed(2)) : 0,
+        };
+      })
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment sorting daily analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment sorting daily analytics" });
+  }
+});
+
+router.get("/fulfillment-sorting-shows", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const sorterId = req.query.sorterId ? String(req.query.sorterId).trim() : null;
+  const limit = Math.max(1, Math.min(Number(req.query.limit || 25), 100));
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        ss.whatnotShowId AS showId,
+        COALESCE(ws.name, CONCAT('Show ', ss.whatnotShowId)) AS showName,
+        COUNT(*) AS shipmentsClosed,
+        COALESCE(SUM(ss.totalExpectedUnits), 0) AS totalUnits,
+        COALESCE(SUM(ss.closeRelevantUnits), 0) AS closeRelevantUnits,
+        COALESCE(SUM(ss.hasMismatch), 0) AS mismatchShipments,
+        COUNT(DISTINCT NULLIF(ss.closedBy, '')) AS activeSorters,
+        COALESCE(SUM(CASE WHEN ss.hasRandomGiveaway = 1 AND ss.hasNonRandomGiveaway = 1 THEN 1 ELSE 0 END), 0) AS mixedGiveawayShipments
+      FROM ${FULFILLMENT_SORTING_SHIPMENT_SUBQUERY} ss
+      LEFT JOIN ${TABLES.shows} ws
+        ON ws.id = ss.whatnotShowId
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from
+        AND ss.closedAt < :to
+        AND ss.hasNonRandomGiveaway = 1
+        AND (:showId IS NULL OR ss.whatnotShowId = :showId)
+        AND (:sorterId IS NULL OR ss.closedBy = :sorterId)
+      GROUP BY ss.whatnotShowId, ws.id, ws.name
+      ORDER BY shipmentsClosed DESC, totalUnits DESC, showName ASC
+      LIMIT :limit
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          sorterId,
+          limit,
+        },
+      }
+    );
+
+    return res.json(
+      (rows || []).map((row) => {
+        const shipmentsClosed = Number(row.shipmentsClosed || 0);
+        const totalUnits = Number(row.totalUnits || 0);
+        const mismatchShipments = Number(row.mismatchShipments || 0);
+        return {
+          showId: Number(row.showId || 0),
+          showName: row.showName || "Unknown Show",
+          shipmentsClosed,
+          totalUnits,
+          closeRelevantUnits: Number(row.closeRelevantUnits || 0),
+          activeSorters: Number(row.activeSorters || 0),
+          mismatchShipments,
+          mixedGiveawayShipments: Number(row.mixedGiveawayShipments || 0),
+          avgUnitsPerShipment: shipmentsClosed > 0 ? Number((totalUnits / shipmentsClosed).toFixed(2)) : 0,
+          reviewRate: shipmentsClosed > 0 ? Number(((mismatchShipments / shipmentsClosed) * 100).toFixed(2)) : 0,
+        };
+      })
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment sorting show analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment sorting show analytics" });
+  }
+});
+
+router.get("/fulfillment-sorting-weekday", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const sorterId = req.query.sorterId ? String(req.query.sorterId).trim() : null;
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        WEEKDAY(ss.closedAt) AS dayIndex,
+        DAYNAME(ss.closedAt) AS dayName,
+        COUNT(*) AS shipmentsClosed,
+        COALESCE(SUM(ss.totalExpectedUnits), 0) AS totalUnits,
+        COALESCE(SUM(ss.closeRelevantUnits), 0) AS closeRelevantUnits,
+        COALESCE(SUM(ss.hasMismatch), 0) AS mismatchShipments
+      FROM ${FULFILLMENT_SORTING_SHIPMENT_SUBQUERY} ss
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from
+        AND ss.closedAt < :to
+        AND ss.hasNonRandomGiveaway = 1
+        AND (:showId IS NULL OR ss.whatnotShowId = :showId)
+        AND (:sorterId IS NULL OR ss.closedBy = :sorterId)
+      GROUP BY WEEKDAY(ss.closedAt), DAYNAME(ss.closedAt)
+      ORDER BY dayIndex ASC
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          sorterId,
+        },
+      }
+    );
+
+    return res.json(
+      (rows || []).map((row) => ({
+        dayIndex: Number(row.dayIndex || 0),
+        dayName: row.dayName || "",
+        shipmentsClosed: Number(row.shipmentsClosed || 0),
+        totalUnits: Number(row.totalUnits || 0),
+        closeRelevantUnits: Number(row.closeRelevantUnits || 0),
+        mismatchShipments: Number(row.mismatchShipments || 0),
+      }))
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment sorting weekday analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment sorting weekday analytics" });
+  }
+});
+
+router.get("/fulfillment-sorting-time-heatmap", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const sorterId = req.query.sorterId ? String(req.query.sorterId).trim() : null;
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        WEEKDAY(ss.closedAt) AS dayIndex,
+        HOUR(ss.closedAt) AS hourOfDay,
+        COUNT(*) AS shipmentsClosed,
+        COALESCE(SUM(ss.totalExpectedUnits), 0) AS totalUnits,
+        COALESCE(SUM(ss.closeRelevantUnits), 0) AS closeRelevantUnits
+      FROM ${FULFILLMENT_SORTING_SHIPMENT_SUBQUERY} ss
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from
+        AND ss.closedAt < :to
+        AND ss.hasNonRandomGiveaway = 1
+        AND (:showId IS NULL OR ss.whatnotShowId = :showId)
+        AND (:sorterId IS NULL OR ss.closedBy = :sorterId)
+      GROUP BY WEEKDAY(ss.closedAt), HOUR(ss.closedAt)
+      ORDER BY dayIndex ASC, hourOfDay ASC
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          sorterId,
+        },
+      }
+    );
+
+    return res.json(
+      (rows || []).map((row) => ({
+        dayIndex: Number(row.dayIndex || 0),
+        hourOfDay: Number(row.hourOfDay || 0),
+        shipmentsClosed: Number(row.shipmentsClosed || 0),
+        totalUnits: Number(row.totalUnits || 0),
+        closeRelevantUnits: Number(row.closeRelevantUnits || 0),
+      }))
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment sorting heatmap analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment sorting heatmap analytics" });
+  }
+});
+
+router.get("/fulfillment-sorting-categories", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const sorterId = req.query.sorterId ? String(req.query.sorterId).trim() : null;
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        COALESCE(wsi.itemCategory, 'others') AS itemCategory,
+        COUNT(DISTINCT CONCAT(wsi.whatnotShowId, ':', wsi.importId, ':', wsi.shipmentId)) AS shipmentCount,
+        COALESCE(SUM(COALESCE(wsi.expectedQty, 0)), 0) AS totalUnits,
+        COALESCE(SUM(
+          CASE
+            WHEN wsi.isAuctionItem = 0 AND COALESCE(wsi.itemCategory, 'others') = 'others' THEN 0
+            ELSE COALESCE(wsi.expectedQty, 0)
+          END
+        ), 0) AS closeRelevantUnits,
+        COALESCE(SUM(CASE WHEN COALESCE(NULLIF(TRIM(wsi.mismatchReason), ''), NULL) IS NOT NULL THEN 1 ELSE 0 END), 0) AS mismatchRows
+      FROM ${TABLES.shipmentItems} wsi
+      JOIN ${FULFILLMENT_SORTING_SHIPMENT_SUBQUERY} ss
+        ON ss.whatnotShowId = wsi.whatnotShowId
+       AND ss.importId = wsi.importId
+       AND ss.shipmentId = wsi.shipmentId
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from
+        AND ss.closedAt < :to
+        AND ss.hasNonRandomGiveaway = 1
+        AND (:showId IS NULL OR ss.whatnotShowId = :showId)
+        AND (:sorterId IS NULL OR ss.closedBy = :sorterId)
+      GROUP BY COALESCE(wsi.itemCategory, 'others')
+      ORDER BY totalUnits DESC, itemCategory ASC
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          sorterId,
+        },
+      }
+    );
+
+    return res.json(
+      (rows || []).map((row) => ({
+        itemCategory: row.itemCategory || "others",
+        shipmentCount: Number(row.shipmentCount || 0),
+        totalUnits: Number(row.totalUnits || 0),
+        closeRelevantUnits: Number(row.closeRelevantUnits || 0),
+        mismatchRows: Number(row.mismatchRows || 0),
+      }))
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment sorting category analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment sorting category analytics" });
+  }
+});
+
+router.get("/fulfillment-sorting-sorters-daily", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const sorterId = req.query.sorterId ? String(req.query.sorterId).trim() : null;
+  const limit = Math.max(1, Math.min(Number(req.query.limit || 5), 10));
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        DATE_FORMAT(ss.closedAt, '%Y-%m-%d') AS bucket,
+        ss.closedBy AS sorterId,
+        COALESCE(u.name, u.username, CONCAT('User ', ss.closedBy), 'Unknown') AS sorterName,
+        COUNT(*) AS shipmentsClosed,
+        COALESCE(SUM(ss.totalExpectedUnits), 0) AS totalUnits,
+        COALESCE(SUM(ss.closeRelevantUnits), 0) AS closeRelevantUnits
+      FROM ${FULFILLMENT_SORTING_SHIPMENT_SUBQUERY} ss
+      LEFT JOIN ${TABLES.users} u
+        ON CAST(u.id AS CHAR) = ss.closedBy
+      JOIN (
+        SELECT
+          innerSs.closedBy
+        FROM ${FULFILLMENT_SORTING_SHIPMENT_SUBQUERY} innerSs
+        WHERE innerSs.closedAt IS NOT NULL
+          AND innerSs.closedAt >= :from
+          AND innerSs.closedAt < :to
+          AND innerSs.hasNonRandomGiveaway = 1
+          AND (:showId IS NULL OR innerSs.whatnotShowId = :showId)
+          AND (:sorterId IS NULL OR innerSs.closedBy = :sorterId)
+        GROUP BY innerSs.closedBy
+        ORDER BY COUNT(*) DESC, SUM(innerSs.totalExpectedUnits) DESC
+        LIMIT :limit
+      ) topSorters
+        ON topSorters.closedBy <=> ss.closedBy
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from
+        AND ss.closedAt < :to
+        AND ss.hasNonRandomGiveaway = 1
+        AND (:showId IS NULL OR ss.whatnotShowId = :showId)
+        AND (:sorterId IS NULL OR ss.closedBy = :sorterId)
+      GROUP BY DATE_FORMAT(ss.closedAt, '%Y-%m-%d'), ss.closedBy, u.id, u.name, u.username
+      ORDER BY bucket ASC, shipmentsClosed DESC, totalUnits DESC
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          sorterId,
+          limit,
+        },
+      }
+    );
+
+    return res.json(
+      (rows || []).map((row) => ({
+        bucket: row.bucket,
+        sorterId: row.sorterId || null,
+        sorterName: row.sorterName || "Unknown",
+        shipmentsClosed: Number(row.shipmentsClosed || 0),
+        totalUnits: Number(row.totalUnits || 0),
+        closeRelevantUnits: Number(row.closeRelevantUnits || 0),
+      }))
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment sorting sorters daily analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment sorting sorters daily analytics" });
+  }
+});
+
+router.get("/fulfillment-sorting-shipments", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const sorterId = req.query.sorterId ? String(req.query.sorterId).trim() : null;
+  const limit = Math.max(1, Math.min(Number(req.query.limit || 100), 250));
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        ss.whatnotShowId AS showId,
+        COALESCE(ws.name, CONCAT('Show ', ss.whatnotShowId)) AS showName,
+        ss.importId,
+        ss.shipmentId,
+        ss.tracking,
+        ss.closedAt,
+        ss.closedBy AS sorterId,
+        COALESCE(u.name, u.username, CONCAT('User ', ss.closedBy), 'Unknown') AS sorterName,
+        ss.totalExpectedUnits,
+        ss.closeRelevantUnits,
+        ss.lineCount,
+        ss.categoryTypeCount,
+        ss.categories,
+        ss.hasMismatch,
+        ss.hasRandomGiveaway,
+        ss.hasNonRandomGiveaway,
+        ss.auctionUnits,
+        ss.flashSaleUnits,
+        ss.raidGiveawayUnits,
+        ss.buyersGiveawayUnits,
+        ss.randomGiveawayUnits,
+        ss.coffeeUnits,
+        ss.sponsoredGiveawayUnits,
+        ss.otherUnits,
+        ss.buyer,
+        ss.orderId,
+        ss.orderNumericId
+      FROM ${FULFILLMENT_SORTING_SHIPMENT_SUBQUERY} ss
+      LEFT JOIN ${TABLES.shows} ws
+        ON ws.id = ss.whatnotShowId
+      LEFT JOIN ${TABLES.users} u
+        ON CAST(u.id AS CHAR) = ss.closedBy
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from
+        AND ss.closedAt < :to
+        AND ss.hasNonRandomGiveaway = 1
+        AND (:showId IS NULL OR ss.whatnotShowId = :showId)
+        AND (:sorterId IS NULL OR ss.closedBy = :sorterId)
+      ORDER BY ss.closedAt DESC, ss.shipmentId DESC
+      LIMIT :limit
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          sorterId,
+          limit,
+        },
+      }
+    );
+
+    return res.json(
+      (rows || []).map((row) => ({
+        showId: Number(row.showId || 0),
+        showName: row.showName || "Unknown Show",
+        importId: Number(row.importId || 0),
+        shipmentId: row.shipmentId,
+        tracking: row.tracking || null,
+        closedAt: row.closedAt,
+        sorterId: row.sorterId || null,
+        sorterName: row.sorterName || "Unknown",
+        totalExpectedUnits: Number(row.totalExpectedUnits || 0),
+        closeRelevantUnits: Number(row.closeRelevantUnits || 0),
+        lineCount: Number(row.lineCount || 0),
+        categoryTypeCount: Number(row.categoryTypeCount || 0),
+        categories: row.categories || "",
+        hasMismatch: Number(row.hasMismatch || 0) === 1,
+        hasRandomGiveaway: Number(row.hasRandomGiveaway || 0) === 1,
+        hasNonRandomGiveaway: Number(row.hasNonRandomGiveaway || 0) === 1,
+        auctionUnits: Number(row.auctionUnits || 0),
+        flashSaleUnits: Number(row.flashSaleUnits || 0),
+        raidGiveawayUnits: Number(row.raidGiveawayUnits || 0),
+        buyersGiveawayUnits: Number(row.buyersGiveawayUnits || 0),
+        randomGiveawayUnits: Number(row.randomGiveawayUnits || 0),
+        coffeeUnits: Number(row.coffeeUnits || 0),
+        sponsoredGiveawayUnits: Number(row.sponsoredGiveawayUnits || 0),
+        otherUnits: Number(row.otherUnits || 0),
+        buyer: row.buyer || null,
+        orderId: row.orderId || null,
+        orderNumericId: row.orderNumericId || null,
+      }))
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment sorting shipment analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment sorting shipment analytics" });
   }
 });
 

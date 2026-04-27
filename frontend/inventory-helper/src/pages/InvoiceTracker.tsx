@@ -79,6 +79,11 @@ type Invoice = {
   paymentProofOriginalName?: string | null;
   paymentProofUploadedAt?: string | null;
   paymentProofUploaderDisplay?: string | null;
+  invoiceAttachmentAvailable?: boolean;
+  invoiceAttachmentOriginalName?: string | null;
+  invoiceAttachmentMimeType?: string | null;
+  invoiceAttachmentUploadedAt?: string | null;
+  invoiceAttachmentUploaderDisplay?: string | null;
   receivedDate?: string | null;
   miscellaneousAmount?: number;
   shippingAmount?: number;
@@ -192,6 +197,11 @@ const emptyForm = {
   paymentProofOriginalName: "",
   paymentProofUploadedAt: "",
   paymentProofUploaderDisplay: "",
+  invoiceAttachmentAvailable: false,
+  invoiceAttachmentOriginalName: "",
+  invoiceAttachmentMimeType: "",
+  invoiceAttachmentUploadedAt: "",
+  invoiceAttachmentUploaderDisplay: "",
   receivedDate: "",
   miscellaneousAmount: 0,
   shippingAmount: 0,
@@ -228,8 +238,8 @@ function InvoiceTracker() {
   const [sendingReminder, setSendingReminder] = useState(false);
   const [uploadingPaymentProof, setUploadingPaymentProof] = useState(false);
   const [removingPaymentProof, setRemovingPaymentProof] = useState(false);
-  const [paymentProofPreviewUrl, setPaymentProofPreviewUrl] = useState("");
-  const [paymentProofDialogOpen, setPaymentProofDialogOpen] = useState(false);
+  const [uploadingInvoiceAttachment, setUploadingInvoiceAttachment] = useState(false);
+  const [removingInvoiceAttachment, setRemovingInvoiceAttachment] = useState(false);
   const [skuLookupLoading, setSkuLookupLoading] = useState<Record<number, boolean>>({});
   const [inboundDialogOpen, setInboundDialogOpen] = useState(false);
   const [startInboundConfirmOpen, setStartInboundConfirmOpen] = useState(false);
@@ -278,6 +288,11 @@ function InvoiceTracker() {
       paymentProofOriginalName: target.paymentProofOriginalName,
       paymentProofUploadedAt: target.paymentProofUploadedAt,
       paymentProofUploaderDisplay: target.paymentProofUploaderDisplay,
+      invoiceAttachmentAvailable: target.invoiceAttachmentAvailable,
+      invoiceAttachmentOriginalName: target.invoiceAttachmentOriginalName,
+      invoiceAttachmentMimeType: target.invoiceAttachmentMimeType,
+      invoiceAttachmentUploadedAt: target.invoiceAttachmentUploadedAt,
+      invoiceAttachmentUploaderDisplay: target.invoiceAttachmentUploaderDisplay,
       receivedDate: target.receivedDate,
       miscellaneousAmount: Number(target.miscellaneousAmount || 0),
       shippingAmount: Number(target.shippingAmount || 0),
@@ -379,52 +394,6 @@ function InvoiceTracker() {
     loadVendorOptions();
   }, [token]);
 
-  useEffect(() => {
-    return () => {
-      if (paymentProofPreviewUrl) {
-        window.URL.revokeObjectURL(paymentProofPreviewUrl);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    const loadPaymentProofPreview = async () => {
-      if (!token || !dialogOpen || !form.id || !form.paymentProofImageAvailable) {
-        setPaymentProofPreviewUrl((prev) => {
-          if (prev) {
-            window.URL.revokeObjectURL(prev);
-          }
-          return "";
-        });
-        return;
-      }
-
-      try {
-        const response = await axios.get(getApiUrl(`invoice-tracker/${form.id}/payment-proof`), {
-          headers: { Authorization: `Bearer ${token}` },
-          responseType: "blob",
-        });
-        const nextUrl = window.URL.createObjectURL(response.data);
-        setPaymentProofPreviewUrl((prev) => {
-          if (prev) {
-            window.URL.revokeObjectURL(prev);
-          }
-          return nextUrl;
-        });
-      } catch (error) {
-        console.error("Failed to load payment proof preview:", error);
-        setPaymentProofPreviewUrl((prev) => {
-          if (prev) {
-            window.URL.revokeObjectURL(prev);
-          }
-          return "";
-        });
-      }
-    };
-
-    loadPaymentProofPreview();
-  }, [dialogOpen, form.id, form.paymentProofImageAvailable, token]);
-
   const normalizeInvoiceToForm = (detail: Invoice) => ({
     id: detail.id,
     updatedAt: detail.updatedAt,
@@ -444,6 +413,11 @@ function InvoiceTracker() {
     paymentProofOriginalName: detail.paymentProofOriginalName || "",
     paymentProofUploadedAt: detail.paymentProofUploadedAt || "",
     paymentProofUploaderDisplay: detail.paymentProofUploaderDisplay || "",
+    invoiceAttachmentAvailable: !!detail.invoiceAttachmentAvailable,
+    invoiceAttachmentOriginalName: detail.invoiceAttachmentOriginalName || "",
+    invoiceAttachmentMimeType: detail.invoiceAttachmentMimeType || "",
+    invoiceAttachmentUploadedAt: detail.invoiceAttachmentUploadedAt || "",
+    invoiceAttachmentUploaderDisplay: detail.invoiceAttachmentUploaderDisplay || "",
     receivedDate: detail.receivedDate || "",
     inboundCompletedAt: detail.inboundCompletedAt || "",
     inboundCompletedBy: detail.inboundCompletedBy || null,
@@ -495,11 +469,6 @@ function InvoiceTracker() {
     setNewVendorName("");
     setAddVendorDialogOpen(false);
     setSavedFormSnapshot(buildFormSnapshot(emptyForm));
-    if (paymentProofPreviewUrl) {
-      window.URL.revokeObjectURL(paymentProofPreviewUrl);
-    }
-    setPaymentProofPreviewUrl("");
-    setPaymentProofDialogOpen(false);
     setInboundDialogOpen(false);
     setInboundRows([]);
     setInboundSummary(null);
@@ -617,16 +586,105 @@ function InvoiceTracker() {
       const normalizedForm = normalizeInvoiceToForm(response.data);
       setForm(normalizedForm);
       setSavedFormSnapshot(buildFormSnapshot(normalizedForm));
-      if (paymentProofPreviewUrl) {
-        window.URL.revokeObjectURL(paymentProofPreviewUrl);
-      }
-      setPaymentProofPreviewUrl("");
       toast.success("Payment proof removed.");
     } catch (error: any) {
       console.error("Failed to delete payment proof:", error);
       toast.error(error?.response?.data?.error || "Failed to delete payment proof");
     } finally {
       setRemovingPaymentProof(false);
+    }
+  };
+
+  const openPaymentProof = async () => {
+    if (!token || !form.id || !form.paymentProofImageAvailable) return;
+    try {
+      const response = await axios.get(getApiUrl(`invoice-tracker/${form.id}/payment-proof`), {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: "blob",
+      });
+      const objectUrl = window.URL.createObjectURL(response.data);
+      window.open(objectUrl, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => {
+        window.URL.revokeObjectURL(objectUrl);
+      }, 60000);
+    } catch (error: any) {
+      console.error("Failed to open payment proof:", error);
+      toast.error(error?.response?.data?.error || "Failed to open payment proof");
+    }
+  };
+  const handleUploadInvoiceAttachment = async (file?: File | null) => {
+    if (!token || !form.id || !file) return;
+    if (hasUnsavedChanges) {
+      toast.error("Save invoice changes before uploading invoice attachment.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setUploadingInvoiceAttachment(true);
+      const response = await axios.post<Invoice>(
+        getApiUrl(`invoice-tracker/${form.id}/invoice-attachment`),
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+      const normalizedForm = normalizeInvoiceToForm(response.data);
+      setForm(normalizedForm);
+      setSavedFormSnapshot(buildFormSnapshot(normalizedForm));
+      toast.success("Invoice attachment uploaded.");
+    } catch (error: any) {
+      console.error("Failed to upload invoice attachment:", error);
+      toast.error(error?.response?.data?.error || "Failed to upload invoice attachment");
+    } finally {
+      setUploadingInvoiceAttachment(false);
+    }
+  };
+
+  const handleDeleteInvoiceAttachment = async () => {
+    if (!token || !form.id || !form.invoiceAttachmentAvailable) return;
+    if (hasUnsavedChanges) {
+      toast.error("Save invoice changes before deleting invoice attachment.");
+      return;
+    }
+
+    try {
+      setRemovingInvoiceAttachment(true);
+      const response = await axios.delete<Invoice>(getApiUrl(`invoice-tracker/${form.id}/invoice-attachment`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const normalizedForm = normalizeInvoiceToForm(response.data);
+      setForm(normalizedForm);
+      setSavedFormSnapshot(buildFormSnapshot(normalizedForm));
+      toast.success("Invoice attachment removed.");
+    } catch (error: any) {
+      console.error("Failed to delete invoice attachment:", error);
+      toast.error(error?.response?.data?.error || "Failed to delete invoice attachment");
+    } finally {
+      setRemovingInvoiceAttachment(false);
+    }
+  };
+
+  const openInvoiceAttachment = async () => {
+    if (!token || !form.id || !form.invoiceAttachmentAvailable) return;
+    try {
+      const response = await axios.get(getApiUrl(`invoice-tracker/${form.id}/invoice-attachment`), {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: "blob",
+      });
+      const objectUrl = window.URL.createObjectURL(response.data);
+      window.open(objectUrl, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => {
+        window.URL.revokeObjectURL(objectUrl);
+      }, 60000);
+    } catch (error: any) {
+      console.error("Failed to open invoice attachment:", error);
+      toast.error(error?.response?.data?.error || "Failed to open invoice attachment");
     }
   };
 
@@ -1541,58 +1599,24 @@ function InvoiceTracker() {
                               Payment Proof
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                              Upload a screenshot or image as proof of payment.
+                              Upload the payment proof as an attachment and open it when needed.
                             </Typography>
                           </Box>
 
-                              {form.paymentProofImageAvailable ? (
+                          {form.paymentProofImageAvailable ? (
                             <Stack spacing={1.5}>
-                              {paymentProofPreviewUrl ? (
-                                <Box
-                                  component="button"
-                                  type="button"
-                                  onClick={() => setPaymentProofDialogOpen(true)}
-                                  sx={{
-                                    p: 0,
-                                    border: "none",
-                                    background: "transparent",
-                                    cursor: "zoom-in",
-                                    textAlign: "left",
-                                    width: "fit-content",
-                                  }}
-                                >
-                                  <Box
-                                    component="img"
-                                    src={paymentProofPreviewUrl}
-                                    alt="Payment proof"
-                                    sx={{
-                                      width: "100%",
-                                      maxWidth: 420,
-                                      borderRadius: 1,
-                                      border: "1px solid #e5e7eb",
-                                      objectFit: "contain",
-                                      backgroundColor: "#fff",
-                                      display: "block",
-                                    }}
-                                  />
-                                </Box>
-                              ) : (
-                                <Box display="flex" alignItems="center" gap={1}>
-                                  <CircularProgress size={18} />
-                                  <Typography variant="body2" color="text.secondary">
-                                    Loading payment proof preview...
-                                  </Typography>
-                                </Box>
-                              )}
                               <Typography variant="body2" color="text.secondary">
-                                {form.paymentProofOriginalName || "Payment proof image"}
+                                {form.paymentProofOriginalName || "Payment proof attachment"}
                                 {form.paymentProofUploadedAt
-                                  ? ` · Uploaded ${new Date(form.paymentProofUploadedAt).toLocaleString()}`
+                                  ? ` - Uploaded ${new Date(form.paymentProofUploadedAt).toLocaleString()}`
                                   : ""}
                                 {form.paymentProofUploaderDisplay
-                                  ? ` · By ${form.paymentProofUploaderDisplay}`
+                                  ? ` - By ${form.paymentProofUploaderDisplay}`
                                   : ""}
                               </Typography>
+                              <Button variant="text" onClick={openPaymentProof} sx={{ px: 0, width: "fit-content" }}>
+                                Open Attachment
+                              </Button>
                             </Stack>
                           ) : (
                             <Typography variant="body2" color="text.secondary">
@@ -1611,12 +1635,12 @@ function InvoiceTracker() {
                                 {uploadingPaymentProof
                                   ? "Uploading..."
                                   : form.paymentProofImageAvailable
-                                    ? "Replace Image"
-                                    : "Upload Image"}
+                                    ? "Replace Attachment"
+                                    : "Upload Attachment"}
                                 <input
                                   type="file"
                                   hidden
-                                  accept="image/png,image/jpeg,image/jpg,image/webp"
+                                  accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp,.pdf,.png,.jpg,.jpeg,.webp"
                                   onChange={(event) => {
                                     const file = event.target.files?.[0] || null;
                                     handleUploadPaymentProof(file);
@@ -1631,7 +1655,7 @@ function InvoiceTracker() {
                                   onClick={handleDeletePaymentProof}
                                   disabled={uploadingPaymentProof || removingPaymentProof || hasUnsavedChanges || saving}
                                 >
-                                  {removingPaymentProof ? "Removing..." : "Remove Image"}
+                                  {removingPaymentProof ? "Removing..." : "Remove Attachment"}
                                 </Button>
                               )}
                             </Stack>
@@ -1640,11 +1664,6 @@ function InvoiceTracker() {
                           {!isReadOnly && hasUnsavedChanges && (
                             <Typography variant="caption" color="text.secondary">
                               Save invoice changes first before uploading or removing payment proof.
-                            </Typography>
-                          )}
-                          {form.paymentProofImageAvailable && paymentProofPreviewUrl && (
-                            <Typography variant="caption" color="text.secondary">
-                              Click the preview to open the full-size image.
                             </Typography>
                           )}
                         </Stack>
@@ -1792,6 +1811,87 @@ function InvoiceTracker() {
                 onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
                 disabled={disableNonPaymentEdits}
               />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#fcfcfd" }}>
+                <Stack spacing={1.5}>
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={700}>
+                      Invoice Document
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Optionally attach the vendor invoice as a PDF or image.
+                    </Typography>
+                  </Box>
+
+                  {form.invoiceAttachmentAvailable ? (
+                    <Stack spacing={1}>
+                      <Typography variant="body2" color="text.secondary">
+                        {form.invoiceAttachmentOriginalName || "Invoice attachment"}
+                        {form.invoiceAttachmentUploadedAt
+                          ? ` - Uploaded ${new Date(form.invoiceAttachmentUploadedAt).toLocaleString()}`
+                          : ""}
+                        {form.invoiceAttachmentUploaderDisplay
+                          ? ` - By ${form.invoiceAttachmentUploaderDisplay}`
+                          : ""}
+                      </Typography>
+                      <Box>
+                        <Button variant="text" onClick={openInvoiceAttachment} sx={{ px: 0 }}>
+                          Open Attached File
+                        </Button>
+                      </Box>
+                    </Stack>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      No invoice document uploaded yet.
+                    </Typography>
+                  )}
+
+                  {!isReadOnly && form.id && (
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        startIcon={<UploadIcon />}
+                        disabled={uploadingInvoiceAttachment || removingInvoiceAttachment || hasUnsavedChanges || saving}
+                      >
+                        {uploadingInvoiceAttachment
+                          ? "Uploading..."
+                          : form.invoiceAttachmentAvailable
+                            ? "Replace File"
+                            : "Upload File"}
+                        <input
+                          type="file"
+                          hidden
+                          accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp,.pdf,.png,.jpg,.jpeg,.webp"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0] || null;
+                            handleUploadInvoiceAttachment(file);
+                            event.currentTarget.value = "";
+                          }}
+                        />
+                      </Button>
+                      {form.invoiceAttachmentAvailable && (
+                        <Button
+                          color="error"
+                          variant="outlined"
+                          onClick={handleDeleteInvoiceAttachment}
+                          disabled={uploadingInvoiceAttachment || removingInvoiceAttachment || hasUnsavedChanges || saving}
+                        >
+                          {removingInvoiceAttachment ? "Removing..." : "Remove File"}
+                        </Button>
+                      )}
+                    </Stack>
+                  )}
+
+                  {!isReadOnly && hasUnsavedChanges && (
+                    <Typography variant="caption" color="text.secondary">
+                      Save invoice changes first before uploading or removing the invoice document.
+                    </Typography>
+                  )}
+                </Stack>
+              </Paper>
             </Grid>
 
             <Grid item xs={12}>
@@ -2022,53 +2122,6 @@ function InvoiceTracker() {
           <Button variant="contained" onClick={handleCreateVendor} disabled={creatingVendor}>
             {creatingVendor ? "Saving..." : "Save Vendor"}
           </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={paymentProofDialogOpen}
-        onClose={() => setPaymentProofDialogOpen(false)}
-        fullWidth
-        maxWidth="md"
-      >
-        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Box component="span">Payment Proof Preview</Box>
-          <IconButton onClick={() => setPaymentProofDialogOpen(false)} size="small">
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2}>
-            {paymentProofPreviewUrl ? (
-              <Box
-                component="img"
-                src={paymentProofPreviewUrl}
-                alt="Payment proof full size"
-                sx={{
-                  width: "100%",
-                  maxHeight: "75vh",
-                  objectFit: "contain",
-                  borderRadius: 1,
-                  backgroundColor: "#fff",
-                }}
-              />
-            ) : (
-              <Box display="flex" alignItems="center" gap={1}>
-                <CircularProgress size={20} />
-                <Typography color="text.secondary">Loading payment proof...</Typography>
-              </Box>
-            )}
-            <Typography variant="body2" color="text.secondary">
-              {form.paymentProofOriginalName || "Payment proof image"}
-              {form.paymentProofUploadedAt
-                ? ` · Uploaded ${new Date(form.paymentProofUploadedAt).toLocaleString()}`
-                : ""}
-              {form.paymentProofUploaderDisplay ? ` · By ${form.paymentProofUploaderDisplay}` : ""}
-            </Typography>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPaymentProofDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
 
@@ -2357,3 +2410,7 @@ function InvoiceTracker() {
 }
 
 export default InvoiceTracker;
+
+
+
+
