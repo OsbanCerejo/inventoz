@@ -2,37 +2,61 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.addColumn("salesOrders", "invoiceAttachmentPath", {
-      type: Sequelize.STRING,
-      allowNull: true,
-    });
+    const table = await queryInterface.describeTable("salesOrders");
 
-    await queryInterface.addColumn("salesOrders", "invoiceAttachmentOriginalName", {
-      type: Sequelize.STRING,
-      allowNull: true,
-    });
+    if (!table.invoiceAttachmentPath) {
+      await queryInterface.addColumn("salesOrders", "invoiceAttachmentPath", {
+        type: Sequelize.STRING,
+        allowNull: true,
+      });
+    }
 
-    await queryInterface.addColumn("salesOrders", "invoiceAttachmentMimeType", {
-      type: Sequelize.STRING,
-      allowNull: true,
-    });
+    if (!table.invoiceAttachmentOriginalName) {
+      await queryInterface.addColumn("salesOrders", "invoiceAttachmentOriginalName", {
+        type: Sequelize.STRING,
+        allowNull: true,
+      });
+    }
 
-    await queryInterface.addColumn("salesOrders", "invoiceAttachmentUploadedAt", {
-      type: Sequelize.DATE,
-      allowNull: true,
-    });
+    if (!table.invoiceAttachmentMimeType) {
+      await queryInterface.addColumn("salesOrders", "invoiceAttachmentMimeType", {
+        type: Sequelize.STRING,
+        allowNull: true,
+      });
+    }
 
-    await queryInterface.addColumn("salesOrders", "invoiceAttachmentUploadedBy", {
-      type: Sequelize.INTEGER,
-      allowNull: true,
-    });
+    if (!table.invoiceAttachmentUploadedAt) {
+      await queryInterface.addColumn("salesOrders", "invoiceAttachmentUploadedAt", {
+        type: Sequelize.DATE,
+        allowNull: true,
+      });
+    }
+
+    if (!table.invoiceAttachmentUploadedBy) {
+      await queryInterface.addColumn("salesOrders", "invoiceAttachmentUploadedBy", {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+      });
+    }
   },
 
   async down(queryInterface) {
-    await queryInterface.removeColumn("salesOrders", "invoiceAttachmentUploadedBy");
-    await queryInterface.removeColumn("salesOrders", "invoiceAttachmentUploadedAt");
-    await queryInterface.removeColumn("salesOrders", "invoiceAttachmentMimeType");
-    await queryInterface.removeColumn("salesOrders", "invoiceAttachmentOriginalName");
-    await queryInterface.removeColumn("salesOrders", "invoiceAttachmentPath");
+    const table = await queryInterface.describeTable("salesOrders");
+
+    if (table.invoiceAttachmentUploadedBy) {
+      await queryInterface.removeColumn("salesOrders", "invoiceAttachmentUploadedBy");
+    }
+    if (table.invoiceAttachmentUploadedAt) {
+      await queryInterface.removeColumn("salesOrders", "invoiceAttachmentUploadedAt");
+    }
+    if (table.invoiceAttachmentMimeType) {
+      await queryInterface.removeColumn("salesOrders", "invoiceAttachmentMimeType");
+    }
+    if (table.invoiceAttachmentOriginalName) {
+      await queryInterface.removeColumn("salesOrders", "invoiceAttachmentOriginalName");
+    }
+    if (table.invoiceAttachmentPath) {
+      await queryInterface.removeColumn("salesOrders", "invoiceAttachmentPath");
+    }
   },
 };
