@@ -48,6 +48,7 @@ const PermissionError: React.FC<PermissionErrorProps> = ({
       case 'whatnot': return 'Whatnot';
       case 'packing': return 'Packing';
       case 'whatnotAnalytics': return 'Whatnot Analytics';
+      case 'sortingAnalytics': return 'Sorting Analytics';
       case 'packingAnalytics': return 'Packing Analytics';
       case 'lowStock': return 'Low Stock';
       case 'ebay': return 'eBay';
@@ -66,6 +67,7 @@ const PermissionError: React.FC<PermissionErrorProps> = ({
       case 'whatnot': return 'Whatnot';
       case 'packing': return 'Packing';
       case 'whatnotAnalytics': return 'Whatnot Analytics';
+      case 'sortingAnalytics': return 'Sorting Analytics';
       case 'packingAnalytics': return 'Packing Analytics';
       case 'lowStock': return 'Low Stock';
       default: return menuItem;

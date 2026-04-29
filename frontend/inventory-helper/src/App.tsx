@@ -283,7 +283,7 @@ function AppContent() {
             <Route
               path="/sorting-analytics"
               element={
-                <ProtectedRoute resource="whatnotAnalytics" action="view" menuItem="whatnotAnalytics">
+                <ProtectedRoute resource="sortingAnalytics" action="view" menuItem="sortingAnalytics">
                   <SortingAnalytics />
                 </ProtectedRoute>
               }

@@ -107,6 +107,13 @@ function Home() {
       path: "/whatnot-analytics",
       color: "#e8f1ff"
     },
+    sortingAnalytics: {
+      title: "Sorting Analytics",
+      description: "Review sorter throughput, show split, and scan timing",
+      icon: <WhatnotAnalyticsIcon sx={{ fontSize: 40, color: '#6a1b9a' }} />,
+      path: "/sorting-analytics",
+      color: "#f4e8ff"
+    },
     packingAnalytics: {
       title: "Packing Analytics",
       description: "Analyze barcode packing productivity",
@@ -143,6 +150,7 @@ function Home() {
     "invoiceTracker",
     "packingAnalytics",
     "whatnotAnalytics",
+    "sortingAnalytics",
     "tickets",
     "whatnot",
     "pricelist",

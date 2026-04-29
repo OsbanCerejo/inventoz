@@ -119,6 +119,30 @@ const FULFILLMENT_SORTING_SHIPMENT_SUBQUERY = `
   )
 `;
 
+const FULFILLMENT_SORTING_SCAN_TIMING_SUBQUERY = `
+  (
+    SELECT
+      wss.whatnotShowId,
+      wss.importId,
+      wss.shipmentId,
+      COUNT(*) AS totalScans,
+      MIN(wss.createdAt) AS firstScanAt,
+      MAX(wss.createdAt) AS lastScanAt,
+      CASE
+        WHEN COUNT(*) > 1 THEN TIMESTAMPDIFF(SECOND, MIN(wss.createdAt), MAX(wss.createdAt)) / (COUNT(*) - 1)
+        ELSE NULL
+      END AS avgSecondsBetweenScans,
+      CASE
+        WHEN COUNT(*) > 1 THEN TIMESTAMPDIFF(SECOND, MIN(wss.createdAt), MAX(wss.createdAt)) / 60
+        ELSE 0
+      END AS handlingMinutes
+    FROM ${TABLES.shipmentScans} wss
+    WHERE wss.shipmentId IS NOT NULL
+      AND wss.shipmentId <> ''
+    GROUP BY wss.whatnotShowId, wss.importId, wss.shipmentId
+  )
+`;
+
 const ACTIVE_VENDOR_COST_SUBQUERY = `
   (
     SELECT
@@ -2220,7 +2244,7 @@ router.get("/inventory-risk", auth, checkPermission("whatnotAnalytics", "view"),
   }
 });
 
-router.get("/fulfillment-sorting-overview", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+router.get("/fulfillment-sorting-overview", auth, checkPermission("sortingAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -2289,7 +2313,7 @@ router.get("/fulfillment-sorting-overview", auth, checkPermission("whatnotAnalyt
   }
 });
 
-router.get("/fulfillment-sorting-leaderboard", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+router.get("/fulfillment-sorting-leaderboard", auth, checkPermission("sortingAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -2371,7 +2395,7 @@ router.get("/fulfillment-sorting-leaderboard", auth, checkPermission("whatnotAna
   }
 });
 
-router.get("/fulfillment-sorting-daily", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+router.get("/fulfillment-sorting-daily", auth, checkPermission("sortingAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -2434,7 +2458,7 @@ router.get("/fulfillment-sorting-daily", auth, checkPermission("whatnotAnalytics
   }
 });
 
-router.get("/fulfillment-sorting-shows", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+router.get("/fulfillment-sorting-shows", auth, checkPermission("sortingAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -2505,7 +2529,7 @@ router.get("/fulfillment-sorting-shows", auth, checkPermission("whatnotAnalytics
   }
 });
 
-router.get("/fulfillment-sorting-weekday", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+router.get("/fulfillment-sorting-weekday", auth, checkPermission("sortingAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -2560,7 +2584,7 @@ router.get("/fulfillment-sorting-weekday", auth, checkPermission("whatnotAnalyti
   }
 });
 
-router.get("/fulfillment-sorting-time-heatmap", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+router.get("/fulfillment-sorting-time-heatmap", auth, checkPermission("sortingAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -2613,7 +2637,7 @@ router.get("/fulfillment-sorting-time-heatmap", auth, checkPermission("whatnotAn
   }
 });
 
-router.get("/fulfillment-sorting-categories", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+router.get("/fulfillment-sorting-categories", auth, checkPermission("sortingAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -2675,7 +2699,7 @@ router.get("/fulfillment-sorting-categories", auth, checkPermission("whatnotAnal
   }
 });
 
-router.get("/fulfillment-sorting-sorters-daily", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+router.get("/fulfillment-sorting-sorters-daily", auth, checkPermission("sortingAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
@@ -2749,7 +2773,162 @@ router.get("/fulfillment-sorting-sorters-daily", auth, checkPermission("whatnotA
   }
 });
 
-router.get("/fulfillment-sorting-shipments", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+router.get("/fulfillment-sorting-show-sorters", auth, checkPermission("sortingAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const sorterId = req.query.sorterId ? String(req.query.sorterId).trim() : null;
+  const limit = Math.max(1, Math.min(Number(req.query.limit || 25), 100));
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        ss.whatnotShowId AS showId,
+        COALESCE(ws.name, CONCAT('Show ', ss.whatnotShowId)) AS showName,
+        ss.closedBy AS sorterId,
+        COALESCE(u.name, u.username, CONCAT('User ', ss.closedBy), 'Unknown') AS sorterName,
+        COUNT(*) AS shipmentsClosed,
+        COALESCE(SUM(ss.totalExpectedUnits), 0) AS totalUnits,
+        COALESCE(SUM(ss.closeRelevantUnits), 0) AS closeRelevantUnits,
+        AVG(st.avgSecondsBetweenScans) AS avgSecondsBetweenScans,
+        AVG(st.handlingMinutes) AS avgHandlingMinutes,
+        COALESCE(SUM(st.totalScans), 0) AS totalScans
+      FROM ${FULFILLMENT_SORTING_SHIPMENT_SUBQUERY} ss
+      LEFT JOIN ${TABLES.shows} ws
+        ON ws.id = ss.whatnotShowId
+      LEFT JOIN ${TABLES.users} u
+        ON CAST(u.id AS CHAR) = ss.closedBy
+      LEFT JOIN ${FULFILLMENT_SORTING_SCAN_TIMING_SUBQUERY} st
+        ON st.whatnotShowId = ss.whatnotShowId
+       AND st.importId = ss.importId
+       AND st.shipmentId = ss.shipmentId
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from
+        AND ss.closedAt < :to
+        AND ss.hasNonRandomGiveaway = 1
+        AND (:showId IS NULL OR ss.whatnotShowId = :showId)
+        AND (:sorterId IS NULL OR ss.closedBy = :sorterId)
+      GROUP BY ss.whatnotShowId, ws.id, ws.name, ss.closedBy, u.id, u.name, u.username
+      ORDER BY showName ASC, shipmentsClosed DESC, totalUnits DESC, sorterName ASC
+      LIMIT :limit
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          sorterId,
+          limit,
+        },
+      }
+    );
+
+    return res.json(
+      (rows || []).map((row) => ({
+        showId: Number(row.showId || 0),
+        showName: row.showName || "Unknown Show",
+        sorterId: row.sorterId || null,
+        sorterName: row.sorterName || "Unknown",
+        shipmentsClosed: Number(row.shipmentsClosed || 0),
+        totalUnits: Number(row.totalUnits || 0),
+        closeRelevantUnits: Number(row.closeRelevantUnits || 0),
+        avgSecondsBetweenScans:
+          row.avgSecondsBetweenScans === null || row.avgSecondsBetweenScans === undefined
+            ? null
+            : Number(Number(row.avgSecondsBetweenScans).toFixed(2)),
+        avgHandlingMinutes:
+          row.avgHandlingMinutes === null || row.avgHandlingMinutes === undefined
+            ? null
+            : Number(Number(row.avgHandlingMinutes).toFixed(2)),
+        totalScans: Number(row.totalScans || 0),
+      }))
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment sorting show sorter analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment sorting show sorter analytics" });
+  }
+});
+
+router.get("/fulfillment-sorting-scan-timing", auth, checkPermission("sortingAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const sorterId = req.query.sorterId ? String(req.query.sorterId).trim() : null;
+  const limit = Math.max(1, Math.min(Number(req.query.limit || 50), 100));
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        ss.closedBy AS sorterId,
+        COALESCE(u.name, u.username, CONCAT('User ', ss.closedBy), 'Unknown') AS sorterName,
+        COUNT(*) AS shipmentsClosed,
+        AVG(st.avgSecondsBetweenScans) AS avgSecondsBetweenScans,
+        AVG(st.handlingMinutes) AS avgHandlingMinutes,
+        AVG(st.totalScans) AS avgScansPerShipment,
+        COALESCE(SUM(st.totalScans), 0) AS totalScans
+      FROM ${FULFILLMENT_SORTING_SHIPMENT_SUBQUERY} ss
+      LEFT JOIN ${TABLES.users} u
+        ON CAST(u.id AS CHAR) = ss.closedBy
+      LEFT JOIN ${FULFILLMENT_SORTING_SCAN_TIMING_SUBQUERY} st
+        ON st.whatnotShowId = ss.whatnotShowId
+       AND st.importId = ss.importId
+       AND st.shipmentId = ss.shipmentId
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from
+        AND ss.closedAt < :to
+        AND ss.hasNonRandomGiveaway = 1
+        AND (:showId IS NULL OR ss.whatnotShowId = :showId)
+        AND (:sorterId IS NULL OR ss.closedBy = :sorterId)
+      GROUP BY ss.closedBy, u.id, u.name, u.username
+      ORDER BY shipmentsClosed DESC, avgSecondsBetweenScans ASC, sorterName ASC
+      LIMIT :limit
+      `,
+      {
+        replacements: {
+          from: range.from,
+          to: range.to,
+          showId,
+          sorterId,
+          limit,
+        },
+      }
+    );
+
+    return res.json(
+      (rows || []).map((row) => ({
+        sorterId: row.sorterId || null,
+        sorterName: row.sorterName || "Unknown",
+        shipmentsClosed: Number(row.shipmentsClosed || 0),
+        avgSecondsBetweenScans:
+          row.avgSecondsBetweenScans === null || row.avgSecondsBetweenScans === undefined
+            ? null
+            : Number(Number(row.avgSecondsBetweenScans).toFixed(2)),
+        avgHandlingMinutes:
+          row.avgHandlingMinutes === null || row.avgHandlingMinutes === undefined
+            ? null
+            : Number(Number(row.avgHandlingMinutes).toFixed(2)),
+        avgScansPerShipment:
+          row.avgScansPerShipment === null || row.avgScansPerShipment === undefined
+            ? null
+            : Number(Number(row.avgScansPerShipment).toFixed(2)),
+        totalScans: Number(row.totalScans || 0),
+      }))
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment sorting scan timing analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment sorting scan timing analytics" });
+  }
+});
+
+router.get("/fulfillment-sorting-shipments", auth, checkPermission("sortingAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) {
     return res.status(400).json({ error: "Invalid date range" });
