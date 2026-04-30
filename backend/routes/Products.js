@@ -35,6 +35,32 @@ const buildContainsFilter = (columnName, rawValue, options = {}) => {
   };
 };
 
+const normalizeNullableInteger = (value) => {
+  if (value === "" || value === null || value === undefined) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+
+  return Math.max(0, Math.floor(parsed));
+};
+
+const normalizeNullableDecimal = (value) => {
+  if (value === "" || value === null || value === undefined) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+
+  return parsed.toFixed(2);
+};
+
 router.get("/", auth, checkPermission('products', 'view'), async (req, res) => {
   const db = require("../models");
   const listOfProducts = await db.Products.findAll({
@@ -45,6 +71,42 @@ router.get("/", auth, checkPermission('products', 'view'), async (req, res) => {
     }]
   });
   res.json(listOfProducts);
+});
+
+router.get("/hba/public-catalog", async (req, res) => {
+  try {
+    const rows = await Products.findAll({
+      attributes: [
+        "sku",
+        "brand",
+        "itemName",
+        "image",
+        "quantity",
+        "hbaQuantity",
+        "hbaPrice",
+      ],
+      where: {
+        hbaEnabled: true,
+      },
+      order: [["brand", "ASC"], ["itemName", "ASC"], ["sku", "ASC"]],
+    });
+
+    return res.json(
+      rows.map((row) => ({
+        sku: row.sku,
+        brand: row.brand,
+        itemName: row.itemName,
+        image: row.image || "",
+        inventoryQuantity: row.quantity,
+        hbaQuantity: row.hbaQuantity,
+        hbaPrice: row.hbaPrice,
+        inStock: Number(row.hbaQuantity || 0) > 0,
+      }))
+    );
+  } catch (error) {
+    console.error("Error loading public HBA catalog:", error);
+    return res.status(500).json({ error: "Failed to load public HBA catalog" });
+  }
 });
 
 router.get("/list", auth, checkPermission('products', 'view'), async (req, res) => {
@@ -122,6 +184,31 @@ router.get("/list", auth, checkPermission('products', 'view'), async (req, res) 
   }
 });
 
+router.get("/hba/catalog", auth, checkPermission('products', 'view'), async (req, res) => {
+  try {
+    const rows = await Products.findAll({
+      attributes: [
+        "sku",
+        "brand",
+        "itemName",
+        "image",
+        "quantity",
+        "hbaQuantity",
+        "hbaPrice",
+      ],
+      where: {
+        hbaEnabled: true,
+      },
+      order: [["brand", "ASC"], ["itemName", "ASC"], ["sku", "ASC"]],
+    });
+
+    return res.json(rows);
+  } catch (error) {
+    console.error("Error loading HBA catalog:", error);
+    return res.status(500).json({ error: "Failed to load HBA catalog" });
+  }
+});
+
 router.get("/byId/:id", auth, checkPermission('products', 'view'), async (req, res) => {
   const id = req.params.id;
   const product = await Products.findByPk(id);
@@ -149,7 +236,10 @@ router.post("/", auth, checkPermission('products', 'create'), async (req, res) =
       ...product,
       trackQuantity: product.trackQuantity || false,
       minimumQuantity: product.minimumQuantity || null,
-      lowStockAlertSent: false
+      lowStockAlertSent: false,
+      hbaEnabled: Boolean(product.hbaEnabled),
+      hbaQuantity: normalizeNullableInteger(product.hbaQuantity),
+      hbaPrice: normalizeNullableDecimal(product.hbaPrice),
     };
     
     const [found, created] = await Products.findOrCreate({
@@ -238,6 +328,18 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
           product.minimumQuantity !== undefined
             ? normalizeMinimumQuantity(product.minimumQuantity)
             : currentProduct.minimumQuantity,
+        hbaEnabled:
+          product.hbaEnabled !== undefined
+            ? Boolean(product.hbaEnabled)
+            : currentProduct.hbaEnabled,
+        hbaQuantity:
+          product.hbaQuantity !== undefined
+            ? normalizeNullableInteger(product.hbaQuantity)
+            : currentProduct.hbaQuantity,
+        hbaPrice:
+          product.hbaPrice !== undefined
+            ? normalizeNullableDecimal(product.hbaPrice)
+            : currentProduct.hbaPrice,
       },
       { where: { sku: product.sku } }
     );

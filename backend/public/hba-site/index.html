@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HBA Order Catalog</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="site-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Wholesale Catalog</p>
+          <h1>HBA Order Site</h1>
+          <p class="subcopy">
+            Browse the live HBA assortment, see posted quantities and pricing,
+            and build a quick order draft.
+          </p>
+        </div>
+        <aside class="hero-panel">
+          <div class="stat-card">
+            <span class="stat-label">Visible SKUs</span>
+            <strong class="stat-value" id="visible-sku-count">0</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">In Stock</span>
+            <strong class="stat-value" id="in-stock-count">0</strong>
+          </div>
+        </aside>
+      </header>
+
+      <main class="layout">
+        <section class="catalog-panel">
+          <div class="toolbar">
+            <div class="toolbar-group grow">
+              <label class="field-label" for="catalog-search">Search</label>
+              <input
+                id="catalog-search"
+                class="text-input"
+                type="search"
+                placeholder="Search by SKU, brand, or item name"
+              />
+            </div>
+            <div class="toolbar-group">
+              <label class="field-label" for="availability-filter">Availability</label>
+              <select id="availability-filter" class="select-input">
+                <option value="all">All</option>
+                <option value="in-stock">In Stock</option>
+                <option value="sold-out">Sold Out</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="catalog-grid" class="catalog-grid"></div>
+          <div id="catalog-empty" class="empty-state hidden">
+            <h2>No HBA products found</h2>
+            <p>Turn on HBA for a product inside Inventoz to make it appear here.</p>
+          </div>
+        </section>
+
+        <aside class="cart-panel">
+          <div class="cart-header">
+            <div>
+              <p class="eyebrow">Draft Order</p>
+              <h2>Cart</h2>
+            </div>
+            <span id="cart-line-count" class="pill">0 lines</span>
+          </div>
+
+          <div id="cart-items" class="cart-items"></div>
+
+          <div class="cart-footer">
+            <div class="summary-row">
+              <span>Total Units</span>
+              <strong id="cart-total-units">0</strong>
+            </div>
+            <div class="summary-row summary-total">
+              <span>Estimated Total</span>
+              <strong id="cart-total-price">$0.00</strong>
+            </div>
+            <button id="copy-order-button" class="primary-button" type="button">
+              Copy Order Summary
+            </button>
+            <p class="helper-copy">
+              This first version is intentionally lightweight: it surfaces only HBA-enabled products from Inventoz.
+              Order submission and stock deduction can be added later without reworking the catalog foundation.
+            </p>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <template id="product-card-template">
+      <article class="product-card">
+        <div class="card-image-wrap">
+          <img class="card-image" alt="" />
+        </div>
+        <div class="card-body">
+          <div class="card-topline">
+            <span class="brand-pill"></span>
+            <span class="stock-pill"></span>
+          </div>
+          <h3 class="product-name"></h3>
+          <p class="product-sku"></p>
+          <div class="product-metrics">
+            <div>
+              <span class="metric-label">Posted Qty</span>
+              <strong class="posted-qty"></strong>
+            </div>
+            <div>
+              <span class="metric-label">Unit Price</span>
+              <strong class="unit-price"></strong>
+            </div>
+          </div>
+          <div class="order-row">
+            <label>
+              <span class="field-label">Qty</span>
+              <input class="quantity-input" type="number" min="0" value="0" />
+            </label>
+            <button class="secondary-button add-button" type="button">Add</button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <template id="cart-item-template">
+      <div class="cart-item">
+        <div class="cart-item-copy">
+          <strong class="cart-item-name"></strong>
+          <span class="cart-item-meta"></span>
+        </div>
+        <div class="cart-item-actions">
+          <label>
+            <span class="field-label">Qty</span>
+            <input class="cart-item-qty" type="number" min="0" value="1" />
+          </label>
+          <strong class="cart-item-total"></strong>
+        </div>
+      </div>
+    </template>
+
+    <script>
+      window.HBA_CONFIG = window.HBA_CONFIG || {
+        apiBaseUrl: "",
+      };
+    </script>
+    <script src="./app.js" defer></script>
+  </body>
+</html>

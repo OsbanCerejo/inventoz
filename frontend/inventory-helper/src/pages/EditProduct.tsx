@@ -89,6 +89,9 @@ const formikValidationSchema = Yup.object().shape({
   // Low Stock Tracking
   trackQuantity: Yup.boolean(),
   minimumQuantity: Yup.number().nullable(),
+  hbaEnabled: Yup.boolean(),
+  hbaQuantity: Yup.number().nullable(),
+  hbaPrice: Yup.number().nullable(),
 });
 
 interface ChangeRecord {
@@ -181,6 +184,9 @@ function EditProduct() {
       // Low Stock Tracking (Admin only)
       trackQuantity: productObject.trackQuantity || false,
       minimumQuantity: productObject.minimumQuantity || "",
+      hbaEnabled: productObject.hbaEnabled || false,
+      hbaQuantity: productObject.hbaQuantity || "",
+      hbaPrice: productObject.hbaPrice || "",
     }),
     [productObject, productDetails]
   );
@@ -1368,6 +1374,68 @@ function EditProduct() {
                             />
                           </Box>
                         </Grid>
+                      )}
+                      <Grid item xs={6}>
+                        HBA
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Switch
+                          id="hbaEnabled"
+                          name="hbaEnabled"
+                          checked={formik.values.hbaEnabled}
+                          onChange={formik.handleChange}
+                          inputProps={{ "aria-label": "controlled" }}
+                        />
+                      </Grid>
+                      {formik.values.hbaEnabled && (
+                        <>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
+                                id="hbaQuantity"
+                                name="hbaQuantity"
+                                label="HBA Quantity"
+                                type="number"
+                                value={formik.values.hbaQuantity}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.hbaQuantity &&
+                                  Boolean(formik.errors.hbaQuantity)
+                                }
+                                helperText={
+                                  formik.touched.hbaQuantity && typeof formik.errors.hbaQuantity === "string"
+                                    ? formik.errors.hbaQuantity
+                                    : ""
+                                }
+                              />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
+                                id="hbaPrice"
+                                name="hbaPrice"
+                                label="HBA Price"
+                                type="number"
+                                value={formik.values.hbaPrice}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                error={
+                                  formik.touched.hbaPrice &&
+                                  Boolean(formik.errors.hbaPrice)
+                                }
+                                helperText={
+                                  formik.touched.hbaPrice && typeof formik.errors.hbaPrice === "string"
+                                    ? formik.errors.hbaPrice
+                                    : ""
+                                }
+                              />
+                            </Box>
+                          </Grid>
+                        </>
                       )}
                     </>
                   )}

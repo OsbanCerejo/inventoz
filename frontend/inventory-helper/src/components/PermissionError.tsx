@@ -50,6 +50,8 @@ const PermissionError: React.FC<PermissionErrorProps> = ({
       case 'whatnotAnalytics': return 'Whatnot Analytics';
       case 'sortingAnalytics': return 'Sorting Analytics';
       case 'packingAnalytics': return 'Packing Analytics';
+      case 'walmartIntegration': return 'Walmart Integration';
+      case 'walmartOrders': return 'Walmart Orders';
       case 'lowStock': return 'Low Stock';
       case 'ebay': return 'eBay';
       default: return resource;
@@ -69,6 +71,8 @@ const PermissionError: React.FC<PermissionErrorProps> = ({
       case 'whatnotAnalytics': return 'Whatnot Analytics';
       case 'sortingAnalytics': return 'Sorting Analytics';
       case 'packingAnalytics': return 'Packing Analytics';
+      case 'walmartIntegration': return 'Walmart Integration';
+      case 'walmartOrders': return 'Walmart Orders';
       case 'lowStock': return 'Low Stock';
       default: return menuItem;
     }

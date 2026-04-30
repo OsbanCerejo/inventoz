@@ -5,19 +5,20 @@ import { People as PeopleIcon } from '@mui/icons-material';
 
 function NavBar() {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeDropdown, setActiveDropdown] = useState<"analytics" | "tools" | "user" | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<"analytics" | "tools" | "walmart" | "user" | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout, hasMenuAccess, isLoading, isAuthenticated } = useAuth();
   const analyticsRef = useRef<HTMLLIElement | null>(null);
   const toolsRef = useRef<HTMLLIElement | null>(null);
+  const walmartRef = useRef<HTMLLIElement | null>(null);
   const userRef = useRef<HTMLDivElement | null>(null);
 
   const toggleNavbar = () => {
     setIsOpen(!isOpen);
   };
 
-  const toggleDropdown = (dropdown: "analytics" | "tools" | "user") => {
+  const toggleDropdown = (dropdown: "analytics" | "tools" | "walmart" | "user") => {
     setActiveDropdown((prev) => (prev === dropdown ? null : dropdown));
   };
 
@@ -31,6 +32,7 @@ function NavBar() {
       if (
         analyticsRef.current?.contains(target) ||
         toolsRef.current?.contains(target) ||
+        walmartRef.current?.contains(target) ||
         userRef.current?.contains(target)
       ) {
         return;
@@ -86,6 +88,7 @@ function NavBar() {
   const toolsItems = [
     { key: 'tickets-tool', permissionKey: 'tickets', label: 'Tickets', path: '/tickets' },
     { key: 'invoice-tracker-tool', permissionKey: 'invoiceTracker', label: 'Invoice Tracker', path: '/invoice-tracker' },
+    { key: 'sales-tool', permissionKey: 'sales', label: 'Sales Tracker', path: '/sales' },
     { key: 'whatnot-tool', permissionKey: 'whatnot', label: 'Whatnot', path: '/whatnot' },
     { key: 'whatnot-fulfillment-tool', permissionKey: 'whatnot', label: 'Whatnot Fulfillment', path: '/whatnot-fulfillment' },
     { key: 'label-generator-tool', permissionKey: 'whatnot', label: 'Label Generator', path: '/label-generator' },
@@ -95,10 +98,17 @@ function NavBar() {
     { key: 'barcode-tool', permissionKey: 'barcodeScan', label: 'Barcode Scan', path: '/barcode-scan' },
   ];
 
+  const walmartItems = [
+    { key: 'walmartIntegration', label: 'Walmart Product Catalog', path: '/walmart-product-catalog' },
+    { key: 'walmartIntegration', label: 'Walmart Integration', path: '/walmart-integration' },
+    { key: 'walmartOrders', label: 'Walmart Orders', path: '/walmart-orders' },
+  ];
+
   const visibleAnalyticsItems = analyticsItems.filter((item) => hasMenuAccess(item.key));
   const visibleToolsItems = toolsItems.filter((item) =>
     hasMenuAccess((item as { permissionKey?: string }).permissionKey || item.key)
   );
+  const visibleWalmartItems = walmartItems.filter((item) => hasMenuAccess(item.key));
   const isPathActive = (path: string) =>
     location.pathname === path ||
     (path !== "/" && location.pathname.startsWith(path));
@@ -274,6 +284,54 @@ function NavBar() {
                           display: "block",
                           fontSize: "14px",
                           fontWeight: 500,
+                        }}
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </li>
+            )}
+            {visibleWalmartItems.length > 0 && (
+              <li className="nav-item dropdown" style={{ position: "relative" }} ref={walmartRef}>
+                <button
+                  className="btn btn-link nav-link dropdown-toggle"
+                  onClick={() => toggleDropdown("walmart")}
+                  style={{
+                    ...navLinkBase,
+                    color:
+                      activeDropdown === "walmart" || visibleWalmartItems.some((item) => isPathActive(item.path))
+                        ? "#0f172a"
+                        : "#334155",
+                    borderBottomColor:
+                      activeDropdown === "walmart" || visibleWalmartItems.some((item) => isPathActive(item.path))
+                        ? "#0f172a"
+                        : "transparent",
+                  }}
+                >
+                  Walmart
+                </button>
+                {activeDropdown === "walmart" && (
+                  <div
+                    className="dropdown-menu show"
+                    style={{
+                      left: "0",
+                      ...dropdownCardStyle,
+                    }}
+                  >
+                    {visibleWalmartItems.map((item) => (
+                      <Link
+                        key={item.path}
+                        className="dropdown-item"
+                        to={item.path}
+                        style={{
+                          display: "block",
+                          padding: "0.65rem 0.9rem",
+                          color: isPathActive(item.path) ? "#0f172a" : "#334155",
+                          backgroundColor: isPathActive(item.path) ? "#f8fafc" : "transparent",
+                          textDecoration: "none",
+                          fontWeight: isPathActive(item.path) ? 600 : 500,
                         }}
                       >
                         {item.label}

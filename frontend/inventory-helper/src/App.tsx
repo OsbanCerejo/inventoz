@@ -21,6 +21,9 @@ import WhatnotFulfillment from "./pages/WhatnotFulfillment";
 import WhatnotAnalytics from "./pages/WhatnotAnalytics";
 import WhatnotFulfillmentAnalytics from "./pages/WhatnotFulfillmentAnalytics";
 import SortingAnalytics from "./pages/SortingAnalytics";
+import WalmartIntegration from "./pages/WalmartIntegration";
+import WalmartOrders from "./pages/WalmartOrders";
+import WalmartProductCatalog from "./pages/WalmartProductCatalog";
 import PriceList from "./pages/PriceList";
 import Users from "./pages/Users";
 import BarcodeScan from "./pages/BarcodeScan";
@@ -285,6 +288,38 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="sortingAnalytics" action="view" menuItem="sortingAnalytics">
                   <SortingAnalytics />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/walmart-product-catalog"
+              element={
+                <ProtectedRoute
+                  resource="walmartIntegration"
+                  action="view"
+                  menuItem="walmartIntegration"
+                >
+                  <WalmartProductCatalog />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/walmart-integration"
+              element={
+                <ProtectedRoute
+                  resource="walmartIntegration"
+                  action="view"
+                  menuItem="walmartIntegration"
+                >
+                  <WalmartIntegration />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/walmart-orders"
+              element={
+                <ProtectedRoute resource="walmartOrders" action="view" menuItem="walmartOrders">
+                  <WalmartOrders />
                 </ProtectedRoute>
               }
             />

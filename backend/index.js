@@ -105,6 +105,15 @@ app.use("/whatnot/fulfillment", whatnotFulfillmentRouter);
 const whatnotAnalyticsRouter = require("./routes/whatnotAnalytics");
 app.use("/whatnot/analytics", whatnotAnalyticsRouter);
 
+const walmartIntegrationRouter = require("./routes/WalmartIntegration");
+app.use("/walmart-integration", walmartIntegrationRouter);
+
+const walmartOrdersRouter = require("./routes/WalmartOrders");
+app.use("/walmart-orders", walmartOrdersRouter);
+
+const walmartProductsRouter = require("./routes/WalmartProducts");
+app.use("/walmart-products", walmartProductsRouter);
+
 const priceListRouter = require("./routes/priceList");
 app.use("/api/price-list", priceListRouter);
 
@@ -125,6 +134,16 @@ app.use("/invoice-tracker", invoiceTrackerRouter);
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(express.static(path.join(__dirname, 'public', 'hba-site')));
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'hba-site', 'index.html'));
+});
+app.get('/hba-site', (req, res) => {
+  res.redirect(301, '/');
+});
+app.get('/hba-site/*', (req, res) => {
+  res.redirect(301, '/');
+});
 
 // Health check endpoint (no database required)
 app.get('/health', (req, res) => {

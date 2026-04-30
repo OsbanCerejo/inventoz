@@ -107,6 +107,21 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         defaultValue: null,
       },
+      hbaEnabled: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      hbaQuantity: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: null,
+      },
+      hbaPrice: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        defaultValue: null,
+      },
       lastPriceUpdate: {
         type: DataTypes.DATE,
         allowNull: true,

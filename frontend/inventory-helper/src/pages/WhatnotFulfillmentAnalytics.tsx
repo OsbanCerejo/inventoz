@@ -39,6 +39,8 @@ interface FulfillmentOverviewData {
   pendingRevenue: number;
   reviewShipments: number;
   reviewRevenue: number;
+  randomGiveawayShipments: number;
+  randomGiveawayUnits: number;
 }
 
 interface FulfillmentShowPerformance {
@@ -482,6 +484,7 @@ function WhatnotFulfillmentAnalytics() {
   const overviewMetrics = [
     { label: "Revenue", value: formatCurrency(overview?.revenue || 0), color: "#0b6bcb" },
     { label: "Units Sold", value: overview?.unitsSold || 0, color: "#1f7a1f" },
+    { label: "Random Giveaways", value: overview?.randomGiveawayUnits || 0, color: "#8e24aa" },
     { label: "Avg Sold Price", value: formatCurrency(overview?.avgSoldPrice || 0), color: "#6a1b9a" },
     { label: "Completed Shipments", value: overview?.completedShipments || 0, color: "#ef6c00" },
     { label: "Pending Revenue", value: formatCurrency(overview?.pendingRevenue || 0), color: "#00838f" },
@@ -525,6 +528,11 @@ function WhatnotFulfillmentAnalytics() {
               <Typography variant="caption" color="text.secondary">Unique SKUs Sold</Typography>
               <Typography variant="h6" sx={{ color: "#2e7d32", fontWeight: 700 }}>{formatNumber(overview?.uniqueSkusSold || 0)}</Typography>
               <Typography variant="body2" color="text.secondary">Across {formatNumber(overview?.uniqueShows || 0)} shows in this period</Typography>
+            </Box>
+            <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: "#faf5ff", border: "1px solid #e7d9fb" }}>
+              <Typography variant="caption" color="text.secondary">Random Giveaway Shipments</Typography>
+              <Typography variant="h6" sx={{ color: "#7b1fa2", fontWeight: 700 }}>{formatNumber(overview?.randomGiveawayShipments || 0)}</Typography>
+              <Typography variant="body2" color="text.secondary">{formatNumber(overview?.randomGiveawayUnits || 0)} random giveaway units closed in this period</Typography>
             </Box>
           </Stack>
         </Paper>

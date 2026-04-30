@@ -194,7 +194,7 @@ router.get("/fulfillment-overview", auth, checkPermission("whatnotAnalytics", "v
   const showId = req.query.showId ? Number(req.query.showId) : null;
 
   try {
-    const [[salesRows], [pipelineRows]] = await Promise.all([
+    const [[salesRows], [pipelineRows], [giveawayRows]] = await Promise.all([
       sequelize.query(
         `
         SELECT
@@ -250,10 +250,30 @@ router.get("/fulfillment-overview", auth, checkPermission("whatnotAnalytics", "v
           },
         }
       ),
+      sequelize.query(
+        `
+        SELECT
+          COUNT(DISTINCT CONCAT(wsi.whatnotShowId, ':', wsi.importId, ':', wsi.shipmentId)) AS randomGiveawayShipments,
+          COALESCE(SUM(COALESCE(wsi.expectedQty, 0)), 0) AS randomGiveawayUnits
+        FROM ${TABLES.shipmentItems} wsi
+        WHERE COALESCE(wsi.itemCategory, 'others') = 'random_giveaway'
+          AND COALESCE(wsi.createdAt, wsi.placedAt) >= :from
+          AND COALESCE(wsi.createdAt, wsi.placedAt) < :to
+          AND (:showId IS NULL OR wsi.whatnotShowId = :showId)
+        `,
+        {
+          replacements: {
+            from: range.from,
+            to: range.to,
+            showId,
+          },
+        }
+      ),
     ]);
 
     const salesRow = Array.isArray(salesRows) ? salesRows[0] || {} : salesRows || {};
     const pipelineRow = Array.isArray(pipelineRows) ? pipelineRows[0] || {} : pipelineRows || {};
+    const giveawayRow = Array.isArray(giveawayRows) ? giveawayRows[0] || {} : giveawayRows || {};
 
     const unitsSold = Number(salesRow?.unitsSold || 0);
     const revenue = Number(salesRow?.revenue || 0);
@@ -269,6 +289,8 @@ router.get("/fulfillment-overview", auth, checkPermission("whatnotAnalytics", "v
       pendingRevenue: Number(Number(pipelineRow?.pendingRevenue || 0).toFixed(2)),
       reviewShipments: Number(pipelineRow?.reviewShipments || 0),
       reviewRevenue: Number(Number(pipelineRow?.reviewRevenue || 0).toFixed(2)),
+      randomGiveawayShipments: Number(giveawayRow?.randomGiveawayShipments || 0),
+      randomGiveawayUnits: Number(giveawayRow?.randomGiveawayUnits || 0),
     });
   } catch (error) {
     console.error("Error fetching fulfillment overview analytics:", error);

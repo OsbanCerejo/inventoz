@@ -12,6 +12,8 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  Switch,
+  FormControlLabel,
 } from "@mui/material";
 import axios from "axios";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -46,10 +48,15 @@ function Product() {
   const [updatePrice, setUpdatePrice] = useState<number>(0);
   const isAdmin = user?.role === "admin";
   const canViewInboundHistory = isAdmin || hasPermission("inbound", "view");
+  const canEditProducts = isAdmin || hasPermission("products", "edit");
 
   const [vendorPrices, setVendorPrices] = useState<any[]>([]);
   const [averagePrice, setAveragePrice] = useState<number | null>(null);
   const [inboundHistory, setInboundHistory] = useState<any[]>([]);
+  const [savingHba, setSavingHba] = useState(false);
+  const [hbaEnabled, setHbaEnabled] = useState(false);
+  const [hbaQuantity, setHbaQuantity] = useState("");
+  const [hbaPrice, setHbaPrice] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -102,6 +109,20 @@ function Product() {
       fetchData(); // Fetch only if no updated product is passed
     }
   }, [id, location.state]);
+
+  useEffect(() => {
+    setHbaEnabled(Boolean(productObject.hbaEnabled));
+    setHbaQuantity(
+      productObject.hbaQuantity === null || productObject.hbaQuantity === undefined
+        ? ""
+        : String(productObject.hbaQuantity)
+    );
+    setHbaPrice(
+      productObject.hbaPrice === null || productObject.hbaPrice === undefined
+        ? ""
+        : String(productObject.hbaPrice)
+    );
+  }, [productObject.hbaEnabled, productObject.hbaPrice, productObject.hbaQuantity]);
 
   // Separate effect for pricing + inbound history.
   // Kept separate so it re-fires when auth finishes loading (user was null on first render).
@@ -246,6 +267,45 @@ function Product() {
     }
   }, [productObject.sku, updatePrice]);
 
+  const handleSaveHba = useCallback(async () => {
+    if (!productObject?.sku) return;
+
+    if (hbaEnabled) {
+      const parsedQuantity = Number(hbaQuantity);
+      const parsedPrice = Number(hbaPrice);
+
+      if (!Number.isFinite(parsedQuantity) || parsedQuantity < 0) {
+        toast.error("Enter a valid HBA quantity.", { position: "top-right" });
+        return;
+      }
+
+      if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+        toast.error("Enter a valid HBA price.", { position: "top-right" });
+        return;
+      }
+    }
+
+    setSavingHba(true);
+    try {
+      const payload = {
+        ...productObject,
+        hbaEnabled,
+        hbaQuantity: hbaEnabled ? hbaQuantity : "",
+        hbaPrice: hbaEnabled ? hbaPrice : "",
+      };
+
+      const { data: updatedProduct } = await axios.put(getApiUrl("products"), payload);
+      setProductObject(updatedProduct);
+      invalidateProductsCache();
+      toast.success("HBA settings saved.", { position: "top-right" });
+    } catch (error) {
+      console.error("Error saving HBA settings:", error);
+      toast.error("Failed to save HBA settings.", { position: "top-right" });
+    } finally {
+      setSavingHba(false);
+    }
+  }, [hbaEnabled, hbaPrice, hbaQuantity, productObject]);
+
   return (
     <div className="product-container">
       <Paper
@@ -389,6 +449,58 @@ function Product() {
                   <Box display="flex" justifyContent="space-between" py={1}>
                     <Typography variant="body1">{productObject.warehouseLocations || "—"}</Typography>
                   </Box>
+                  <Divider sx={{ my: 1.5 }} />
+                  <Typography variant="subtitle2" fontWeight="bold" mb={0.5}>
+                    HBA Listing
+                  </Typography>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={hbaEnabled}
+                        onChange={(event) => setHbaEnabled(event.target.checked)}
+                        disabled={!canEditProducts}
+                      />
+                    }
+                    label={hbaEnabled ? "Enabled" : "Disabled"}
+                  />
+                  {hbaEnabled ? (
+                    <Box display="flex" flexDirection="column" gap={1.5} mt={1}>
+                      <TextField
+                        label="HBA Quantity"
+                        type="number"
+                        size="small"
+                        value={hbaQuantity}
+                        onChange={(event) => setHbaQuantity(event.target.value)}
+                        disabled={!canEditProducts}
+                        inputProps={{ min: 0 }}
+                      />
+                      <TextField
+                        label="HBA Price"
+                        type="number"
+                        size="small"
+                        value={hbaPrice}
+                        onChange={(event) => setHbaPrice(event.target.value)}
+                        disabled={!canEditProducts}
+                        inputProps={{ min: 0, step: "0.01" }}
+                      />
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" mt={1}>
+                      This SKU is currently hidden from the standalone HBA site.
+                    </Typography>
+                  )}
+                  {canEditProducts && (
+                    <Box mt={1.5}>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={handleSaveHba}
+                        disabled={savingHba}
+                      >
+                        {savingHba ? "Saving..." : "Save HBA"}
+                      </Button>
+                    </Box>
+                  )}
 
                   {/* Vendor Pricing — admin only, fixed height scrollable */}
                   {user?.role === "admin" && (
