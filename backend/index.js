@@ -24,11 +24,21 @@ const validateCriticalEnv = () => {
 validateCriticalEnv();
 
 // CORS configuration for allowed domains
+const envOrigins = String(process.env.CORS_ORIGIN || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
   'https://inventoz-frontend.lprpnx.easypanel.host',
+  'https://inventoz-backend.lprpnx.easypanel.host',
+  'https://orders.hbadeals.com',
+  ...envOrigins,
 ];
+
+const allowedOriginSet = new Set(allowedOrigins);
 
 const corsOptions = {
   origin: (origin, callback) => {
@@ -37,7 +47,7 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    if (allowedOrigins.includes(origin)) {
+    if (allowedOriginSet.has(origin)) {
       return callback(null, true);
     }
 
