@@ -111,15 +111,24 @@ const generateHbaOrderNumber = () => {
   return `HBA-${yyyymmdd}-${randomSuffix}`;
 };
 
+const escapeHtml = (value) => {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+};
+
 const buildHbaOrderEmailHtml = ({ customer, items, totals }) => {
   const rows = items
     .map(
       (item) => `
         <tr>
-          <td style="padding:8px;border:1px solid #ddd;">${item.sku}</td>
-          <td style="padding:8px;border:1px solid #ddd;">${item.upc || ""}</td>
-          <td style="padding:8px;border:1px solid #ddd;">${item.brand || ""}</td>
-          <td style="padding:8px;border:1px solid #ddd;">${item.itemName}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(item.sku)}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(item.upc || "")}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(item.brand || "")}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(item.itemName)}</td>
           <td style="padding:8px;border:1px solid #ddd;text-align:right;">${item.quantity}</td>
           <td style="padding:8px;border:1px solid #ddd;text-align:right;">$${Number(item.price || 0).toFixed(2)}</td>
           <td style="padding:8px;border:1px solid #ddd;text-align:right;">$${Number(item.subtotal || 0).toFixed(2)}</td>
@@ -135,18 +144,18 @@ const buildHbaOrderEmailHtml = ({ customer, items, totals }) => {
 
       <h3>Contact Information</h3>
       <table style="border-collapse:collapse;">
-        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Name</td><td>${customer.name}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Company</td><td>${customer.companyName}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Address 1</td><td>${customer.addressLine1}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Address 2</td><td>${customer.addressLine2 || ""}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">City</td><td>${customer.city}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">State</td><td>${customer.state || ""}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Zip</td><td>${customer.zipCode || ""}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Country</td><td>${customer.country}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Phone</td><td>${customer.phone}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Email</td><td>${customer.email}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Sales Person</td><td>${customer.salesPerson}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Notes</td><td>${customer.notes || ""}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Name</td><td>${escapeHtml(customer.name)}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Company</td><td>${escapeHtml(customer.companyName)}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Address 1</td><td>${escapeHtml(customer.addressLine1)}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Address 2</td><td>${escapeHtml(customer.addressLine2 || "")}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">City</td><td>${escapeHtml(customer.city)}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">State</td><td>${escapeHtml(customer.state || "")}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Zip</td><td>${escapeHtml(customer.zipCode || "")}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Country</td><td>${escapeHtml(customer.country)}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Phone</td><td>${escapeHtml(customer.phone)}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Email</td><td>${escapeHtml(customer.email)}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Sales Person</td><td>${escapeHtml(customer.salesPerson)}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Notes</td><td>${escapeHtml(customer.notes || "")}</td></tr>
       </table>
 
       <h3>Order Items</h3>
@@ -310,21 +319,79 @@ router.post("/hba/submit-order", async (req, res) => {
       }
     }
 
-    const normalizedItems = items
-      .map((item) => {
-        const quantity = Math.max(0, Math.floor(Number(item.quantity || 0)));
-        const price = Number(item.price || 0);
-        return {
-          sku: String(item.sku || "").trim(),
-          upc: item.upc || "",
-          brand: item.brand || "",
-          itemName: item.itemName || "",
-          quantity,
-          price,
-          subtotal: quantity * price,
-        };
-      })
+    const allowedSalesPeople = new Set(getHbaSalesPeople());
+    if (!allowedSalesPeople.has(String(customer.salesPerson || "").trim())) {
+      return res.status(400).json({ error: "Selected sales person is invalid." });
+    }
+
+    const requestedItems = items
+      .map((item) => ({
+        sku: String(item?.sku || "").trim(),
+        quantity: Math.max(0, Math.floor(Number(item?.quantity || 0))),
+      }))
       .filter((item) => item.sku && item.quantity > 0);
+
+    if (requestedItems.length === 0) {
+      return res.status(400).json({ error: "Cart is empty." });
+    }
+
+    const requestedSkuMap = requestedItems.reduce((map, item) => {
+      map.set(item.sku, (map.get(item.sku) || 0) + item.quantity);
+      return map;
+    }, new Map());
+
+    const submittedSkus = [...requestedSkuMap.keys()];
+    const products = await Products.findAll({
+      attributes: ["sku", "upc", "brand", "itemName", "hbaEnabled", "hbaQuantity", "hbaPrice"],
+      where: {
+        sku: {
+          [Op.in]: submittedSkus,
+        },
+      },
+    });
+
+    if (products.length !== submittedSkus.length) {
+      const foundSkuSet = new Set(products.map((product) => product.sku));
+      const missingSkus = submittedSkus.filter((sku) => !foundSkuSet.has(sku));
+      return res.status(400).json({
+        error: `Some submitted SKUs are invalid: ${missingSkus.join(", ")}`,
+      });
+    }
+
+    const normalizedItems = [];
+    for (const product of products) {
+      if (!product.hbaEnabled) {
+        return res.status(400).json({ error: `SKU ${product.sku} is not available for HBA ordering.` });
+      }
+
+      const allowedQuantity = Math.max(0, Math.floor(Number(product.hbaQuantity || 0)));
+      const requestedQuantity = requestedSkuMap.get(product.sku) || 0;
+
+      if (requestedQuantity < 1) {
+        continue;
+      }
+
+      if (allowedQuantity < 1) {
+        return res.status(400).json({ error: `SKU ${product.sku} is currently sold out.` });
+      }
+
+      if (requestedQuantity > allowedQuantity) {
+        return res.status(400).json({
+          error: `Requested quantity for SKU ${product.sku} exceeds available HBA quantity.`,
+        });
+      }
+
+      const price = Number(product.hbaPrice || 0);
+      normalizedItems.push({
+        sku: product.sku,
+        upc: product.upc || "",
+        brand: product.brand || "",
+        itemName: product.itemName || "",
+        quantity: requestedQuantity,
+        price,
+        subtotal: requestedQuantity * price,
+      });
+    }
 
     if (normalizedItems.length === 0) {
       return res.status(400).json({ error: "Cart is empty." });
