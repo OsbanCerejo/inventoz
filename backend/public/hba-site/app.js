@@ -3,6 +3,7 @@ const state = {
   filteredProducts: [],
   cart: loadCart(),
   view: "catalog",
+  selectedCategory: "all",
   sortKey: "",
   sortDirection: "asc",
   eventsWired: false,
@@ -13,6 +14,7 @@ const apiBaseUrl = String(window.HBA_CONFIG?.apiBaseUrl || "").replace(/\/$/, ""
 const elements = {
   search: document.getElementById("catalog-search"),
   availabilityFilter: document.getElementById("availability-filter"),
+  categoryFilterButtons: document.getElementById("category-filter-buttons"),
   catalogView: document.getElementById("catalog-view"),
   cartView: document.getElementById("cart-view"),
   checkoutView: document.getElementById("checkout-view"),
@@ -57,6 +59,21 @@ const fallbackImage =
       <text x="50%" y="48%" text-anchor="middle" fill="#666" font-family="Arial, sans-serif" font-size="16">HBA</text>
     </svg>
   `);
+
+const preferredCategoryOrder = ["All", "Perfumes", "Cosmetics", "Skincare", "Home", "Other"];
+
+const categoryDisplayMap = new Map([
+  ["fragrance", "Perfumes"],
+  ["fragrances", "Perfumes"],
+  ["perfume", "Perfumes"],
+  ["perfumes", "Perfumes"],
+  ["cosmetic", "Cosmetics"],
+  ["cosmetics", "Cosmetics"],
+  ["skincare", "Skincare"],
+  ["skin care", "Skincare"],
+  ["home", "Home"],
+  ["other", "Other"],
+]);
 
 async function fetchCatalog() {
   const response = await fetch(`${apiBaseUrl}/products/hba/public-catalog`);
@@ -123,8 +140,70 @@ function normalizeText(value) {
     .trim();
 }
 
+function formatSizeOz(sizeOz) {
+  if (sizeOz === null || sizeOz === undefined || sizeOz === "") return "";
+  const numericSize = Number(sizeOz);
+  if (Number.isFinite(numericSize) && numericSize > 0) {
+    return `${numericSize} oz`;
+  }
+  return String(sizeOz).trim();
+}
+
+function buildItemMeta(productOrLine) {
+  const details = [];
+  const sizeLabel = formatSizeOz(productOrLine.sizeOz);
+  const strengthLabel = String(productOrLine.strength || "").trim();
+  const isFragrance = normalizeCategoryLabel(productOrLine.category) === "Perfumes";
+
+  if (sizeLabel) details.push(sizeLabel);
+  if (strengthLabel) details.push(strengthLabel);
+
+  return {
+    details,
+    showTesterBadge: isFragrance && Boolean(productOrLine.tester),
+  };
+}
+
+function renderItemNameCell(cell, productOrLine) {
+  const primary = document.createElement("div");
+  primary.className = "item-name-primary";
+  primary.textContent = productOrLine.itemName || "";
+  cell.appendChild(primary);
+
+  const metaInfo = buildItemMeta(productOrLine);
+  if (metaInfo.details.length > 0 || metaInfo.showTesterBadge) {
+    const meta = document.createElement("div");
+    meta.className = "item-name-meta";
+
+    if (metaInfo.details.length > 0) {
+      const metaText = document.createElement("span");
+      metaText.textContent = metaInfo.details.join(" · ");
+      meta.appendChild(metaText);
+    }
+
+    if (metaInfo.showTesterBadge) {
+      const badge = document.createElement("span");
+      badge.className = "tester-badge";
+      badge.textContent = "Tester";
+
+      if (metaInfo.details.length > 0) {
+        const separator = document.createElement("span");
+        separator.className = "item-meta-separator";
+        separator.textContent = "·";
+        meta.appendChild(separator);
+      }
+
+      meta.appendChild(badge);
+    }
+
+    cell.appendChild(meta);
+  }
+}
+
 function buildSearchHaystack(product) {
-  return normalizeText([product.sku, product.upc, product.brand, product.itemName].join(" "));
+  return normalizeText(
+    [product.upc, product.brand, product.itemName, formatSizeOz(product.sizeOz), product.strength].join(" ")
+  );
 }
 
 function matchesRobustSearch(product, searchValue) {
@@ -133,6 +212,58 @@ function matchesRobustSearch(product, searchValue) {
   const terms = normalizeText(searchValue).split(" ").filter(Boolean);
   if (terms.length === 0) return true;
   return terms.every((term) => haystack.includes(term));
+}
+
+function normalizeCategoryLabel(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+  return categoryDisplayMap.get(normalized) || normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function getAvailableCategories() {
+  const categories = new Set();
+  for (const product of state.products) {
+    const normalized = normalizeCategoryLabel(product.category);
+    if (normalized) {
+      categories.add(normalized);
+    }
+  }
+
+  const orderedCategories = preferredCategoryOrder.filter(
+    (category) => category === "All" || categories.has(category)
+  );
+
+  const remainingCategories = Array.from(categories)
+    .filter((category) => !preferredCategoryOrder.includes(category))
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
+  return ["all", ...orderedCategories.filter((category) => category !== "All"), ...remainingCategories];
+}
+
+function renderCategoryFilters() {
+  elements.categoryFilterButtons.innerHTML = "";
+
+  for (const category of getAvailableCategories()) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "category-filter-button";
+    button.dataset.category = category;
+    button.textContent = category === "all" ? "All" : category;
+
+    if (state.selectedCategory === category) {
+      button.classList.add("active");
+    }
+
+    button.addEventListener("click", () => {
+      state.selectedCategory = category;
+      applyFilters();
+    });
+
+    elements.categoryFilterButtons.appendChild(button);
+  }
 }
 
 function getCartSummary() {
@@ -158,6 +289,10 @@ function updateCartForProduct(product, rawQuantity) {
       upc: product.upc,
       brand: product.brand,
       itemName: product.itemName,
+      category: product.category,
+      sizeOz: product.sizeOz,
+      strength: product.strength,
+      tester: Boolean(product.tester),
       quantity,
       hbaPrice: Number(product.hbaPrice || 0),
     };
@@ -189,6 +324,7 @@ function applySort(rows) {
 function applyFilters() {
   const searchValue = elements.search.value.trim();
   const availability = elements.availabilityFilter.value;
+  const selectedCategory = state.selectedCategory;
 
   const rows = state.products.filter((product) => {
     const matchesSearch = matchesRobustSearch(product, searchValue);
@@ -196,11 +332,15 @@ function applyFilters() {
       availability === "all" ||
       (availability === "in-stock" && product.inStock) ||
       (availability === "sold-out" && !product.inStock);
+    const matchesCategory =
+      selectedCategory === "all" ||
+      normalizeCategoryLabel(product.category) === selectedCategory;
 
-    return matchesSearch && matchesAvailability;
+    return matchesSearch && matchesAvailability && matchesCategory;
   });
 
   state.filteredProducts = applySort(rows);
+  renderCategoryFilters();
   renderCatalog();
   renderSortIndicators();
 }
@@ -231,7 +371,6 @@ function renderCatalog() {
   for (const product of state.filteredProducts) {
     const fragment = elements.catalogRowTemplate.content.cloneNode(true);
     const rowImage = fragment.querySelector(".table-image");
-    const skuCell = fragment.querySelector(".sku-cell");
     const upcCell = fragment.querySelector(".upc-cell");
     const brandCell = fragment.querySelector(".brand-cell");
     const nameCell = fragment.querySelector(".name-cell");
@@ -241,10 +380,9 @@ function renderCatalog() {
 
     rowImage.src = product.image || fallbackImage;
     rowImage.alt = product.itemName;
-    skuCell.textContent = product.sku;
     upcCell.textContent = product.upc || "";
     brandCell.textContent = product.brand;
-    nameCell.textContent = product.itemName;
+    renderItemNameCell(nameCell, product);
     availableCell.textContent = String(product.hbaQuantity ?? 0);
     priceCell.textContent = currencyFormatter.format(Number(product.hbaPrice || 0));
     qtyInput.max = String(product.hbaQuantity || 0);
@@ -271,7 +409,6 @@ function renderOrderTable(targetBody, editable) {
 
   for (const line of lines) {
     const fragment = elements.cartRowTemplate.content.cloneNode(true);
-    const skuCell = fragment.querySelector(".sku-cell");
     const upcCell = fragment.querySelector(".upc-cell");
     const brandCell = fragment.querySelector(".brand-cell");
     const nameCell = fragment.querySelector(".name-cell");
@@ -279,10 +416,9 @@ function renderOrderTable(targetBody, editable) {
     const qtyInput = fragment.querySelector(".cart-row-qty-input");
     const totalCell = fragment.querySelector(".line-total-cell");
 
-    skuCell.textContent = line.sku;
     upcCell.textContent = line.upc || "";
     brandCell.textContent = line.brand;
-    nameCell.textContent = line.itemName;
+    renderItemNameCell(nameCell, line);
     priceCell.textContent = currencyFormatter.format(line.hbaPrice);
     qtyInput.value = String(line.quantity);
     totalCell.textContent = currencyFormatter.format(line.quantity * line.hbaPrice);

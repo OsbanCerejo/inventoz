@@ -230,11 +230,21 @@ router.get("/hba/public-catalog", async (req, res) => {
         "sku",
         "brand",
         "itemName",
+        "category",
+        "sizeOz",
+        "strength",
         "image",
         "upc",
         "quantity",
         "hbaQuantity",
         "hbaPrice",
+      ],
+      include: [
+        {
+          model: ProductDetails,
+          required: false,
+          attributes: ["tester"],
+        },
       ],
       where: {
         hbaEnabled: true,
@@ -243,17 +253,25 @@ router.get("/hba/public-catalog", async (req, res) => {
     });
 
     return res.json(
-      rows.map((row) => ({
-        sku: row.sku,
-        brand: row.brand,
-        itemName: row.itemName,
-        image: row.image || "",
-        upc: row.upc,
-        inventoryQuantity: row.quantity,
-        hbaQuantity: row.hbaQuantity,
-        hbaPrice: row.hbaPrice,
-        inStock: Number(row.hbaQuantity || 0) > 0,
-      }))
+      rows.map((row) => {
+        const details = row.ProductDetails || row.ProductDetail || null;
+
+        return {
+          sku: row.sku,
+          brand: row.brand,
+          itemName: row.itemName,
+          category: row.category || "",
+          sizeOz: row.sizeOz,
+          strength: row.strength,
+          tester: Boolean(details?.tester),
+          image: row.image || "",
+          upc: row.upc,
+          inventoryQuantity: row.quantity,
+          hbaQuantity: row.hbaQuantity,
+          hbaPrice: row.hbaPrice,
+          inStock: Number(row.hbaQuantity || 0) > 0,
+        };
+      })
     );
   } catch (error) {
     console.error("Error loading public HBA catalog:", error);

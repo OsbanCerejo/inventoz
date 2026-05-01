@@ -3,15 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HBA Orders</title>
+    <title>HBA Deals</title>
+    <link rel="icon" type="image/svg+xml" href="./hba-logo.svg" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="page-shell">
       <header class="page-header">
-        <div>
-          <h1>HBA Orders</h1>
-          <p class="page-subtitle">Only HBA-enabled Inventoz products appear here.</p>
+        <div class="brand-block">
+          <img class="brand-logo" src="./hba-logo.svg" alt="HBA Deals" />
+          <div class="brand-copy">
+            <p class="page-subtitle">Your one stop shop for all your wholesale needs</p>
+          </div>
         </div>
         <button id="cart-summary-button" class="cart-summary-button" type="button">
           <span class="cart-icon" aria-hidden="true">🛒</span>
@@ -22,13 +25,18 @@
 
       <main id="catalog-view">
         <section class="table-panel">
+          <div class="category-filter-bar">
+            <div class="category-filter-label">Category</div>
+            <div id="category-filter-buttons" class="category-filter-buttons"></div>
+          </div>
+
           <div class="toolbar">
             <div class="toolbar-field grow">
               <label for="catalog-search">Search</label>
               <input
                 id="catalog-search"
                 type="search"
-                placeholder="Search by SKU, UPC, brand, or item name"
+                placeholder="Search by UPC, brand, or item name"
               />
             </div>
             <div class="toolbar-field">
@@ -46,7 +54,6 @@
               <thead>
                 <tr>
                   <th>Image</th>
-                  <th>SKU</th>
                   <th>UPC</th>
                   <th>
                     <button class="sort-button" type="button" data-sort-key="brand">
@@ -102,7 +109,6 @@
             <table class="catalog-table">
               <thead>
                 <tr>
-                  <th>SKU</th>
                   <th>UPC</th>
                   <th>Brand</th>
                   <th>Item Name</th>
@@ -151,7 +157,6 @@
             <table class="catalog-table">
               <thead>
                 <tr>
-                  <th>SKU</th>
                   <th>UPC</th>
                   <th>Brand</th>
                   <th>Item Name</th>
@@ -237,7 +242,6 @@
       <template id="catalog-row-template">
         <tr>
           <td class="image-cell"><img class="table-image" alt="" /></td>
-          <td class="sku-cell"></td>
           <td class="upc-cell"></td>
           <td class="brand-cell"></td>
           <td class="name-cell"></td>
@@ -251,7 +255,6 @@
 
       <template id="cart-row-template">
         <tr>
-          <td class="sku-cell"></td>
           <td class="upc-cell"></td>
           <td class="brand-cell"></td>
           <td class="name-cell"></td>
