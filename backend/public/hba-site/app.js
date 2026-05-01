@@ -5,6 +5,7 @@ const state = {
   view: "catalog",
   sortKey: "",
   sortDirection: "asc",
+  eventsWired: false,
 };
 
 const apiBaseUrl = String(window.HBA_CONFIG?.apiBaseUrl || "").replace(/\/$/, "");
@@ -61,6 +62,14 @@ async function fetchCatalog() {
   const response = await fetch(`${apiBaseUrl}/products/hba/public-catalog`);
   if (!response.ok) {
     throw new Error(`Failed to load catalog (${response.status})`);
+  }
+  return response.json();
+}
+
+async function fetchSiteConfig() {
+  const response = await fetch(`${apiBaseUrl}/products/hba/site-config`);
+  if (!response.ok) {
+    throw new Error(`Failed to load site config (${response.status})`);
   }
   return response.json();
 }
@@ -200,10 +209,12 @@ function renderSortIndicators() {
   elements.sortIndicators.forEach((indicator) => {
     const key = indicator.dataset.indicatorFor;
     if (key !== state.sortKey) {
-      indicator.textContent = "";
+      indicator.textContent = "⇅";
+      indicator.style.color = "#b5b5b5";
       return;
     }
-    indicator.textContent = state.sortDirection === "asc" ? "▲" : "▼";
+    indicator.textContent = state.sortDirection === "asc" ? "↑" : "↓";
+    indicator.style.color = "#666";
   });
 }
 
@@ -342,12 +353,10 @@ function clearCart() {
   renderAll();
 }
 
-function populateSalesPeople() {
-  const salesPeople = Array.isArray(window.HBA_CONFIG?.salesPeople) && window.HBA_CONFIG.salesPeople.length > 0
-    ? window.HBA_CONFIG.salesPeople
-    : ["General Sales"];
+function populateSalesPeople(salesPeople) {
+  const values = Array.isArray(salesPeople) && salesPeople.length > 0 ? salesPeople : ["General Sales"];
 
-  salesPeople.forEach((person) => {
+  values.forEach((person) => {
     const option = document.createElement("option");
     option.value = person;
     option.textContent = person;
@@ -378,11 +387,11 @@ async function handleCheckoutSubmit(event) {
       price: line.hbaPrice,
     }));
 
-    await submitOrder({ customer, items });
+    const result = await submitOrder({ customer, items });
     clearCart();
     elements.checkoutForm.reset();
     state.view = "catalog";
-    elements.checkoutMessage.textContent = "Order submitted successfully.";
+    elements.checkoutMessage.textContent = `Order submitted successfully. Reference: ${result.orderNumber || "Created"}.`;
     elements.checkoutMessage.classList.add("success");
     renderAll();
   } catch (error) {
@@ -396,6 +405,9 @@ async function handleCheckoutSubmit(event) {
 }
 
 function wireEvents() {
+  if (state.eventsWired) return;
+  state.eventsWired = true;
+
   elements.search.addEventListener("input", applyFilters);
   elements.availabilityFilter.addEventListener("change", applyFilters);
   elements.cartSummaryButton.addEventListener("click", () => {
@@ -435,12 +447,12 @@ function wireEvents() {
 }
 
 async function init() {
-  populateSalesPeople();
-  wireEvents();
-  renderCartSummary();
-  renderView();
-
   try {
+    const siteConfig = await fetchSiteConfig();
+    populateSalesPeople(siteConfig.salesPeople);
+    wireEvents();
+    renderCartSummary();
+    renderView();
     state.products = await fetchCatalog();
     state.filteredProducts = [...state.products];
     applyFilters();
@@ -449,6 +461,12 @@ async function init() {
     renderCartSummary();
   } catch (error) {
     console.error(error);
+    if (elements.salesPersonSelect.options.length <= 1) {
+      populateSalesPeople(["General Sales"]);
+    }
+    wireEvents();
+    renderCartSummary();
+    renderView();
     elements.catalogEmpty.classList.remove("hidden");
     elements.catalogEmpty.textContent =
       "Unable to load catalog. Make sure the backend is running and at least one SKU has HBA enabled.";

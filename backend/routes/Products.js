@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { Products, ProductDetails, ProductHistory, StockUpdateHistory, Logs } = require("../models");
+const { Products, ProductDetails, ProductHistory, StockUpdateHistory, Logs, HbaOrder, HbaOrderItem, sequelize } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 const StockUpdateService = require("../Services/StockUpdateService");
@@ -59,6 +59,56 @@ const normalizeNullableDecimal = (value) => {
   }
 
   return parsed.toFixed(2);
+};
+
+const HBA_ORDER_RATE_LIMIT_WINDOW_MS =
+  Math.max(1, Number(process.env.HBA_ORDER_RATE_LIMIT_WINDOW_MINUTES || 15)) * 60 * 1000;
+const HBA_ORDER_RATE_LIMIT_MAX_REQUESTS = Math.max(
+  1,
+  Number(process.env.HBA_ORDER_RATE_LIMIT_MAX_REQUESTS || 5)
+);
+const hbaOrderSubmissionLog = new Map();
+
+const getClientIp = (req) => {
+  const forwardedFor = req.headers["x-forwarded-for"];
+  if (typeof forwardedFor === "string" && forwardedFor.trim()) {
+    return forwardedFor.split(",")[0].trim();
+  }
+  return req.ip || req.connection?.remoteAddress || "unknown";
+};
+
+const checkHbaOrderRateLimit = (ipAddress) => {
+  const now = Date.now();
+  const windowStart = now - HBA_ORDER_RATE_LIMIT_WINDOW_MS;
+  const previousEntries = hbaOrderSubmissionLog.get(ipAddress) || [];
+  const recentEntries = previousEntries.filter((timestamp) => timestamp >= windowStart);
+
+  if (recentEntries.length >= HBA_ORDER_RATE_LIMIT_MAX_REQUESTS) {
+    const retryAfterMs = recentEntries[0] + HBA_ORDER_RATE_LIMIT_WINDOW_MS - now;
+    hbaOrderSubmissionLog.set(ipAddress, recentEntries);
+    return {
+      limited: true,
+      retryAfterSeconds: Math.max(1, Math.ceil(retryAfterMs / 1000)),
+    };
+  }
+
+  recentEntries.push(now);
+  hbaOrderSubmissionLog.set(ipAddress, recentEntries);
+  return { limited: false, retryAfterSeconds: 0 };
+};
+
+const getHbaSalesPeople = () => {
+  return String(process.env.HBA_SALES_PEOPLE || "General Sales")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+};
+
+const generateHbaOrderNumber = () => {
+  const now = new Date();
+  const yyyymmdd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  const randomSuffix = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `HBA-${yyyymmdd}-${randomSuffix}`;
 };
 
 const buildHbaOrderEmailHtml = ({ customer, items, totals }) => {
@@ -202,9 +252,25 @@ router.get("/hba/public-catalog", async (req, res) => {
   }
 });
 
+router.get("/hba/site-config", async (req, res) => {
+  return res.json({
+    salesPeople: getHbaSalesPeople(),
+  });
+});
+
 router.post("/hba/submit-order", async (req, res) => {
   try {
     const EmailService = require("../Services/EmailService");
+    const clientIp = getClientIp(req);
+    const rateLimitState = checkHbaOrderRateLimit(clientIp);
+
+    if (rateLimitState.limited) {
+      res.set("Retry-After", String(rateLimitState.retryAfterSeconds));
+      return res.status(429).json({
+        error: "Too many order submissions. Please wait a few minutes and try again.",
+      });
+    }
+
     const recipientListRaw =
       process.env.HBA_ORDER_NOTIFICATION_EMAIL ||
       process.env.HBA_ORDER_NOTIFICATION_EMAILS ||
@@ -274,20 +340,77 @@ router.post("/hba/submit-order", async (req, res) => {
       { totalSkus: 0, totalUnits: 0, totalPrice: 0 }
     );
 
+    const orderNumber = generateHbaOrderNumber();
+    const userAgent = String(req.headers["user-agent"] || "");
+
+    const orderRecord = await sequelize.transaction(async (transaction) => {
+      const createdOrder = await HbaOrder.create(
+        {
+          orderNumber,
+          customerName: customer.name,
+          companyName: customer.companyName,
+          addressLine1: customer.addressLine1,
+          addressLine2: customer.addressLine2 || "",
+          city: customer.city,
+          state: customer.state || "",
+          zipCode: customer.zipCode || "",
+          country: customer.country,
+          phone: customer.phone,
+          email: customer.email,
+          salesPerson: customer.salesPerson,
+          notes: customer.notes || "",
+          totalSkus: totals.totalSkus,
+          totalUnits: totals.totalUnits,
+          totalPrice: totals.totalPrice.toFixed(2),
+          submittedIp: clientIp,
+          userAgent,
+          notificationStatus: "pending",
+          notificationRecipients: recipients.join(", "),
+        },
+        { transaction }
+      );
+
+      await HbaOrderItem.bulkCreate(
+        normalizedItems.map((item) => ({
+          orderId: createdOrder.id,
+          sku: item.sku,
+          upc: item.upc,
+          brand: item.brand,
+          itemName: item.itemName,
+          quantity: item.quantity,
+          unitPrice: item.price.toFixed(2),
+          subtotal: item.subtotal.toFixed(2),
+        })),
+        { transaction }
+      );
+
+      return createdOrder;
+    });
+
     const html = buildHbaOrderEmailHtml({ customer, items: normalizedItems, totals });
     const text = buildHbaOrderEmailText({ customer, items: normalizedItems, totals });
     const success = await EmailService.sendEmail({
       to: recipients,
-      subject: `HBA Order Request - ${customer.companyName} - ${customer.name}`,
+      subject: `HBA Order Request ${orderNumber} - ${customer.companyName} - ${customer.name}`,
       html,
       text,
     });
 
     if (!success) {
+      await orderRecord.update({
+        notificationStatus: "failed",
+        notificationError: "Failed to send order email.",
+      });
       return res.status(500).json({ error: "Failed to send order email." });
     }
 
-    return res.json({ success: true });
+    await orderRecord.update({
+      notificationStatus: "sent",
+      notificationSentAt: new Date(),
+      notificationError: null,
+    });
+
+    return res.json({ success: true, orderNumber });
   } catch (error) {
     console.error("Error submitting HBA order:", error);
     return res.status(500).json({ error: "Failed to submit HBA order." });

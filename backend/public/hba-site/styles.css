@@ -137,7 +137,11 @@ body {
 
 .sort-indicator {
   display: inline-block;
-  min-width: 10px;
+  min-width: 16px;
+  margin-left: 4px;
+  color: #b5b5b5;
+  font-size: 12px;
+  letter-spacing: -1px;
 }
 
 .image-cell {
