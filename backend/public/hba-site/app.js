@@ -100,9 +100,17 @@ async function submitOrder(payload) {
     body: JSON.stringify(payload),
   });
 
-  const data = await response.json().catch(() => ({}));
+  const rawBody = await response.text();
+  let data = {};
+  try {
+    data = rawBody ? JSON.parse(rawBody) : {};
+  } catch (error) {
+    data = {};
+  }
+
   if (!response.ok) {
-    throw new Error(data.error || `Failed to submit order (${response.status})`);
+    const fallbackMessage = rawBody ? rawBody.slice(0, 240) : `Failed to submit order (${response.status})`;
+    throw new Error(data.error || data.details || fallbackMessage);
   }
 
   return data;

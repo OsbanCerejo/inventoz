@@ -498,7 +498,25 @@ router.post("/hba/submit-order", async (req, res) => {
     return res.json({ success: true, orderNumber });
   } catch (error) {
     console.error("Error submitting HBA order:", error);
-    return res.status(500).json({ error: "Failed to submit HBA order." });
+    if (error?.original) {
+      console.error("Original database error:", {
+        name: error.original.name,
+        message: error.original.message,
+        code: error.original.code,
+        errno: error.original.errno,
+        sqlMessage: error.original.sqlMessage,
+      });
+    }
+
+    const details =
+      process.env.NODE_ENV === "development"
+        ? error?.message || "Failed to submit HBA order."
+        : undefined;
+
+    return res.status(500).json({
+      error: "Failed to submit HBA order.",
+      ...(details ? { details } : {}),
+    });
   }
 });
 
