@@ -3,47 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HBA Order Catalog</title>
+    <title>HBA Orders</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="site-shell">
-      <header class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">Wholesale Catalog</p>
-          <h1>HBA Order Site</h1>
-          <p class="subcopy">
-            Browse the live HBA assortment, see posted quantities and pricing,
-            and build a quick order draft.
-          </p>
+    <div class="page-shell">
+      <header class="page-header">
+        <div>
+          <h1>HBA Orders</h1>
+          <p class="page-subtitle">Only HBA-enabled Inventoz products appear here.</p>
         </div>
-        <aside class="hero-panel">
-          <div class="stat-card">
-            <span class="stat-label">Visible SKUs</span>
-            <strong class="stat-value" id="visible-sku-count">0</strong>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">In Stock</span>
-            <strong class="stat-value" id="in-stock-count">0</strong>
-          </div>
-        </aside>
+        <button id="cart-summary-button" class="cart-summary-button" type="button">
+          <span class="cart-icon" aria-hidden="true">🛒</span>
+          <span id="cart-summary-lines">0 SKUs</span>
+          <strong id="cart-summary-price">$0.00</strong>
+        </button>
       </header>
 
-      <main class="layout">
-        <section class="catalog-panel">
+      <main id="catalog-view">
+        <section class="table-panel">
           <div class="toolbar">
-            <div class="toolbar-group grow">
-              <label class="field-label" for="catalog-search">Search</label>
+            <div class="toolbar-field grow">
+              <label for="catalog-search">Search</label>
               <input
                 id="catalog-search"
-                class="text-input"
                 type="search"
-                placeholder="Search by SKU, brand, or item name"
+                placeholder="Search by SKU, UPC, brand, or item name"
               />
             </div>
-            <div class="toolbar-group">
-              <label class="field-label" for="availability-filter">Availability</label>
-              <select id="availability-filter" class="select-input">
+            <div class="toolbar-field">
+              <label for="availability-filter">Availability</label>
+              <select id="availability-filter">
                 <option value="all">All</option>
                 <option value="in-stock">In Stock</option>
                 <option value="sold-out">Sold Out</option>
@@ -51,99 +41,235 @@
             </div>
           </div>
 
-          <div id="catalog-grid" class="catalog-grid"></div>
+          <div class="table-wrap">
+            <table class="catalog-table">
+              <thead>
+                <tr>
+                  <th>Image</th>
+                  <th>SKU</th>
+                  <th>UPC</th>
+                  <th>
+                    <button class="sort-button" type="button" data-sort-key="brand">
+                      Brand <span class="sort-indicator" data-indicator-for="brand"></span>
+                    </button>
+                  </th>
+                  <th>
+                    <button class="sort-button" type="button" data-sort-key="itemName">
+                      Item Name <span class="sort-indicator" data-indicator-for="itemName"></span>
+                    </button>
+                  </th>
+                  <th>
+                    <button class="sort-button" type="button" data-sort-key="hbaQuantity">
+                      Available <span class="sort-indicator" data-indicator-for="hbaQuantity"></span>
+                    </button>
+                  </th>
+                  <th>
+                    <button class="sort-button" type="button" data-sort-key="hbaPrice">
+                      Price <span class="sort-indicator" data-indicator-for="hbaPrice"></span>
+                    </button>
+                  </th>
+                  <th>Qty</th>
+                </tr>
+              </thead>
+              <tbody id="catalog-body"></tbody>
+            </table>
+          </div>
+
           <div id="catalog-empty" class="empty-state hidden">
-            <h2>No HBA products found</h2>
-            <p>Turn on HBA for a product inside Inventoz to make it appear here.</p>
+            No HBA products found.
           </div>
         </section>
+      </main>
 
-        <aside class="cart-panel">
-          <div class="cart-header">
-            <div>
-              <p class="eyebrow">Draft Order</p>
-              <h2>Cart</h2>
+      <main id="cart-view" class="hidden">
+        <section class="cart-page-panel">
+          <div class="cart-page-header">
+            <h2>Cart</h2>
+            <div class="cart-page-actions">
+              <button id="back-to-products-button" class="secondary-button" type="button">
+                Back to Products
+              </button>
+              <button id="clear-cart-button" class="secondary-button danger-button" type="button">
+                Clear Cart
+              </button>
+              <button id="complete-order-button" class="primary-button" type="button">
+                Complete Order
+              </button>
             </div>
-            <span id="cart-line-count" class="pill">0 lines</span>
           </div>
 
-          <div id="cart-items" class="cart-items"></div>
+          <div class="table-wrap">
+            <table class="catalog-table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>UPC</th>
+                  <th>Brand</th>
+                  <th>Item Name</th>
+                  <th>Price</th>
+                  <th>Qty</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="cart-table-body"></tbody>
+            </table>
+          </div>
 
-          <div class="cart-footer">
+          <div id="cart-empty" class="empty-state hidden">
+            Your cart is empty.
+          </div>
+
+          <div class="cart-totals-panel">
+            <div class="summary-row">
+              <span>Total SKUs</span>
+              <strong id="cart-total-lines">0</strong>
+            </div>
             <div class="summary-row">
               <span>Total Units</span>
               <strong id="cart-total-units">0</strong>
             </div>
-            <div class="summary-row summary-total">
-              <span>Estimated Total</span>
+            <div class="summary-row">
+              <span>Total Price</span>
               <strong id="cart-total-price">$0.00</strong>
             </div>
-            <button id="copy-order-button" class="primary-button" type="button">
-              Copy Order Summary
-            </button>
-            <p class="helper-copy">
-              This first version is intentionally lightweight: it surfaces only HBA-enabled products from Inventoz.
-              Order submission and stock deduction can be added later without reworking the catalog foundation.
-            </p>
           </div>
-        </aside>
+        </section>
       </main>
+
+      <main id="checkout-view" class="hidden">
+        <section class="checkout-panel">
+          <div class="cart-page-header">
+            <h2>Checkout</h2>
+            <div class="cart-page-actions">
+              <button id="checkout-back-button" class="secondary-button" type="button">
+                Change Order
+              </button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="catalog-table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>UPC</th>
+                  <th>Brand</th>
+                  <th>Item Name</th>
+                  <th>Price</th>
+                  <th>Qty</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="checkout-table-body"></tbody>
+            </table>
+          </div>
+
+          <div class="checkout-summary">
+            <p><strong>Products:</strong> <span id="checkout-total-lines">0</span></p>
+            <p><strong>Quantity:</strong> <span id="checkout-total-units">0</span></p>
+            <p><strong>Total:</strong> <span id="checkout-total-price">$0.00</span></p>
+          </div>
+
+          <form id="checkout-form" class="checkout-form">
+            <h3>Contact Information</h3>
+            <div class="form-grid">
+              <label>
+                <span>Name *</span>
+                <input id="customer-name" name="name" required />
+              </label>
+              <label>
+                <span>Company Name *</span>
+                <input id="customer-companyName" name="companyName" required />
+              </label>
+              <label>
+                <span>Address Line 1 *</span>
+                <input id="customer-addressLine1" name="addressLine1" required />
+              </label>
+              <label>
+                <span>Address Line 2</span>
+                <input id="customer-addressLine2" name="addressLine2" />
+              </label>
+              <label>
+                <span>City *</span>
+                <input id="customer-city" name="city" required />
+              </label>
+              <label>
+                <span>State</span>
+                <input id="customer-state" name="state" />
+              </label>
+              <label>
+                <span>Zip Code</span>
+                <input id="customer-zipCode" name="zipCode" />
+              </label>
+              <label>
+                <span>Country *</span>
+                <input id="customer-country" name="country" required />
+              </label>
+              <label>
+                <span>Phone *</span>
+                <input id="customer-phone" name="phone" required />
+              </label>
+              <label>
+                <span>Email *</span>
+                <input id="customer-email" name="email" type="email" required />
+              </label>
+              <label>
+                <span>Sales Person *</span>
+                <select id="customer-salesPerson" name="salesPerson" required>
+                  <option value="">--- Select One ---</option>
+                </select>
+              </label>
+              <label class="full-width">
+                <span>Notes</span>
+                <textarea id="customer-notes" name="notes" rows="4"></textarea>
+              </label>
+            </div>
+            <div class="checkout-actions">
+              <button id="submit-order-button" class="primary-button" type="submit">
+                Place Order
+              </button>
+            </div>
+            <p id="checkout-message" class="checkout-message"></p>
+          </form>
+        </section>
+      </main>
+
+      <template id="catalog-row-template">
+        <tr>
+          <td class="image-cell"><img class="table-image" alt="" /></td>
+          <td class="sku-cell"></td>
+          <td class="upc-cell"></td>
+          <td class="brand-cell"></td>
+          <td class="name-cell"></td>
+          <td class="available-cell"></td>
+          <td class="price-cell"></td>
+          <td class="qty-cell">
+            <input class="row-qty-input" type="number" min="0" />
+          </td>
+        </tr>
+      </template>
+
+      <template id="cart-row-template">
+        <tr>
+          <td class="sku-cell"></td>
+          <td class="upc-cell"></td>
+          <td class="brand-cell"></td>
+          <td class="name-cell"></td>
+          <td class="price-cell"></td>
+          <td class="qty-cell">
+            <input class="cart-row-qty-input" type="number" min="0" />
+          </td>
+          <td class="line-total-cell"></td>
+        </tr>
+      </template>
+
+      <script>
+        window.HBA_CONFIG = window.HBA_CONFIG || {
+          apiBaseUrl: "",
+          salesPeople: ["General Sales"],
+        };
+      </script>
+      <script src="./app.js" defer></script>
     </div>
-
-    <template id="product-card-template">
-      <article class="product-card">
-        <div class="card-image-wrap">
-          <img class="card-image" alt="" />
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="brand-pill"></span>
-            <span class="stock-pill"></span>
-          </div>
-          <h3 class="product-name"></h3>
-          <p class="product-sku"></p>
-          <div class="product-metrics">
-            <div>
-              <span class="metric-label">Posted Qty</span>
-              <strong class="posted-qty"></strong>
-            </div>
-            <div>
-              <span class="metric-label">Unit Price</span>
-              <strong class="unit-price"></strong>
-            </div>
-          </div>
-          <div class="order-row">
-            <label>
-              <span class="field-label">Qty</span>
-              <input class="quantity-input" type="number" min="0" value="0" />
-            </label>
-            <button class="secondary-button add-button" type="button">Add</button>
-          </div>
-        </div>
-      </article>
-    </template>
-
-    <template id="cart-item-template">
-      <div class="cart-item">
-        <div class="cart-item-copy">
-          <strong class="cart-item-name"></strong>
-          <span class="cart-item-meta"></span>
-        </div>
-        <div class="cart-item-actions">
-          <label>
-            <span class="field-label">Qty</span>
-            <input class="cart-item-qty" type="number" min="0" value="1" />
-          </label>
-          <strong class="cart-item-total"></strong>
-        </div>
-      </div>
-    </template>
-
-    <script>
-      window.HBA_CONFIG = window.HBA_CONFIG || {
-        apiBaseUrl: "",
-      };
-    </script>
-    <script src="./app.js" defer></script>
   </body>
 </html>

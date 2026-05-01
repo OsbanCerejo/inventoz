@@ -2,6 +2,9 @@ const state = {
   products: [],
   filteredProducts: [],
   cart: loadCart(),
+  view: "catalog",
+  sortKey: "",
+  sortDirection: "asc",
 };
 
 const apiBaseUrl = String(window.HBA_CONFIG?.apiBaseUrl || "").replace(/\/$/, "");
@@ -9,17 +12,35 @@ const apiBaseUrl = String(window.HBA_CONFIG?.apiBaseUrl || "").replace(/\/$/, ""
 const elements = {
   search: document.getElementById("catalog-search"),
   availabilityFilter: document.getElementById("availability-filter"),
-  grid: document.getElementById("catalog-grid"),
-  empty: document.getElementById("catalog-empty"),
-  visibleSkuCount: document.getElementById("visible-sku-count"),
-  inStockCount: document.getElementById("in-stock-count"),
-  cartItems: document.getElementById("cart-items"),
-  cartLineCount: document.getElementById("cart-line-count"),
+  catalogView: document.getElementById("catalog-view"),
+  cartView: document.getElementById("cart-view"),
+  checkoutView: document.getElementById("checkout-view"),
+  catalogBody: document.getElementById("catalog-body"),
+  catalogEmpty: document.getElementById("catalog-empty"),
+  cartEmpty: document.getElementById("cart-empty"),
+  cartTableBody: document.getElementById("cart-table-body"),
+  checkoutTableBody: document.getElementById("checkout-table-body"),
+  cartSummaryButton: document.getElementById("cart-summary-button"),
+  cartSummaryLines: document.getElementById("cart-summary-lines"),
+  cartSummaryPrice: document.getElementById("cart-summary-price"),
+  cartTotalLines: document.getElementById("cart-total-lines"),
   cartTotalUnits: document.getElementById("cart-total-units"),
   cartTotalPrice: document.getElementById("cart-total-price"),
-  copyOrderButton: document.getElementById("copy-order-button"),
-  productCardTemplate: document.getElementById("product-card-template"),
-  cartItemTemplate: document.getElementById("cart-item-template"),
+  checkoutTotalLines: document.getElementById("checkout-total-lines"),
+  checkoutTotalUnits: document.getElementById("checkout-total-units"),
+  checkoutTotalPrice: document.getElementById("checkout-total-price"),
+  backToProductsButton: document.getElementById("back-to-products-button"),
+  clearCartButton: document.getElementById("clear-cart-button"),
+  completeOrderButton: document.getElementById("complete-order-button"),
+  checkoutBackButton: document.getElementById("checkout-back-button"),
+  checkoutForm: document.getElementById("checkout-form"),
+  submitOrderButton: document.getElementById("submit-order-button"),
+  checkoutMessage: document.getElementById("checkout-message"),
+  salesPersonSelect: document.getElementById("customer-salesPerson"),
+  catalogRowTemplate: document.getElementById("catalog-row-template"),
+  cartRowTemplate: document.getElementById("cart-row-template"),
+  sortButtons: document.querySelectorAll(".sort-button"),
+  sortIndicators: document.querySelectorAll(".sort-indicator"),
 };
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -30,10 +51,9 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
 const fallbackImage =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320">
-      <rect width="320" height="320" rx="28" fill="#f2ece1"/>
-      <text x="50%" y="48%" text-anchor="middle" fill="#71563d" font-family="Georgia, serif" font-size="34">HBA</text>
-      <text x="50%" y="60%" text-anchor="middle" fill="#9a7f61" font-family="Arial, sans-serif" font-size="16">No image</text>
+    <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">
+      <rect width="80" height="80" fill="#f6f6f6"/>
+      <text x="50%" y="48%" text-anchor="middle" fill="#666" font-family="Arial, sans-serif" font-size="16">HBA</text>
     </svg>
   `);
 
@@ -42,8 +62,24 @@ async function fetchCatalog() {
   if (!response.ok) {
     throw new Error(`Failed to load catalog (${response.status})`);
   }
-
   return response.json();
+}
+
+async function submitOrder(payload) {
+  const response = await fetch(`${apiBaseUrl}/products/hba/submit-order`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || `Failed to submit order (${response.status})`);
+  }
+
+  return data;
 }
 
 function loadCart() {
@@ -61,9 +97,33 @@ function persistCart() {
 }
 
 function sanitizeQuantity(rawValue, maxQuantity) {
+  if (rawValue === "" || rawValue === null || rawValue === undefined) {
+    return 0;
+  }
+
   const parsed = Number(rawValue);
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
   return Math.min(Math.floor(parsed), Math.max(0, Number(maxQuantity || 0)));
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildSearchHaystack(product) {
+  return normalizeText([product.sku, product.upc, product.brand, product.itemName].join(" "));
+}
+
+function matchesRobustSearch(product, searchValue) {
+  if (!searchValue) return true;
+  const haystack = buildSearchHaystack(product);
+  const terms = normalizeText(searchValue).split(" ").filter(Boolean);
+  if (terms.length === 0) return true;
+  return terms.every((term) => haystack.includes(term));
 }
 
 function getCartSummary() {
@@ -78,17 +138,51 @@ function getCartSummary() {
   );
 }
 
+function updateCartForProduct(product, rawQuantity) {
+  const quantity = sanitizeQuantity(rawQuantity, product.hbaQuantity);
+
+  if (quantity === 0) {
+    delete state.cart[product.sku];
+  } else {
+    state.cart[product.sku] = {
+      sku: product.sku,
+      upc: product.upc,
+      brand: product.brand,
+      itemName: product.itemName,
+      quantity,
+      hbaPrice: Number(product.hbaPrice || 0),
+    };
+  }
+
+  persistCart();
+  renderAll();
+}
+
+function applySort(rows) {
+  if (!state.sortKey) return rows;
+
+  const direction = state.sortDirection === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const aValue = a[state.sortKey];
+    const bValue = b[state.sortKey];
+
+    if (state.sortKey === "hbaQuantity" || state.sortKey === "hbaPrice") {
+      return (Number(aValue || 0) - Number(bValue || 0)) * direction;
+    }
+
+    return String(aValue || "").localeCompare(String(bValue || ""), undefined, {
+      sensitivity: "base",
+      numeric: true,
+    }) * direction;
+  });
+}
+
 function applyFilters() {
-  const searchValue = elements.search.value.trim().toLowerCase();
+  const searchValue = elements.search.value.trim();
   const availability = elements.availabilityFilter.value;
 
-  state.filteredProducts = state.products.filter((product) => {
-    const matchesSearch =
-      !searchValue ||
-      product.sku.toLowerCase().includes(searchValue) ||
-      product.brand.toLowerCase().includes(searchValue) ||
-      product.itemName.toLowerCase().includes(searchValue);
-
+  const rows = state.products.filter((product) => {
+    const matchesSearch = matchesRobustSearch(product, searchValue);
     const matchesAvailability =
       availability === "all" ||
       (availability === "in-stock" && product.inStock) ||
@@ -97,179 +191,267 @@ function applyFilters() {
     return matchesSearch && matchesAvailability;
   });
 
+  state.filteredProducts = applySort(rows);
   renderCatalog();
+  renderSortIndicators();
+}
+
+function renderSortIndicators() {
+  elements.sortIndicators.forEach((indicator) => {
+    const key = indicator.dataset.indicatorFor;
+    if (key !== state.sortKey) {
+      indicator.textContent = "";
+      return;
+    }
+    indicator.textContent = state.sortDirection === "asc" ? "▲" : "▼";
+  });
 }
 
 function renderCatalog() {
-  elements.grid.innerHTML = "";
-
-  elements.visibleSkuCount.textContent = String(state.products.length);
-  elements.inStockCount.textContent = String(
-    state.products.filter((product) => product.inStock).length
-  );
+  elements.catalogBody.innerHTML = "";
 
   if (state.filteredProducts.length === 0) {
-    elements.empty.classList.remove("hidden");
+    elements.catalogEmpty.classList.remove("hidden");
     return;
   }
 
-  elements.empty.classList.add("hidden");
+  elements.catalogEmpty.classList.add("hidden");
 
   for (const product of state.filteredProducts) {
-    const fragment = elements.productCardTemplate.content.cloneNode(true);
-    const card = fragment.querySelector(".product-card");
-    const image = fragment.querySelector(".card-image");
-    const brandPill = fragment.querySelector(".brand-pill");
-    const stockPill = fragment.querySelector(".stock-pill");
-    const name = fragment.querySelector(".product-name");
-    const sku = fragment.querySelector(".product-sku");
-    const postedQty = fragment.querySelector(".posted-qty");
-    const unitPrice = fragment.querySelector(".unit-price");
-    const quantityInput = fragment.querySelector(".quantity-input");
-    const addButton = fragment.querySelector(".add-button");
+    const fragment = elements.catalogRowTemplate.content.cloneNode(true);
+    const rowImage = fragment.querySelector(".table-image");
+    const skuCell = fragment.querySelector(".sku-cell");
+    const upcCell = fragment.querySelector(".upc-cell");
+    const brandCell = fragment.querySelector(".brand-cell");
+    const nameCell = fragment.querySelector(".name-cell");
+    const availableCell = fragment.querySelector(".available-cell");
+    const priceCell = fragment.querySelector(".price-cell");
+    const qtyInput = fragment.querySelector(".row-qty-input");
 
-    image.src = product.image || fallbackImage;
-    image.alt = product.itemName;
-    brandPill.textContent = product.brand;
-    stockPill.textContent = product.inStock ? "In Stock" : "Sold Out";
-    stockPill.classList.add(product.inStock ? "in-stock" : "sold-out");
-    name.textContent = product.itemName;
-    sku.textContent = product.sku;
-    postedQty.textContent = String(product.hbaQuantity ?? 0);
-    unitPrice.textContent = currencyFormatter.format(Number(product.hbaPrice || 0));
-    quantityInput.max = String(product.hbaQuantity || 0);
-    quantityInput.disabled = !product.inStock;
-    addButton.disabled = !product.inStock;
+    rowImage.src = product.image || fallbackImage;
+    rowImage.alt = product.itemName;
+    skuCell.textContent = product.sku;
+    upcCell.textContent = product.upc || "";
+    brandCell.textContent = product.brand;
+    nameCell.textContent = product.itemName;
+    availableCell.textContent = String(product.hbaQuantity ?? 0);
+    priceCell.textContent = currencyFormatter.format(Number(product.hbaPrice || 0));
+    qtyInput.max = String(product.hbaQuantity || 0);
+    qtyInput.disabled = !product.inStock;
 
     const existingLine = state.cart[product.sku];
-    if (existingLine) {
-      quantityInput.value = String(existingLine.quantity);
-      addButton.textContent = "Update";
-    }
+    qtyInput.value = existingLine ? String(existingLine.quantity) : "";
 
-    addButton.addEventListener("click", () => {
-      const quantity = sanitizeQuantity(quantityInput.value, product.hbaQuantity);
-
-      if (quantity === 0) {
-        delete state.cart[product.sku];
-      } else {
-        state.cart[product.sku] = {
-          sku: product.sku,
-          brand: product.brand,
-          itemName: product.itemName,
-          quantity,
-          hbaPrice: Number(product.hbaPrice || 0),
-        };
+    const commitValue = () => updateCartForProduct(product, qtyInput.value);
+    qtyInput.addEventListener("blur", commitValue);
+    qtyInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        qtyInput.blur();
       }
-
-      persistCart();
-      renderCatalog();
-      renderCart();
     });
 
-    card.dataset.sku = product.sku;
-    elements.grid.appendChild(fragment);
+    elements.catalogBody.appendChild(fragment);
   }
 }
 
-function renderCart() {
-  elements.cartItems.innerHTML = "";
-
+function renderOrderTable(targetBody, editable) {
+  targetBody.innerHTML = "";
   const lines = Object.values(state.cart);
-  const summary = getCartSummary();
-
-  elements.cartLineCount.textContent = `${summary.lineCount} line${summary.lineCount === 1 ? "" : "s"}`;
-  elements.cartTotalUnits.textContent = String(summary.totalUnits);
-  elements.cartTotalPrice.textContent = currencyFormatter.format(summary.totalPrice);
-
-  if (lines.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-    empty.innerHTML = "<h2>Your cart is empty</h2><p>Add any HBA-enabled product to start building a draft order.</p>";
-    elements.cartItems.appendChild(empty);
-    return;
-  }
 
   for (const line of lines) {
-    const fragment = elements.cartItemTemplate.content.cloneNode(true);
-    const name = fragment.querySelector(".cart-item-name");
-    const meta = fragment.querySelector(".cart-item-meta");
-    const qtyInput = fragment.querySelector(".cart-item-qty");
-    const total = fragment.querySelector(".cart-item-total");
+    const fragment = elements.cartRowTemplate.content.cloneNode(true);
+    const skuCell = fragment.querySelector(".sku-cell");
+    const upcCell = fragment.querySelector(".upc-cell");
+    const brandCell = fragment.querySelector(".brand-cell");
+    const nameCell = fragment.querySelector(".name-cell");
+    const priceCell = fragment.querySelector(".price-cell");
+    const qtyInput = fragment.querySelector(".cart-row-qty-input");
+    const totalCell = fragment.querySelector(".line-total-cell");
 
-    name.textContent = line.itemName;
-    meta.textContent = `${line.sku} • ${currencyFormatter.format(line.hbaPrice)} each`;
+    skuCell.textContent = line.sku;
+    upcCell.textContent = line.upc || "";
+    brandCell.textContent = line.brand;
+    nameCell.textContent = line.itemName;
+    priceCell.textContent = currencyFormatter.format(line.hbaPrice);
     qtyInput.value = String(line.quantity);
-    total.textContent = currencyFormatter.format(line.quantity * line.hbaPrice);
+    totalCell.textContent = currencyFormatter.format(line.quantity * line.hbaPrice);
 
     const currentProduct = state.products.find((product) => product.sku === line.sku);
     qtyInput.max = String(currentProduct?.hbaQuantity || 0);
+    qtyInput.disabled = !editable;
 
-    qtyInput.addEventListener("change", () => {
-      const quantity = sanitizeQuantity(qtyInput.value, currentProduct?.hbaQuantity || 0);
-      if (quantity === 0) {
-        delete state.cart[line.sku];
-      } else {
-        state.cart[line.sku].quantity = quantity;
-      }
+    if (editable) {
+      qtyInput.addEventListener("blur", () => {
+        updateCartForProduct(currentProduct || line, qtyInput.value);
+      });
+      qtyInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          qtyInput.blur();
+        }
+      });
+    }
 
-      persistCart();
-      renderCatalog();
-      renderCart();
-    });
-
-    elements.cartItems.appendChild(fragment);
+    targetBody.appendChild(fragment);
   }
 }
 
-async function copyOrderSummary() {
+function renderCartView() {
   const lines = Object.values(state.cart);
-  if (lines.length === 0) return;
+  if (lines.length === 0) {
+    elements.cartEmpty.classList.remove("hidden");
+  } else {
+    elements.cartEmpty.classList.add("hidden");
+  }
 
+  renderOrderTable(elements.cartTableBody, true);
+}
+
+function renderCheckoutView() {
+  renderOrderTable(elements.checkoutTableBody, false);
+}
+
+function renderCartSummary() {
   const summary = getCartSummary();
-  const text = [
-    "HBA Order Draft",
-    "",
-    ...lines.map((line) => `${line.sku} | ${line.itemName} | Qty ${line.quantity} | ${currencyFormatter.format(line.hbaPrice)} each | ${currencyFormatter.format(line.quantity * line.hbaPrice)}`),
-    "",
-    `Total Units: ${summary.totalUnits}`,
-    `Estimated Total: ${currencyFormatter.format(summary.totalPrice)}`,
-  ].join("\n");
+  elements.cartSummaryLines.textContent = `${summary.lineCount} SKU${summary.lineCount === 1 ? "" : "s"}`;
+  elements.cartSummaryPrice.textContent = currencyFormatter.format(summary.totalPrice);
+  elements.cartTotalLines.textContent = String(summary.lineCount);
+  elements.cartTotalUnits.textContent = String(summary.totalUnits);
+  elements.cartTotalPrice.textContent = currencyFormatter.format(summary.totalPrice);
+  elements.checkoutTotalLines.textContent = String(summary.lineCount);
+  elements.checkoutTotalUnits.textContent = String(summary.totalUnits);
+  elements.checkoutTotalPrice.textContent = currencyFormatter.format(summary.totalPrice);
+}
+
+function renderView() {
+  elements.catalogView.classList.toggle("hidden", state.view !== "catalog");
+  elements.cartView.classList.toggle("hidden", state.view !== "cart");
+  elements.checkoutView.classList.toggle("hidden", state.view !== "checkout");
+}
+
+function renderAll() {
+  renderCatalog();
+  renderCartView();
+  renderCheckoutView();
+  renderCartSummary();
+  renderView();
+}
+
+function clearCart() {
+  state.cart = {};
+  persistCart();
+  renderAll();
+}
+
+function populateSalesPeople() {
+  const salesPeople = Array.isArray(window.HBA_CONFIG?.salesPeople) && window.HBA_CONFIG.salesPeople.length > 0
+    ? window.HBA_CONFIG.salesPeople
+    : ["General Sales"];
+
+  salesPeople.forEach((person) => {
+    const option = document.createElement("option");
+    option.value = person;
+    option.textContent = person;
+    elements.salesPersonSelect.appendChild(option);
+  });
+}
+
+function getCheckoutFormData() {
+  const formData = new FormData(elements.checkoutForm);
+  return Object.fromEntries(formData.entries());
+}
+
+async function handleCheckoutSubmit(event) {
+  event.preventDefault();
+  elements.checkoutMessage.textContent = "";
+  elements.checkoutMessage.className = "checkout-message";
+  elements.submitOrderButton.disabled = true;
+  elements.submitOrderButton.textContent = "Submitting...";
 
   try {
-    await navigator.clipboard.writeText(text);
-    elements.copyOrderButton.textContent = "Copied";
-    window.setTimeout(() => {
-      elements.copyOrderButton.textContent = "Copy Order Summary";
-    }, 1400);
+    const customer = getCheckoutFormData();
+    const items = Object.values(state.cart).map((line) => ({
+      sku: line.sku,
+      upc: line.upc,
+      brand: line.brand,
+      itemName: line.itemName,
+      quantity: line.quantity,
+      price: line.hbaPrice,
+    }));
+
+    await submitOrder({ customer, items });
+    clearCart();
+    elements.checkoutForm.reset();
+    state.view = "catalog";
+    elements.checkoutMessage.textContent = "Order submitted successfully.";
+    elements.checkoutMessage.classList.add("success");
+    renderAll();
   } catch (error) {
-    console.error("Failed to copy order summary:", error);
-    alert(text);
+    console.error(error);
+    elements.checkoutMessage.textContent = error.message || "Failed to submit order.";
+    elements.checkoutMessage.classList.add("error");
+  } finally {
+    elements.submitOrderButton.disabled = false;
+    elements.submitOrderButton.textContent = "Place Order";
   }
 }
 
 function wireEvents() {
   elements.search.addEventListener("input", applyFilters);
   elements.availabilityFilter.addEventListener("change", applyFilters);
-  elements.copyOrderButton.addEventListener("click", copyOrderSummary);
+  elements.cartSummaryButton.addEventListener("click", () => {
+    state.view = "cart";
+    renderView();
+  });
+  elements.backToProductsButton.addEventListener("click", () => {
+    state.view = "catalog";
+    renderView();
+  });
+  elements.clearCartButton.addEventListener("click", clearCart);
+  elements.completeOrderButton.addEventListener("click", () => {
+    state.view = "checkout";
+    renderView();
+  });
+  elements.checkoutBackButton.addEventListener("click", () => {
+    state.view = "cart";
+    renderView();
+  });
+  elements.checkoutForm.addEventListener("submit", handleCheckoutSubmit);
+
+  elements.sortButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.dataset.sortKey;
+      if (!key) return;
+
+      if (state.sortKey === key) {
+        state.sortDirection = state.sortDirection === "asc" ? "desc" : "asc";
+      } else {
+        state.sortKey = key;
+        state.sortDirection = "asc";
+      }
+
+      applyFilters();
+    });
+  });
 }
 
 async function init() {
+  populateSalesPeople();
   wireEvents();
-  renderCart();
+  renderCartSummary();
+  renderView();
 
   try {
     state.products = await fetchCatalog();
     state.filteredProducts = [...state.products];
-    renderCatalog();
+    applyFilters();
+    renderCartView();
+    renderCheckoutView();
+    renderCartSummary();
   } catch (error) {
     console.error(error);
-    elements.grid.innerHTML = "";
-    elements.empty.classList.remove("hidden");
-    elements.empty.innerHTML = `
-      <h2>Unable to load catalog</h2>
-      <p>Make sure the backend is running and at least one SKU has HBA enabled.</p>
-    `;
+    elements.catalogEmpty.classList.remove("hidden");
+    elements.catalogEmpty.textContent =
+      "Unable to load catalog. Make sure the backend is running and at least one SKU has HBA enabled.";
   }
 }
 

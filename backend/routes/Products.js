@@ -61,6 +61,97 @@ const normalizeNullableDecimal = (value) => {
   return parsed.toFixed(2);
 };
 
+const buildHbaOrderEmailHtml = ({ customer, items, totals }) => {
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td style="padding:8px;border:1px solid #ddd;">${item.sku}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${item.upc || ""}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${item.brand || ""}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${item.itemName}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;">${item.quantity}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;">$${Number(item.price || 0).toFixed(2)}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;">$${Number(item.subtotal || 0).toFixed(2)}</td>
+        </tr>
+      `
+    )
+    .join("");
+
+  return `
+    <div style="font-family:Arial,sans-serif;color:#222;line-height:1.5;">
+      <h2>New HBA Order Request</h2>
+      <p>A new order request was submitted from the HBA ordering site.</p>
+
+      <h3>Contact Information</h3>
+      <table style="border-collapse:collapse;">
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Name</td><td>${customer.name}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Company</td><td>${customer.companyName}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Address 1</td><td>${customer.addressLine1}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Address 2</td><td>${customer.addressLine2 || ""}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">City</td><td>${customer.city}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">State</td><td>${customer.state || ""}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Zip</td><td>${customer.zipCode || ""}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Country</td><td>${customer.country}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Phone</td><td>${customer.phone}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Email</td><td>${customer.email}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Sales Person</td><td>${customer.salesPerson}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Notes</td><td>${customer.notes || ""}</td></tr>
+      </table>
+
+      <h3>Order Items</h3>
+      <table style="border-collapse:collapse;width:100%;border:1px solid #ddd;">
+        <thead>
+          <tr style="background:#f7f7f7;">
+            <th style="padding:8px;border:1px solid #ddd;text-align:left;">SKU</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left;">UPC</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left;">Brand</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left;">Item</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:right;">Qty</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:right;">Price</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:right;">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      <p style="margin-top:16px;"><strong>Total SKUs:</strong> ${totals.totalSkus}</p>
+      <p><strong>Total Units:</strong> ${totals.totalUnits}</p>
+      <p><strong>Total Price:</strong> $${Number(totals.totalPrice || 0).toFixed(2)}</p>
+    </div>
+  `;
+};
+
+const buildHbaOrderEmailText = ({ customer, items, totals }) => {
+  return [
+    "New HBA Order Request",
+    "",
+    "Contact Information",
+    `Name: ${customer.name}`,
+    `Company: ${customer.companyName}`,
+    `Address 1: ${customer.addressLine1}`,
+    `Address 2: ${customer.addressLine2 || ""}`,
+    `City: ${customer.city}`,
+    `State: ${customer.state || ""}`,
+    `Zip: ${customer.zipCode || ""}`,
+    `Country: ${customer.country}`,
+    `Phone: ${customer.phone}`,
+    `Email: ${customer.email}`,
+    `Sales Person: ${customer.salesPerson}`,
+    `Notes: ${customer.notes || ""}`,
+    "",
+    "Order Items",
+    ...items.map(
+      (item) =>
+        `${item.sku} | ${item.upc || ""} | ${item.brand || ""} | ${item.itemName} | Qty ${item.quantity} | $${Number(item.price || 0).toFixed(2)} | $${Number(item.subtotal || 0).toFixed(2)}`
+    ),
+    "",
+    `Total SKUs: ${totals.totalSkus}`,
+    `Total Units: ${totals.totalUnits}`,
+    `Total Price: $${Number(totals.totalPrice || 0).toFixed(2)}`,
+  ].join("\n");
+};
+
 router.get("/", auth, checkPermission('products', 'view'), async (req, res) => {
   const db = require("../models");
   const listOfProducts = await db.Products.findAll({
@@ -81,6 +172,7 @@ router.get("/hba/public-catalog", async (req, res) => {
         "brand",
         "itemName",
         "image",
+        "upc",
         "quantity",
         "hbaQuantity",
         "hbaPrice",
@@ -97,6 +189,7 @@ router.get("/hba/public-catalog", async (req, res) => {
         brand: row.brand,
         itemName: row.itemName,
         image: row.image || "",
+        upc: row.upc,
         inventoryQuantity: row.quantity,
         hbaQuantity: row.hbaQuantity,
         hbaPrice: row.hbaPrice,
@@ -106,6 +199,98 @@ router.get("/hba/public-catalog", async (req, res) => {
   } catch (error) {
     console.error("Error loading public HBA catalog:", error);
     return res.status(500).json({ error: "Failed to load public HBA catalog" });
+  }
+});
+
+router.post("/hba/submit-order", async (req, res) => {
+  try {
+    const EmailService = require("../Services/EmailService");
+    const recipientListRaw =
+      process.env.HBA_ORDER_NOTIFICATION_EMAIL ||
+      process.env.HBA_ORDER_NOTIFICATION_EMAILS ||
+      process.env.ALERT_EMAIL ||
+      process.env.SMTP_USER;
+
+    const recipients = String(recipientListRaw || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    if (recipients.length === 0) {
+      return res.status(500).json({ error: "HBA order notification email is not configured." });
+    }
+
+    const customer = req.body?.customer || {};
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+
+    if (items.length === 0) {
+      return res.status(400).json({ error: "Cart is empty." });
+    }
+
+    const requiredFields = [
+      "name",
+      "companyName",
+      "addressLine1",
+      "city",
+      "country",
+      "phone",
+      "email",
+      "salesPerson",
+    ];
+
+    for (const field of requiredFields) {
+      if (!String(customer[field] || "").trim()) {
+        return res.status(400).json({ error: `Missing required field: ${field}` });
+      }
+    }
+
+    const normalizedItems = items
+      .map((item) => {
+        const quantity = Math.max(0, Math.floor(Number(item.quantity || 0)));
+        const price = Number(item.price || 0);
+        return {
+          sku: String(item.sku || "").trim(),
+          upc: item.upc || "",
+          brand: item.brand || "",
+          itemName: item.itemName || "",
+          quantity,
+          price,
+          subtotal: quantity * price,
+        };
+      })
+      .filter((item) => item.sku && item.quantity > 0);
+
+    if (normalizedItems.length === 0) {
+      return res.status(400).json({ error: "Cart is empty." });
+    }
+
+    const totals = normalizedItems.reduce(
+      (summary, item) => {
+        summary.totalSkus += 1;
+        summary.totalUnits += item.quantity;
+        summary.totalPrice += item.subtotal;
+        return summary;
+      },
+      { totalSkus: 0, totalUnits: 0, totalPrice: 0 }
+    );
+
+    const html = buildHbaOrderEmailHtml({ customer, items: normalizedItems, totals });
+    const text = buildHbaOrderEmailText({ customer, items: normalizedItems, totals });
+    const success = await EmailService.sendEmail({
+      to: recipients,
+      subject: `HBA Order Request - ${customer.companyName} - ${customer.name}`,
+      html,
+      text,
+    });
+
+    if (!success) {
+      return res.status(500).json({ error: "Failed to send order email." });
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Error submitting HBA order:", error);
+    return res.status(500).json({ error: "Failed to submit HBA order." });
   }
 });
 
