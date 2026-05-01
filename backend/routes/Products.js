@@ -19,6 +19,8 @@ const LIST_SORT_KEYS = new Set([
   "upc",
 ]);
 
+const NUMERIC_SORT_KEYS = new Set(["quantity", "sizeOz", "upc"]);
+
 const buildContainsFilter = (columnName, rawValue, options = {}) => {
   const value = String(rawValue || "").trim();
   if (!value) return null;
@@ -552,6 +554,10 @@ router.get("/list", auth, checkPermission('products', 'view'), async (req, res) 
 
     const where = whereClauses.length ? { [Op.and]: whereClauses } : {};
     const offset = (page - 1) * pageSize;
+    const order =
+      NUMERIC_SORT_KEYS.has(sortKey)
+        ? [[Sequelize.cast(Sequelize.col(`Products.${sortKey}`), "SIGNED"), sortDirection]]
+        : [[sortKey, sortDirection]];
 
     const { count, rows } = await Products.findAndCountAll({
       attributes: [
@@ -576,7 +582,7 @@ router.get("/list", auth, checkPermission('products', 'view'), async (req, res) 
           attributes: ["tester", "discontinued"],
         },
       ],
-      order: [[sortKey, sortDirection]],
+      order,
       limit: pageSize,
       offset,
       distinct: true,

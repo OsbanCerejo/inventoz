@@ -3,6 +3,7 @@ const state = {
   filteredProducts: [],
   cart: loadCart(),
   view: "catalog",
+  successRedirectTimeoutId: null,
   selectedCategory: "all",
   sortKey: "",
   sortDirection: "asc",
@@ -497,6 +498,13 @@ function clearCart() {
   renderAll();
 }
 
+function clearSuccessRedirectTimeout() {
+  if (state.successRedirectTimeoutId) {
+    clearTimeout(state.successRedirectTimeoutId);
+    state.successRedirectTimeoutId = null;
+  }
+}
+
 function populateSalesPeople(salesPeople) {
   const values = Array.isArray(salesPeople) && salesPeople.length > 0 ? salesPeople : ["General Sales"];
 
@@ -532,12 +540,19 @@ async function handleCheckoutSubmit(event) {
     }));
 
     const result = await submitOrder({ customer, items });
+    clearSuccessRedirectTimeout();
     clearCart();
     elements.checkoutForm.reset();
-    state.view = "catalog";
-    elements.checkoutMessage.textContent = `Order submitted successfully. Reference: ${result.orderNumber || "Created"}.`;
+    state.view = "checkout";
+    elements.checkoutMessage.textContent = `Thank you. Your order has been sent successfully. We will reach out to you at ${customer.email} with your invoice and payment details.${result.orderNumber ? ` Reference: ${result.orderNumber}.` : ""}`;
     elements.checkoutMessage.classList.add("success");
     renderAll();
+
+    state.successRedirectTimeoutId = window.setTimeout(() => {
+      state.successRedirectTimeoutId = null;
+      state.view = "catalog";
+      renderAll();
+    }, 10000);
   } catch (error) {
     console.error(error);
     elements.checkoutMessage.textContent = error.message || "Failed to submit order.";
@@ -555,19 +570,23 @@ function wireEvents() {
   elements.search.addEventListener("input", applyFilters);
   elements.availabilityFilter.addEventListener("change", applyFilters);
   elements.cartSummaryButton.addEventListener("click", () => {
+    clearSuccessRedirectTimeout();
     state.view = "cart";
     renderView();
   });
   elements.backToProductsButton.addEventListener("click", () => {
+    clearSuccessRedirectTimeout();
     state.view = "catalog";
     renderView();
   });
   elements.clearCartButton.addEventListener("click", clearCart);
   elements.completeOrderButton.addEventListener("click", () => {
+    clearSuccessRedirectTimeout();
     state.view = "checkout";
     renderView();
   });
   elements.checkoutBackButton.addEventListener("click", () => {
+    clearSuccessRedirectTimeout();
     state.view = "cart";
     renderView();
   });
