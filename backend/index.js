@@ -115,6 +115,12 @@ app.use("/whatnot/fulfillment", whatnotFulfillmentRouter);
 const whatnotAnalyticsRouter = require("./routes/whatnotAnalytics");
 app.use("/whatnot/analytics", whatnotAnalyticsRouter);
 
+const tiktokRouter = require("./routes/tiktok");
+app.use("/tiktok", tiktokRouter);
+
+const tiktokFulfillmentRouter = require("./routes/tiktokFulfillment");
+app.use("/tiktok/fulfillment", tiktokFulfillmentRouter);
+
 const walmartIntegrationRouter = require("./routes/WalmartIntegration");
 app.use("/walmart-integration", walmartIntegrationRouter);
 

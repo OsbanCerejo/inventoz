@@ -18,6 +18,7 @@ import PackingMode from "./pages/PackingMode";
 import EbayApi from "./pages/EbayApi";
 import Whatnot from "./pages/Whatnot";
 import WhatnotFulfillment from "./pages/WhatnotFulfillment";
+import TikTokFulfillment from "./pages/TikTokFulfillment";
 import WhatnotAnalytics from "./pages/WhatnotAnalytics";
 import WhatnotFulfillmentAnalytics from "./pages/WhatnotFulfillmentAnalytics";
 import SortingAnalytics from "./pages/SortingAnalytics";
@@ -264,6 +265,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="whatnot" action="view" menuItem="whatnot">
                   <WhatnotFulfillment />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/tiktok-fulfillment"
+              element={
+                <ProtectedRoute resource="whatnot" action="view" menuItem="whatnot">
+                  <TikTokFulfillment />
                 </ProtectedRoute>
               }
             />

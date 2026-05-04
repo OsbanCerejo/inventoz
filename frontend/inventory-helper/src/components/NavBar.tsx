@@ -91,6 +91,7 @@ function NavBar() {
     { key: 'sales-tool', permissionKey: 'sales', label: 'Sales Tracker', path: '/sales' },
     { key: 'whatnot-tool', permissionKey: 'whatnot', label: 'Whatnot', path: '/whatnot' },
     { key: 'whatnot-fulfillment-tool', permissionKey: 'whatnot', label: 'Whatnot Fulfillment', path: '/whatnot-fulfillment' },
+    { key: 'tiktok-fulfillment-tool', permissionKey: 'whatnot', label: 'TikTok Fulfillment', path: '/tiktok-fulfillment' },
     { key: 'label-generator-tool', permissionKey: 'whatnot', label: 'Label Generator', path: '/label-generator' },
     { key: 'packing-tool', permissionKey: 'packing', label: 'Packing', path: '/orders/packingMode' },
     { key: 'pricelist-tool', permissionKey: 'pricelist', label: 'PriceList', path: '/price-list' },
