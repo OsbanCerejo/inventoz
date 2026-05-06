@@ -4,10 +4,12 @@ const Op = Sequelize.Op;
 const LowStockAlertService = require("./LowStockAlertService");
 
 class StockUpdateService {
-  static async updateProductQuantity(sku, newQuantity) {
+  static async updateProductQuantity(sku, newQuantity, options = {}) {
     try {
+      const transaction = options.transaction;
+      const lowStockAlerts = Array.isArray(options.lowStockAlerts) ? options.lowStockAlerts : null;
       // Get the current product state
-      const currentProduct = await Products.findOne({ where: { sku } });
+      const currentProduct = await Products.findOne({ where: { sku }, transaction });
       
       if (!currentProduct) {
         throw new Error("Product not found");
@@ -16,7 +18,7 @@ class StockUpdateService {
       // Update the product quantity
       await Products.update(
         { quantity: newQuantity },
-        { where: { sku } }
+        { where: { sku }, transaction }
       );
 
       // Only create a stock update history if the product is verified
@@ -33,7 +35,8 @@ class StockUpdateService {
             newQuantity: newQuantity,
             status: 0,
             tries: 0
-          }
+          },
+          transaction
         });
 
         // If a record exists, update it
@@ -42,17 +45,23 @@ class StockUpdateService {
             oldQuantity: currentProduct.quantity,
             newQuantity: newQuantity,
             tries: 0
-          });
+          }, { transaction });
         }
       }
 
       // Check for low stock and send alert if needed
-      const lowStockCheck = await LowStockAlertService.checkAndHandleLowStock(sku, newQuantity);
+      const lowStockCheck = await LowStockAlertService.checkAndHandleLowStock(sku, newQuantity, {
+        transaction,
+      });
       if (lowStockCheck.shouldAlert) {
-        // Send email alert asynchronously (don't wait for it)
-        LowStockAlertService.sendEmailAlert(lowStockCheck.product).catch(err => {
-          console.error('Failed to send low stock alert email:', err);
-        });
+        if (lowStockAlerts) {
+          lowStockAlerts.push(lowStockCheck.product);
+        } else {
+          // Send email alert asynchronously (don't wait for it)
+          LowStockAlertService.sendEmailAlert(lowStockCheck.product).catch(err => {
+            console.error('Failed to send low stock alert email:', err);
+          });
+        }
       }
 
       return {
@@ -72,16 +81,18 @@ class StockUpdateService {
     }
   }
 
-  static async updateMultipleProductQuantities(updates) {
+  static async updateMultipleProductQuantities(updates, options = {}) {
     try {
-      const results = await Promise.all(
-        updates.map(async (update) => {
-          return this.updateProductQuantity(
+      const results = [];
+      for (const update of updates) {
+        results.push(
+          await this.updateProductQuantity(
             update.sku,
-            update.newQuantity
-          );
-        })
-      );
+            update.newQuantity,
+            options
+          )
+        );
+      }
 
       return {
         success: true,

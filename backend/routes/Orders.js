@@ -3,14 +3,20 @@ const router = express.Router();
 const axios = require("axios");
 const authService = require("../Services/AuthService");
 const StockUpdateService = require("../Services/StockUpdateService");
+const LowStockAlertService = require("../Services/LowStockAlertService");
 const { auth } = require('../middleware/auth');
 const { checkPermission } = require('../middleware/permissions');
-const { Logs, Products, Listings, sequelize, Sequelize } = require("../models");
+const { Logs, Products, Listings, MarketplaceSale, sequelize, Sequelize } = require("../models");
 const Op = Sequelize.Op;
 const service = new authService();
 
 const SHIPSTATION_URL = "https://ssapi.shipstation.com/orders";
 const APPROVE_LOCK_KEY = "orders_approve_lock";
+const baseKnownStoreMeta = {
+  983189: { name: "eBay Buy4LessToday", marketplace: "ebay" },
+  1034120: { name: "eBay OneLifeLuxuries4", marketplace: "ebay" },
+  1040538: { name: "Walmart OneLifeLuxuries", marketplace: "walmart" },
+};
 
 const toNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -22,11 +28,111 @@ const normalizeStoreId = (storeId) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
+const configuredTikTokStoreId = normalizeStoreId(process.env.SHIPSTATION_TIKTOK_STORE_ID);
+const KNOWN_STORE_META = {
+  ...baseKnownStoreMeta,
+  ...(configuredTikTokStoreId
+    ? {
+        [configuredTikTokStoreId]: {
+          name: String(process.env.SHIPSTATION_TIKTOK_STORE_NAME || "TikTok Shop").trim(),
+          marketplace: "tiktok",
+        },
+      }
+    : {}),
+};
+
 const listingColumnForStore = (storeId) => {
   if (storeId === 983189) return "ebayBuy4LessToday";
   if (storeId === 1034120) return "ebayOneLifeLuxuries4";
   if (storeId === 1040538) return "walmartOneLifeLuxuries";
   return null;
+};
+
+const getOrderStoreId = (order) => normalizeStoreId(order?.advancedOptions?.storeId || order?.storeId);
+
+const inferMarketplaceFromOrder = (order) => {
+  const known = KNOWN_STORE_META[getOrderStoreId(order)];
+  if (known?.marketplace) return known.marketplace;
+
+  const probe = [
+    order?.storeName,
+    order?.advancedOptions?.source,
+    order?.advancedOptions?.storeName,
+    order?.orderSourceCode,
+    order?.source,
+  ]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+
+  if (probe.includes("tiktok")) return "tiktok";
+  if (probe.includes("walmart")) return "walmart";
+  if (probe.includes("ebay")) return "ebay";
+  if (probe.includes("amazon")) return "amazon";
+  if (probe.includes("temu")) return "temu";
+  return "other";
+};
+
+const inferStoreNameFromOrder = (order) => {
+  const storeId = getOrderStoreId(order);
+  const known = KNOWN_STORE_META[storeId];
+  if (known?.name) return known.name;
+
+  const marketplace = inferMarketplaceFromOrder(order);
+  if (marketplace === "tiktok") return "TikTok Shop";
+
+  const candidates = [
+    order?.storeName,
+    order?.advancedOptions?.storeName,
+    order?.advancedOptions?.source,
+    order?.orderSourceCode,
+    order?.source,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  if (candidates.length > 0) return candidates[0];
+  if (storeId) return `Store ${storeId}`;
+  return "Unknown Store";
+};
+
+const inferMarketplaceFromStore = ({ storeId, storeName = "" }) => {
+  const known = KNOWN_STORE_META[normalizeStoreId(storeId)];
+  if (known?.marketplace) return known.marketplace;
+
+  const probe = String(storeName || "").trim().toLowerCase();
+  if (probe.includes("tiktok")) return "tiktok";
+  if (probe.includes("walmart")) return "walmart";
+  if (probe.includes("ebay")) return "ebay";
+  if (probe.includes("amazon")) return "amazon";
+  if (probe.includes("temu")) return "temu";
+  return "other";
+};
+
+const parseSaleDate = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return new Date().toISOString().slice(0, 10);
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return new Date().toISOString().slice(0, 10);
+  return parsed.toISOString().slice(0, 10);
+};
+
+const buildAvailableStores = (orders = []) => {
+  const stores = new Map();
+  orders.forEach((order) => {
+    const storeId = getOrderStoreId(order);
+    if (!storeId) return;
+    if (stores.has(storeId)) return;
+    stores.set(storeId, {
+      id: String(storeId),
+      name: inferStoreNameFromOrder(order),
+      marketplace: inferMarketplaceFromOrder(order),
+    });
+  });
+
+  return Array.from(stores.values()).sort((left, right) =>
+    String(left.name || "").localeCompare(String(right.name || ""))
+  );
 };
 
 const extractOrdersArray = (payload) => {
@@ -35,9 +141,22 @@ const extractOrdersArray = (payload) => {
   return [];
 };
 
+const isNonProductOrderItem = (item = {}) => {
+  const name = String(item?.name || "").trim().toLowerCase();
+  const sku = String(item?.sku || "").trim().toLowerCase();
+  const probe = `${name} ${sku}`;
+
+  return (
+    probe.includes("platform discount") ||
+    probe.includes("seller discount") ||
+    probe.includes("shipping discount")
+  );
+};
+
 const normalizeApprovalItems = (items = []) =>
   items
     .map((item) => {
+      if (isNonProductOrderItem(item)) return null;
       const orderId = String(item.orderId || "").trim();
       const storeId = normalizeStoreId(item.store);
       const sku = String(item.finalSku || item.sku || "").trim();
@@ -49,6 +168,12 @@ const normalizeApprovalItems = (items = []) =>
       return {
         orderId,
         storeId,
+        storeName: String(item.storeName || "").trim() || `Store ${storeId}`,
+        saleDate: parseSaleDate(item.orderDate),
+        marketplace: inferMarketplaceFromStore({
+          storeId,
+          storeName: String(item.storeName || "").trim(),
+        }),
         sku,
         quantitySold,
         orderKey: `${orderId}_${storeId}`,
@@ -99,13 +224,14 @@ const buildDeductionMaps = (processedItems) => {
   return { skuTotals, skuStoreTotals };
 };
 
-const resolveProductsForSkus = async (skuTotals) => {
+const resolveProductsForSkus = async (skuTotals, options = {}) => {
+  const transaction = options.transaction;
   const skuCache = new Map();
   const resolveProduct = async (sku) => {
     if (skuCache.has(sku)) return skuCache.get(sku);
-    let product = await Products.findOne({ where: { sku } });
+    let product = await Products.findOne({ where: { sku }, transaction });
     if (!product) {
-      product = await Products.findOne({ where: { alternativeSku: sku } });
+      product = await Products.findOne({ where: { alternativeSku: sku }, transaction });
     }
     skuCache.set(sku, product || null);
     return product || null;
@@ -131,6 +257,91 @@ const resolveProductsForSkus = async (skuTotals) => {
   }
 
   return { productUpdates, missingSkus };
+};
+
+const buildNotFoundItems = (missingSkus, skuTotals) =>
+  missingSkus.map((sku) => ({
+    requestedSku: sku,
+    quantityToDeduct: skuTotals.get(sku) || 0,
+  }));
+
+const buildMarketplaceSalesRows = ({ processedItems, productUpdates, batchId, approvedBy, approvedAt }) => {
+  const canonicalSkuByRequestedSku = new Map(
+    productUpdates.map((row) => [String(row.requestedSku), String(row.sku)])
+  );
+  const groupedRows = new Map();
+
+  processedItems.forEach((item) => {
+    const canonicalSku = canonicalSkuByRequestedSku.get(String(item.sku));
+    if (!canonicalSku) return;
+
+    const saleDate = parseSaleDate(item.saleDate);
+    const storeName = String(item.storeName || "").trim() || `Store ${item.storeId}`;
+    const marketplace = String(item.marketplace || "").trim() || inferMarketplaceFromStore(item);
+    const rowKey = `${item.orderId}__${item.storeId}__${canonicalSku}__${saleDate}`;
+
+    if (!groupedRows.has(rowKey)) {
+      groupedRows.set(rowKey, {
+        orderId: item.orderId,
+        storeId: item.storeId,
+        storeName,
+        marketplace,
+        saleDate,
+        sku: canonicalSku,
+        quantity: 0,
+        batchId,
+        approvedAt,
+        approvedBy,
+      });
+    }
+
+    groupedRows.get(rowKey).quantity += Number(item.quantitySold || 0);
+  });
+
+  return Array.from(groupedRows.values()).filter((row) => Number(row.quantity || 0) > 0);
+};
+
+const findDuplicateMarketplaceOrders = async (normalizedItems, options = {}) => {
+  const transaction = options.transaction;
+  const orderScope = Array.from(
+    new Map(
+      normalizedItems.map((item) => [
+        `${item.orderId}_${item.storeId}`,
+        {
+          orderId: item.orderId,
+          storeId: item.storeId,
+          storeName: item.storeName,
+          marketplace: item.marketplace,
+          saleDate: parseSaleDate(item.saleDate),
+        },
+      ])
+    ).values()
+  );
+
+  if (orderScope.length === 0) {
+    return [];
+  }
+
+  const existingRows = await MarketplaceSale.findAll({
+    where: {
+      [Op.or]: orderScope.map((row) => ({
+        orderId: row.orderId,
+        storeId: row.storeId,
+      })),
+    },
+    attributes: ["orderId", "storeId", "storeName", "marketplace", "saleDate"],
+    group: ["orderId", "storeId", "storeName", "marketplace", "saleDate"],
+    transaction,
+  });
+
+  return existingRows.map((row) => ({
+    orderId: String(row.orderId),
+    storeId: normalizeStoreId(row.storeId),
+    storeName: String(row.storeName || "").trim() || `Store ${row.storeId}`,
+    marketplace: String(row.marketplace || "").trim() || "other",
+    saleDate: parseSaleDate(row.saleDate),
+    orderKey: `${row.orderId}_${row.storeId}`,
+  }));
 };
 
 const fetchAllAwaitingShipmentOrders = async (token, extraParams = {}) => {
@@ -214,12 +425,12 @@ router.get("/allOrders", auth, checkPermission('orders', 'view'), async (req, re
           }
         }
       }
-      res.json({ orders: allOrders });
+      res.json({ orders: allOrders, availableStores: buildAvailableStores(allOrders) });
       return;
     }
     const singleStoreId = storeIds.length === 1 ? storeIds[0] : undefined;
     const orders = await fetchAllAwaitingShipmentOrders(TOKEN, singleStoreId ? { storeid: singleStoreId } : {});
-    res.json({ orders });
+    res.json({ orders, availableStores: buildAvailableStores(orders) });
   } catch (error) {
     console.error(
       "Error:",
@@ -245,11 +456,14 @@ router.post("/approve-preview", auth, checkPermission('orders', 'approve'), asyn
       return res.status(400).json({ error: "No valid order items to preview." });
     }
 
+    const duplicateOrders = await findDuplicateMarketplaceOrders(normalizedItems);
+
     const { allOrderKeys, eligibleOrderKeys, alreadyProcessedCount, processedItems } =
       await getApprovalScope(normalizedItems);
 
     const { skuTotals } = buildDeductionMaps(processedItems);
     const { productUpdates, missingSkus } = await resolveProductsForSkus(skuTotals);
+    const notFoundItems = buildNotFoundItems(missingSkus, skuTotals);
 
     const previewRows = productUpdates.map((row) => ({
       requestedSku: row.requestedSku,
@@ -260,26 +474,16 @@ router.post("/approve-preview", auth, checkPermission('orders', 'approve'), asyn
       status: "ready",
     }));
 
-    missingSkus.forEach((sku) => {
-      const qty = skuTotals.get(sku) || 0;
-      previewRows.push({
-        requestedSku: sku,
-        deductedSku: null,
-        quantityToDeduct: qty,
-        currentQuantity: null,
-        projectedQuantity: null,
-        status: "missing_product",
-      });
-    });
-
     return res.json({
       success: true,
       summary: {
         ordersReceived: allOrderKeys.length,
         ordersToProcess: eligibleOrderKeys.length,
         ordersSkippedAlreadyApproved: alreadyProcessedCount,
+        duplicateOrders,
         skusReadyToUpdate: productUpdates.length,
         skusMissing: missingSkus.length,
+        notFoundItems,
         selectedStores,
       },
       previewRows,
@@ -314,6 +518,15 @@ router.post("/approve-batch", auth, checkPermission('orders', 'approve'), async 
       return res.status(400).json({ error: "No valid order items to process." });
     }
 
+    const duplicateOrders = await findDuplicateMarketplaceOrders(normalizedItems);
+    if (duplicateOrders.length > 0) {
+      return res.status(409).json({
+        error: "One or more orders were already recorded in marketplace sales.",
+        details: "Remove the duplicate orders from the approval batch and retry.",
+        duplicateOrders,
+      });
+    }
+
     const { allOrderKeys, eligibleOrderKeys, alreadyProcessedCount, processedItems } =
       await getApprovalScope(normalizedItems);
 
@@ -335,81 +548,127 @@ router.post("/approve-batch", auth, checkPermission('orders', 'approve'), async 
     }
 
     const { skuTotals, skuStoreTotals } = buildDeductionMaps(processedItems);
-    const { productUpdates, missingSkus } = await resolveProductsForSkus(skuTotals);
-
-    let productUpdateResult = { success: true, results: [] };
-    if (productUpdates.length > 0) {
-      productUpdateResult = await StockUpdateService.updateMultipleProductQuantities(
-        productUpdates.map((u) => ({ sku: u.sku, newQuantity: u.newQuantity }))
-      );
-    }
-
-    const listingResults = [];
-    for (const update of Array.from(skuStoreTotals.values())) {
-      const storeIdNum = normalizeStoreId(update.storeId);
-      const columnToUpdate = listingColumnForStore(storeIdNum);
-      if (!columnToUpdate) {
-        listingResults.push(`Skipped ${update.sku}: invalid storeId ${update.storeId}`);
-        continue;
-      }
-
-      let product = await Products.findOne({ where: { sku: update.sku } });
-      if (!product) {
-        product = await Products.findOne({ where: { alternativeSku: update.sku } });
-      }
-      if (!product) {
-        listingResults.push(`Skipped ${update.sku}: no product mapping`);
-        continue;
-      }
-
-      const listing = await Listings.findByPk(product.sku);
-      if (!listing) {
-        listingResults.push(`Skipped ${update.sku}: no listing found for ${product.sku}`);
-        continue;
-      }
-
-      const newQty = Math.max(toNumber(listing[columnToUpdate], 0) - update.quantitySold, 0);
-      listing[columnToUpdate] = newQty;
-      await listing.save();
-      listingResults.push(`Updated ${product.sku} ${columnToUpdate} => ${newQty}`);
-    }
-
     const batchId = `orders_${new Date().toISOString().slice(0, 10)}_${Date.now()}`;
     const nowIso = new Date().toISOString();
+    const approvedAt = new Date();
+    const listingResults = [];
+    const lowStockAlerts = [];
+    const transactionResult = await sequelize.transaction(async (transaction) => {
+      const duplicateOrdersInTransaction = await findDuplicateMarketplaceOrders(normalizedItems, {
+        transaction,
+      });
+      if (duplicateOrdersInTransaction.length > 0) {
+        const duplicateError = new Error("One or more orders were already recorded in marketplace sales.");
+        duplicateError.statusCode = 409;
+        duplicateError.details = "Remove the duplicate orders from the approval batch and retry.";
+        duplicateError.duplicateOrders = duplicateOrdersInTransaction;
+        throw duplicateError;
+      }
 
-    await Logs.create({
-      timestamp: nowIso,
-      type: "Order Approval",
-      action: "completed",
-      entityType: "order_approval_batch",
-      entityId: batchId,
-      userId: req.user?.id?.toString(),
-      metaData: {
-        selectedStores,
-        ordersReceived: allOrderKeys.length,
-        ordersProcessed: eligibleOrderKeys.length,
-        ordersSkippedAlreadyApproved: alreadyProcessedCount,
-        skusUpdated: productUpdates.length,
-        skusMissing: missingSkus,
-        listingUpdatesApplied: listingResults.filter((r) => r.startsWith("Updated")).length,
-        productUpdateResult,
-        listingResults,
-      },
-    });
+      const { productUpdates, missingSkus } = await resolveProductsForSkus(skuTotals, { transaction });
+    const notFoundItems = buildNotFoundItems(missingSkus, skuTotals);
 
-    await Logs.bulkCreate(
-      eligibleOrderKeys.map((orderKey) => ({
+      let productUpdateResult = { success: true, results: [] };
+      if (productUpdates.length > 0) {
+        productUpdateResult = await StockUpdateService.updateMultipleProductQuantities(
+          productUpdates.map((u) => ({ sku: u.sku, newQuantity: u.newQuantity })),
+          {
+            transaction,
+            lowStockAlerts,
+          }
+        );
+      }
+
+      for (const update of Array.from(skuStoreTotals.values())) {
+        const storeIdNum = normalizeStoreId(update.storeId);
+        const columnToUpdate = listingColumnForStore(storeIdNum);
+        if (!columnToUpdate) {
+          continue;
+        }
+
+        let product = await Products.findOne({ where: { sku: update.sku }, transaction });
+        if (!product) {
+          product = await Products.findOne({ where: { alternativeSku: update.sku }, transaction });
+        }
+        if (!product) {
+          listingResults.push(`Skipped ${update.sku}: no product mapping`);
+          continue;
+        }
+
+        const listing = await Listings.findByPk(product.sku, { transaction });
+        if (!listing) {
+          listingResults.push(`Skipped ${update.sku}: no listing found for ${product.sku}`);
+          continue;
+        }
+
+        const newQty = Math.max(toNumber(listing[columnToUpdate], 0) - update.quantitySold, 0);
+        listing[columnToUpdate] = newQty;
+        await listing.save({ transaction });
+        listingResults.push(`Updated ${product.sku} ${columnToUpdate} => ${newQty}`);
+      }
+
+      const marketplaceSalesRows = buildMarketplaceSalesRows({
+        processedItems,
+        productUpdates,
+        batchId,
+        approvedBy: req.user?.id || null,
+        approvedAt,
+      });
+
+      if (marketplaceSalesRows.length > 0) {
+        await MarketplaceSale.bulkCreate(marketplaceSalesRows, { transaction });
+      }
+
+      await Logs.create({
         timestamp: nowIso,
         type: "Order Approval",
-        action: "processed",
-        entityType: "order_approval_order",
-        entityId: orderKey,
+        action: "completed",
+        entityType: "order_approval_batch",
+        entityId: batchId,
         userId: req.user?.id?.toString(),
         metaData: {
-          batchId,
+          selectedStores,
+          ordersReceived: allOrderKeys.length,
+          ordersProcessed: eligibleOrderKeys.length,
+          ordersSkippedAlreadyApproved: alreadyProcessedCount,
+          skusUpdated: productUpdates.length,
+          skusMissing: missingSkus,
+          notFoundItems,
+          marketplaceSalesRecorded: marketplaceSalesRows.length,
+          listingUpdatesApplied: listingResults.filter((r) => r.startsWith("Updated")).length,
+          productUpdateResult,
+          listingResults,
         },
-      }))
-    );
+      }, { transaction });
+
+      await Logs.bulkCreate(
+        eligibleOrderKeys.map((orderKey) => ({
+          timestamp: nowIso,
+          type: "Order Approval",
+          action: "processed",
+          entityType: "order_approval_order",
+          entityId: orderKey,
+          userId: req.user?.id?.toString(),
+          metaData: {
+            batchId,
+          },
+        })),
+        { transaction }
+      );
+
+      return {
+        productUpdates,
+        missingSkus,
+        notFoundItems,
+        marketplaceSalesRows,
+      };
+    });
+
+    for (const product of lowStockAlerts) {
+      LowStockAlertService.sendEmailAlert(product).catch((err) => {
+        console.error("Failed to send low stock alert email:", err);
+      });
+    }
 
     return res.json({
       success: true,
@@ -418,8 +677,10 @@ router.post("/approve-batch", auth, checkPermission('orders', 'approve'), async 
         ordersReceived: allOrderKeys.length,
         ordersProcessed: eligibleOrderKeys.length,
         ordersSkippedAlreadyApproved: alreadyProcessedCount,
-        skusUpdated: productUpdates.length,
-        skusMissing: missingSkus.length,
+        skusUpdated: transactionResult.productUpdates.length,
+        skusMissing: transactionResult.missingSkus.length,
+        notFoundItems: transactionResult.notFoundItems,
+        marketplaceSalesRecorded: transactionResult.marketplaceSalesRows.length,
         listingUpdatesApplied: listingResults.filter((r) => r.startsWith("Updated")).length,
         errors: listingResults.filter((r) => r.startsWith("Skipped")),
         selectedStores,
@@ -427,9 +688,10 @@ router.post("/approve-batch", auth, checkPermission('orders', 'approve'), async 
     });
   } catch (error) {
     console.error("Error approving order batch:", error);
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       error: "Failed to approve order batch.",
-      details: error.message,
+      details: error.details || error.message,
+      duplicateOrders: error.duplicateOrders || [],
     });
   } finally {
     await releaseApproveLock().catch(() => {});

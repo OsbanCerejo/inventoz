@@ -33,13 +33,30 @@ import './AllOrdersPrint.css';
 import { invalidateProductsCache } from "../utils/productCache";
 
 function AllOrders() {
+  type StoreOption = {
+    id: string;
+    name: string;
+    marketplace?: string;
+    color?: string;
+    text?: string;
+  };
+
   type ApprovalPreviewRow = {
     requestedSku: string;
     deductedSku: string | null;
     quantityToDeduct: number;
     currentQuantity: number | null;
     projectedQuantity: number | null;
-    status: "ready" | "missing_product";
+    status: "ready";
+  };
+
+  type DuplicateOrder = {
+    orderId: string;
+    storeId: number;
+    storeName: string;
+    marketplace: string;
+    saleDate: string;
+    orderKey: string;
   };
 
   const [groupedOrders, setGroupedOrders] = useState<any>({});
@@ -52,18 +69,36 @@ function AllOrders() {
   const [approvalPreviewRows, setApprovalPreviewRows] = useState<ApprovalPreviewRow[]>([]);
   const [approvalPreviewSummary, setApprovalPreviewSummary] = useState<any>(null);
   const [productsData, setProductsData] = useState<any[]>([]);
+  const [storeOptions, setStoreOptions] = useState<StoreOption[]>([]);
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [approving, setApproving] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Hardcoded store list (should match backend logic)
-  const storeOptions = [
-    { id: "1040538", name: "Walmart OneLifeLuxuries", color: "#0071ce" },
-    { id: "983189", name: "eBay Buy4LessToday", color: "#EE66A6" },
-    { id: "1034120", name: "eBay OneLifeLuxuries4", color: "#FFEB55", text: '#222' },
-  ];
+  const paletteByMarketplace: Record<string, { color: string; text?: string }> = {
+    walmart: { color: "#0071ce" },
+    ebay: { color: "#7c3aed" },
+    tiktok: { color: "#111827" },
+    amazon: { color: "#ff9900", text: "#222" },
+    temu: { color: "#f97316" },
+    other: { color: "#64748b" },
+  };
+
+  const enrichStoreOptions = (stores: StoreOption[] = []) =>
+    stores.map((store) => {
+      const marketplaceKey = String(store.marketplace || "").toLowerCase();
+      const palette =
+        paletteByMarketplace[marketplaceKey] ||
+        (String(store.name || "").toLowerCase().includes("tiktok")
+          ? paletteByMarketplace.tiktok
+          : paletteByMarketplace.other);
+      return {
+        ...store,
+        color: store.color || palette.color,
+        text: store.text || palette.text,
+      };
+    });
 
   // Fetch orders and products, then fetch listings for all SKUs
   useEffect(() => {
@@ -82,6 +117,17 @@ function AllOrders() {
     return productMap;
   }
 
+  function isNonProductOrderItem(item: any) {
+    const name = String(item?.name || "").trim().toLowerCase();
+    const sku = String(item?.sku || "").trim().toLowerCase();
+    const probe = `${name} ${sku}`;
+    return (
+      probe.includes("platform discount") ||
+      probe.includes("seller discount") ||
+      probe.includes("shipping discount")
+    );
+  }
+
   const fetchOrders = async (storeIds?: string[]) => {
     try {
       setLoading(true);
@@ -94,6 +140,7 @@ function AllOrders() {
         axios.get(getApiUrl('products')),
       ]);
       setProductsData(productsResponse.data);
+      setStoreOptions(enrichStoreOptions(ordersResponse.data?.availableStores || []));
       const productMap = createProductMap(productsResponse.data);
       const grouped = groupOrdersByProduct(
         ordersResponse.data.orders,
@@ -121,6 +168,9 @@ function AllOrders() {
     result.groupedOrders = orders.reduce((acc: any, order: any) => {
       result.totalOrders += 1;
       order.items.forEach((item: any) => {
+        if (isNonProductOrderItem(item)) {
+          return;
+        }
         const { sku } = item;
         const [actualSku, lotSize] = parseSku(sku);
 
@@ -145,6 +195,7 @@ function AllOrders() {
           variant: product ? product.shade : "",
           condition: product ? product.condition : "",
           store: order.advancedOptions.storeId,
+          storeName: order.storeName || "",
           image:
             product && product.image && product.image !== "null"
               ? product.image
@@ -200,7 +251,11 @@ function AllOrders() {
       setApprovalPreviewRows(response.data?.previewRows || []);
       setApprovalPreviewSummary(response.data?.summary || null);
       setApproveOrders(true);
-      toast.success("Approval preview generated. Please review before updating.");
+      if ((response.data?.summary?.duplicateOrders || []).length > 0) {
+        toast.warning("Some orders were already recorded. Review the duplicate list before updating.");
+      } else {
+        toast.success("Approval preview generated. Please review before updating.");
+      }
     } catch (error) {
       console.error("Error generating approval preview:", error);
       toast.error("Failed to build approval preview.");
@@ -235,9 +290,21 @@ function AllOrders() {
         setApprovalPreviewSummary(null);
         navigate("/", { state: { clearFilters: true } });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating product quantities:", error);
-      toast.error("Failed to approve orders. Please check logs and retry.", {
+      const duplicateOrders: DuplicateOrder[] = error?.response?.data?.duplicateOrders || [];
+      const detailMessage =
+        error?.response?.data?.details ||
+        error?.response?.data?.error ||
+        "Failed to approve orders. Please check logs and retry.";
+      if (duplicateOrders.length > 0) {
+        setApprovalPreviewSummary((current: any) => ({
+          ...(current || {}),
+          duplicateOrders,
+        }));
+        setApproveOrders(true);
+      }
+      toast.error(detailMessage, {
         position: "top-right",
       });
     } finally {
@@ -336,7 +403,7 @@ function AllOrders() {
           width: 8,
           height: 60,
           borderRadius: 6,
-          background: store?.color,
+          background: store?.color || '#64748b',
           marginRight: 8,
           verticalAlign: 'middle',
         }}
@@ -526,6 +593,68 @@ function AllOrders() {
                   </Box>
                 )}
 
+                {approvalPreviewSummary?.notFoundItems?.length > 0 && (
+                  <TableContainer component={Paper} sx={{ mb: 2 }}>
+                    <Box sx={{ px: 2, pt: 2 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                        Not Found
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        These SKUs were not found in Products, so they will not be stored in marketplace sales and no quantity will be deducted for them.
+                      </Typography>
+                    </Box>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell><strong>Requested SKU</strong></TableCell>
+                          <TableCell><strong>Qty</strong></TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {approvalPreviewSummary.notFoundItems.map((row: any, idx: number) => (
+                          <TableRow key={`${row.requestedSku}-${idx}`}>
+                            <TableCell>{row.requestedSku}</TableCell>
+                            <TableCell>{row.quantityToDeduct}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+
+                {approvalPreviewSummary?.duplicateOrders?.length > 0 && (
+                  <TableContainer component={Paper} sx={{ mb: 2 }}>
+                    <Box sx={{ px: 2, pt: 2 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "error.main" }}>
+                        Already Recorded Orders
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        These order IDs already exist in marketplace sales. We block the final approval so those orders do not get deducted and recorded twice.
+                      </Typography>
+                    </Box>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell><strong>Order ID</strong></TableCell>
+                          <TableCell><strong>Store</strong></TableCell>
+                          <TableCell><strong>Marketplace</strong></TableCell>
+                          <TableCell><strong>Sale Date</strong></TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {approvalPreviewSummary.duplicateOrders.map((row: DuplicateOrder) => (
+                          <TableRow key={row.orderKey}>
+                            <TableCell>{row.orderId}</TableCell>
+                            <TableCell>{row.storeName}</TableCell>
+                            <TableCell sx={{ textTransform: "capitalize" }}>{row.marketplace}</TableCell>
+                            <TableCell>{row.saleDate}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+
                 <TableContainer component={Paper} sx={{ mb: 2 }}>
                   <Table size="small">
                     <TableHead>
@@ -546,7 +675,7 @@ function AllOrders() {
                           <TableCell>{row.quantityToDeduct}</TableCell>
                           <TableCell>{row.currentQuantity ?? "N/A"}</TableCell>
                           <TableCell>{row.projectedQuantity ?? "N/A"}</TableCell>
-                          <TableCell>{row.status === "ready" ? "Ready" : "Missing product"}</TableCell>
+                          <TableCell>Ready</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -558,7 +687,7 @@ function AllOrders() {
                   color="success"
                   startIcon={<Check />}
                   onClick={handleOrdersApproveFinal}
-                  disabled={approving || loading || previewLoading}
+                  disabled={approving || loading || previewLoading || (approvalPreviewSummary?.duplicateOrders?.length || 0) > 0}
                   sx={{ mx: 1 }}
                 >
                   {approving ? "Updating..." : "Update Quantity"}

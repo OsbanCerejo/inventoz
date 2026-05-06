@@ -8,16 +8,18 @@ class LowStockAlertService {
    * @param {number} newQuantity - New quantity after update
    * @returns {Promise<Object>} - Result object with alert status
    */
-  static async checkAndHandleLowStock(sku, newQuantity) {
+  static async checkAndHandleLowStock(sku, newQuantity, options = {}) {
     try {
       const db = require("../models");
+      const transaction = options.transaction;
       const product = await Products.findOne({ 
         where: { sku },
         include: [{
           model: db.ProductDetails,
           required: false,
           attributes: ['tester']
-        }]
+        }],
+        transaction
       });
       
       if (!product) {
@@ -30,7 +32,7 @@ class LowStockAlertService {
         if (product.lowStockAlertSent) {
           await Products.update(
             { lowStockAlertSent: false },
-            { where: { sku } }
+            { where: { sku }, transaction }
           );
         }
         return { shouldAlert: false, reason: 'Tracking not enabled' };
@@ -46,7 +48,7 @@ class LowStockAlertService {
           // Mark that alert should be sent
           await Products.update(
             { lowStockAlertSent: true },
-            { where: { sku } }
+            { where: { sku }, transaction }
           );
           
           // Format size display
@@ -87,7 +89,7 @@ class LowStockAlertService {
       if (!isLowStock && product.lowStockAlertSent) {
         await Products.update(
           { lowStockAlertSent: false },
-          { where: { sku } }
+          { where: { sku }, transaction }
         );
       }
 
