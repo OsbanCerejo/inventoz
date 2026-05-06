@@ -1,8 +1,48 @@
 'use strict';
 
+const tableExists = async (queryInterface, tableName) => {
+  try {
+    await queryInterface.describeTable(tableName);
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
+const ensureTable = async (queryInterface, tableName, definition) => {
+  if (!(await tableExists(queryInterface, tableName))) {
+    await queryInterface.createTable(tableName, definition);
+  }
+};
+
+const ensureIndex = async (queryInterface, tableName, fields, options = {}) => {
+  const existingIndexes = await queryInterface.showIndex(tableName);
+  const requestedName =
+    options.name || `${tableName}_${fields.join('_')}`;
+  const alreadyExists = existingIndexes.some((index) => index.name === requestedName);
+  if (!alreadyExists) {
+    await queryInterface.addIndex(tableName, fields, { ...options, name: requestedName });
+  }
+};
+
+const ensureConstraint = async (queryInterface, tableName, options) => {
+  const tableDefinition = await queryInterface.describeTable(tableName);
+  if (tableDefinition[options.fields[0]]?.references) {
+    return;
+  }
+
+  try {
+    await queryInterface.addConstraint(tableName, options);
+  } catch (error) {
+    if (!String(error?.message || '').toLowerCase().includes('duplicate')) {
+      throw error;
+    }
+  }
+};
+
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('tiktokShows', {
+    await ensureTable(queryInterface, 'tiktokShows', {
       id: {
         type: Sequelize.INTEGER,
         primaryKey: true,
@@ -33,9 +73,11 @@ module.exports = {
         defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'),
       },
     });
-    await queryInterface.addIndex('tiktokShows', ['isActive']);
+    await ensureIndex(queryInterface, 'tiktokShows', ['isActive'], {
+      name: 'tiktok_shows_is_active',
+    });
 
-    await queryInterface.createTable('tiktokShipmentImports', {
+    await ensureTable(queryInterface, 'tiktokShipmentImports', {
       id: {
         type: Sequelize.INTEGER,
         primaryKey: true,
@@ -90,7 +132,7 @@ module.exports = {
         defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'),
       },
     });
-    await queryInterface.addConstraint('tiktokShipmentImports', {
+    await ensureConstraint(queryInterface, 'tiktokShipmentImports', {
       fields: ['tiktokShowId'],
       type: 'foreign key',
       name: 'fk_tiktok_shipment_import_show_id',
@@ -101,10 +143,14 @@ module.exports = {
       onUpdate: 'CASCADE',
       onDelete: 'CASCADE',
     });
-    await queryInterface.addIndex('tiktokShipmentImports', ['tiktokShowId']);
-    await queryInterface.addIndex('tiktokShipmentImports', ['tiktokShowId', 'isActive']);
+    await ensureIndex(queryInterface, 'tiktokShipmentImports', ['tiktokShowId'], {
+      name: 'tiktok_shipment_imports_show_id',
+    });
+    await ensureIndex(queryInterface, 'tiktokShipmentImports', ['tiktokShowId', 'isActive'], {
+      name: 'tiktok_shipment_imports_show_id_is_active',
+    });
 
-    await queryInterface.createTable('tiktokShipmentItems', {
+    await ensureTable(queryInterface, 'tiktokShipmentItems', {
       id: {
         type: Sequelize.INTEGER,
         primaryKey: true,
@@ -352,7 +398,7 @@ module.exports = {
         defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'),
       },
     });
-    await queryInterface.addConstraint('tiktokShipmentItems', {
+    await ensureConstraint(queryInterface, 'tiktokShipmentItems', {
       fields: ['tiktokShowId'],
       type: 'foreign key',
       name: 'fk_tiktok_shipment_item_show_id',
@@ -363,7 +409,7 @@ module.exports = {
       onUpdate: 'CASCADE',
       onDelete: 'CASCADE',
     });
-    await queryInterface.addConstraint('tiktokShipmentItems', {
+    await ensureConstraint(queryInterface, 'tiktokShipmentItems', {
       fields: ['importId'],
       type: 'foreign key',
       name: 'fk_tiktok_shipment_item_import_id',
@@ -374,13 +420,23 @@ module.exports = {
       onUpdate: 'CASCADE',
       onDelete: 'CASCADE',
     });
-    await queryInterface.addIndex('tiktokShipmentItems', ['tiktokShowId', 'importId']);
-    await queryInterface.addIndex('tiktokShipmentItems', ['shipmentId']);
-    await queryInterface.addIndex('tiktokShipmentItems', ['tracking']);
-    await queryInterface.addIndex('tiktokShipmentItems', ['status']);
-    await queryInterface.addIndex('tiktokShipmentItems', ['shipmentId', 'stickerNumber']);
+    await ensureIndex(queryInterface, 'tiktokShipmentItems', ['tiktokShowId', 'importId'], {
+      name: 'tiktok_shipment_items_show_import',
+    });
+    await ensureIndex(queryInterface, 'tiktokShipmentItems', ['shipmentId'], {
+      name: 'tiktok_shipment_items_shipment_id',
+    });
+    await ensureIndex(queryInterface, 'tiktokShipmentItems', ['tracking'], {
+      name: 'tiktok_shipment_items_tracking',
+    });
+    await ensureIndex(queryInterface, 'tiktokShipmentItems', ['status'], {
+      name: 'tiktok_shipment_items_status',
+    });
+    await ensureIndex(queryInterface, 'tiktokShipmentItems', ['shipmentId', 'stickerNumber'], {
+      name: 'tiktok_shipment_items_shipment_sticker',
+    });
 
-    await queryInterface.createTable('tiktokShipmentScans', {
+    await ensureTable(queryInterface, 'tiktokShipmentScans', {
       id: {
         type: Sequelize.INTEGER,
         primaryKey: true,
@@ -462,7 +518,7 @@ module.exports = {
         defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'),
       },
     });
-    await queryInterface.addConstraint('tiktokShipmentScans', {
+    await ensureConstraint(queryInterface, 'tiktokShipmentScans', {
       fields: ['tiktokShowId'],
       type: 'foreign key',
       name: 'fk_tiktok_shipment_scan_show_id',
@@ -473,7 +529,7 @@ module.exports = {
       onUpdate: 'CASCADE',
       onDelete: 'CASCADE',
     });
-    await queryInterface.addConstraint('tiktokShipmentScans', {
+    await ensureConstraint(queryInterface, 'tiktokShipmentScans', {
       fields: ['importId'],
       type: 'foreign key',
       name: 'fk_tiktok_shipment_scan_import_id',
@@ -484,11 +540,17 @@ module.exports = {
       onUpdate: 'CASCADE',
       onDelete: 'SET NULL',
     });
-    await queryInterface.addIndex('tiktokShipmentScans', ['tiktokShowId', 'createdAt']);
-    await queryInterface.addIndex('tiktokShipmentScans', ['shipmentId']);
-    await queryInterface.addIndex('tiktokShipmentScans', ['tracking']);
+    await ensureIndex(queryInterface, 'tiktokShipmentScans', ['tiktokShowId', 'createdAt'], {
+      name: 'tiktok_shipment_scans_show_created_at',
+    });
+    await ensureIndex(queryInterface, 'tiktokShipmentScans', ['shipmentId'], {
+      name: 'tiktok_shipment_scans_shipment_id',
+    });
+    await ensureIndex(queryInterface, 'tiktokShipmentScans', ['tracking'], {
+      name: 'tiktok_shipment_scans_tracking',
+    });
 
-    await queryInterface.createTable('tiktokFailedOrders', {
+    await ensureTable(queryInterface, 'tiktokFailedOrders', {
       id: {
         type: Sequelize.INTEGER,
         primaryKey: true,
@@ -547,7 +609,7 @@ module.exports = {
         defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'),
       },
     });
-    await queryInterface.addConstraint('tiktokFailedOrders', {
+    await ensureConstraint(queryInterface, 'tiktokFailedOrders', {
       fields: ['tiktokShowId'],
       type: 'foreign key',
       name: 'fk_tiktok_failed_order_show_id',
@@ -558,7 +620,7 @@ module.exports = {
       onUpdate: 'CASCADE',
       onDelete: 'CASCADE',
     });
-    await queryInterface.addConstraint('tiktokFailedOrders', {
+    await ensureConstraint(queryInterface, 'tiktokFailedOrders', {
       fields: ['importId'],
       type: 'foreign key',
       name: 'fk_tiktok_failed_order_import_id',
@@ -569,8 +631,12 @@ module.exports = {
       onUpdate: 'CASCADE',
       onDelete: 'CASCADE',
     });
-    await queryInterface.addIndex('tiktokFailedOrders', ['tiktokShowId', 'importId']);
-    await queryInterface.addIndex('tiktokFailedOrders', ['stickerNumber']);
+    await ensureIndex(queryInterface, 'tiktokFailedOrders', ['tiktokShowId', 'importId'], {
+      name: 'tiktok_failed_orders_show_import',
+    });
+    await ensureIndex(queryInterface, 'tiktokFailedOrders', ['stickerNumber'], {
+      name: 'tiktok_failed_orders_sticker_number',
+    });
   },
 
   async down(queryInterface) {
