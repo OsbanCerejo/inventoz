@@ -41,6 +41,42 @@ const parseDateRange = (query) => {
 
 const normalizeTracking = (value) => String(value || "").trim();
 
+const buildTrackingCandidates = (value) => {
+  const normalized = normalizeTracking(value);
+  if (!normalized) return [];
+
+  const compact = normalized.replace(/\s+/g, "");
+  const candidates = new Set([normalized, compact]);
+
+  // Many carrier label scans include extra digits ahead of the actual
+  // tracking number. Fulfillment tables typically store just the trailing
+  // tracking portion, so always try the last 22 digits when the numeric
+  // payload is longer than 22.
+  if (/^\d+$/.test(compact) && compact.length > 22) {
+    candidates.add(compact.slice(-22));
+  }
+
+  return Array.from(candidates).filter(Boolean);
+};
+
+const buildTrackingWhereClause = (trackingCandidates) => {
+  const digitCandidates = trackingCandidates
+    .map((candidate) => String(candidate || "").replace(/\D/g, ""))
+    .filter(Boolean);
+
+  const orConditions = [];
+
+  if (trackingCandidates.length > 0) {
+    orConditions.push({ tracking: { [Op.in]: trackingCandidates } });
+  }
+
+  for (const candidate of digitCandidates) {
+    orConditions.push({ tracking: { [Op.like]: `%${candidate}` } });
+  }
+
+  return orConditions.length > 0 ? { [Op.or]: orConditions } : null;
+};
+
 const summarizeFulfillmentSource = (source, rows) => {
   const shipmentIds = [...new Set(rows.map((row) => String(row.shipmentId || "").trim()).filter(Boolean))];
   const closedRows = rows.filter((row) => Boolean(row.closedAt));
@@ -60,6 +96,8 @@ const summarizeFulfillmentSource = (source, rows) => {
 
 const buildFulfillmentCheck = async (tracking) => {
   const normalizedTracking = normalizeTracking(tracking);
+  const trackingCandidates = buildTrackingCandidates(tracking);
+  const trackingWhere = buildTrackingWhereClause(trackingCandidates);
   if (!normalizedTracking) {
     return {
       tracking: normalizedTracking,
@@ -70,14 +108,24 @@ const buildFulfillmentCheck = async (tracking) => {
     };
   }
 
+  if (!trackingWhere) {
+    return {
+      tracking: normalizedTracking,
+      status: "not_found",
+      alert: false,
+      message: "Tracking not found in Whatnot or TikTok fulfillment.",
+      sources: [],
+    };
+  }
+
   const [whatnotRows, tiktokRows] = await Promise.all([
     WhatnotShipmentItem.findAll({
-      where: { tracking: normalizedTracking },
+      where: trackingWhere,
       attributes: ["shipmentId", "tracking", "closedAt"],
       raw: true,
     }),
     TikTokShipmentItem.findAll({
-      where: { tracking: normalizedTracking },
+      where: trackingWhere,
       attributes: ["shipmentId", "tracking", "closedAt"],
       raw: true,
     }),
