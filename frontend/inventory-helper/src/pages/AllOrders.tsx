@@ -76,6 +76,13 @@ function AllOrders() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  const paletteByStoreId: Record<string, { color: string; text?: string }> = {
+    "1040538": { color: "#0071ce" },
+    "983189": { color: "#ec4899" },
+    "1034120": { color: "#facc15", text: "#222" },
+    "1050988": { color: "#111827" },
+  };
+
   const paletteByMarketplace: Record<string, { color: string; text?: string }> = {
     walmart: { color: "#0071ce" },
     ebay: { color: "#7c3aed" },
@@ -89,6 +96,7 @@ function AllOrders() {
     stores.map((store) => {
       const marketplaceKey = String(store.marketplace || "").toLowerCase();
       const palette =
+        paletteByStoreId[String(store.id)] ||
         paletteByMarketplace[marketplaceKey] ||
         (String(store.name || "").toLowerCase().includes("tiktok")
           ? paletteByMarketplace.tiktok
