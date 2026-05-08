@@ -16,12 +16,23 @@
             <p class="page-subtitle">Your one stop shop for all your wholesale needs</p>
           </div>
         </div>
-        <button id="cart-summary-button" class="cart-summary-button" type="button">
-          <span class="cart-icon" aria-hidden="true">🛒</span>
-          <span id="cart-summary-lines">0 SKUs</span>
-          <strong id="cart-summary-price">$0.00</strong>
-        </button>
-      </header>
+                <div class="header-actions">
+          <button id="clear-cart-header-button" class="clear-cart-header-button" type="button">
+            Clear Cart
+          </button>
+                    <button id="cart-summary-button" class="cart-summary-button" type="button">
+            <span class="cart-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <path d="M3 4h2l1.1 5.2A2 2 0 0 0 8.06 11H18a2 2 0 0 0 1.94-1.52L21 6H7.4" />
+                <circle cx="9" cy="19" r="1.6" />
+                <circle cx="17" cy="19" r="1.6" />
+              </svg>
+            </span>
+            <span id="cart-summary-lines">0 SKUs</span>
+            <strong id="cart-summary-price">$0.00</strong>
+          </button>
+        </div>
+</header>
 
       <main id="catalog-view">
         <section class="table-panel">
@@ -53,7 +64,7 @@
             <table class="catalog-table">
               <thead>
                 <tr>
-                  <th>Image</th>
+                  <th></th>
                   <th>UPC</th>
                   <th>
                     <button class="sort-button" type="button" data-sort-key="brand">
@@ -95,9 +106,6 @@
             <div class="cart-page-actions">
               <button id="back-to-products-button" class="secondary-button" type="button">
                 Back to Products
-              </button>
-              <button id="clear-cart-button" class="secondary-button danger-button" type="button">
-                Clear Cart
               </button>
               <button id="complete-order-button" class="primary-button" type="button">
                 Complete Order
@@ -241,7 +249,13 @@
 
       <template id="catalog-row-template">
         <tr>
-          <td class="image-cell"><img class="table-image" alt="" /></td>
+          <td class="image-cell">
+            <div class="image-cell-wrap">
+              <button class="image-search-button" type="button" title="Search this product on Google" aria-label="Search this product on Google">
+                <span aria-hidden="true">👁</span>
+              </button>
+            </div>
+          </td>
           <td class="upc-cell"></td>
           <td class="brand-cell"></td>
           <td class="name-cell"></td>

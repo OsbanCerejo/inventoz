@@ -25,6 +25,7 @@ const elements = {
   cartTableBody: document.getElementById("cart-table-body"),
   checkoutTableBody: document.getElementById("checkout-table-body"),
   cartSummaryButton: document.getElementById("cart-summary-button"),
+  clearCartHeaderButton: document.getElementById("clear-cart-header-button"),
   cartSummaryLines: document.getElementById("cart-summary-lines"),
   cartSummaryPrice: document.getElementById("cart-summary-price"),
   cartTotalLines: document.getElementById("cart-total-lines"),
@@ -34,7 +35,6 @@ const elements = {
   checkoutTotalUnits: document.getElementById("checkout-total-units"),
   checkoutTotalPrice: document.getElementById("checkout-total-price"),
   backToProductsButton: document.getElementById("back-to-products-button"),
-  clearCartButton: document.getElementById("clear-cart-button"),
   completeOrderButton: document.getElementById("complete-order-button"),
   checkoutBackButton: document.getElementById("checkout-back-button"),
   checkoutForm: document.getElementById("checkout-form"),
@@ -51,15 +51,6 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
 });
-
-const fallbackImage =
-  "data:image/svg+xml;utf8," +
-  encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">
-      <rect width="80" height="80" fill="#f6f6f6"/>
-      <text x="50%" y="48%" text-anchor="middle" fill="#666" font-family="Arial, sans-serif" font-size="16">HBA</text>
-    </svg>
-  `);
 
 const preferredCategoryOrder = ["All", "Perfumes", "Cosmetics", "Skincare", "Home", "Other"];
 
@@ -149,18 +140,29 @@ function normalizeText(value) {
     .trim();
 }
 
-function formatSizeOz(sizeOz) {
-  if (sizeOz === null || sizeOz === undefined || sizeOz === "") return "";
-  const numericSize = Number(sizeOz);
-  if (Number.isFinite(numericSize) && numericSize > 0) {
-    return `${numericSize} oz`;
+function formatNumericSize(value, unit) {
+  if (value === null || value === undefined || value === "") return "";
+  const numericValue = Number(value);
+  if (Number.isFinite(numericValue) && numericValue > 0) {
+    return `${numericValue} ${unit}`;
   }
-  return String(sizeOz).trim();
+  return String(value).trim();
+}
+
+function formatSizeDisplay(sizeOz, sizeMl) {
+  const sizeOzLabel = formatNumericSize(sizeOz, "oz");
+  const sizeMlLabel = formatNumericSize(sizeMl, "ml");
+
+  if (sizeOzLabel && sizeMlLabel) {
+    return `${sizeOzLabel} / ${sizeMlLabel}`;
+  }
+
+  return sizeOzLabel || sizeMlLabel;
 }
 
 function buildItemMeta(productOrLine) {
   const details = [];
-  const sizeLabel = formatSizeOz(productOrLine.sizeOz);
+  const sizeLabel = formatSizeDisplay(productOrLine.sizeOz, productOrLine.sizeMl);
   const strengthLabel = String(productOrLine.strength || "").trim();
   const isFragrance = normalizeCategoryLabel(productOrLine.category) === "Perfumes";
 
@@ -173,45 +175,43 @@ function buildItemMeta(productOrLine) {
   };
 }
 
+function buildGoogleSearchQuery(productOrLine) {
+  const upc = String(productOrLine.upc || "").trim();
+  if (upc) {
+    return upc;
+  }
+
+  return [productOrLine.itemName, formatSizeDisplay(productOrLine.sizeOz, productOrLine.sizeMl), productOrLine.strength]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
 function renderItemNameCell(cell, productOrLine) {
   const primary = document.createElement("div");
   primary.className = "item-name-primary";
-  primary.textContent = productOrLine.itemName || "";
-  cell.appendChild(primary);
+  primary.appendChild(document.createTextNode(productOrLine.itemName || ""));
 
   const metaInfo = buildItemMeta(productOrLine);
-  if (metaInfo.details.length > 0 || metaInfo.showTesterBadge) {
-    const meta = document.createElement("div");
-    meta.className = "item-name-meta";
-
-    if (metaInfo.details.length > 0) {
-      const metaText = document.createElement("span");
-      metaText.textContent = metaInfo.details.join(" · ");
-      meta.appendChild(metaText);
-    }
-
-    if (metaInfo.showTesterBadge) {
-      const badge = document.createElement("span");
-      badge.className = "tester-badge";
-      badge.textContent = "Tester";
-
-      if (metaInfo.details.length > 0) {
-        const separator = document.createElement("span");
-        separator.className = "item-meta-separator";
-        separator.textContent = "·";
-        meta.appendChild(separator);
-      }
-
-      meta.appendChild(badge);
-    }
-
-    cell.appendChild(meta);
+  if (metaInfo.details.length > 0) {
+    const metaText = document.createElement("span");
+    metaText.className = "item-name-meta-inline";
+    metaText.textContent = "(" + metaInfo.details.join(" / ") + ")";
+    primary.appendChild(metaText);
   }
-}
 
+  if (metaInfo.showTesterBadge) {
+    const badge = document.createElement("span");
+    badge.className = "tester-badge";
+    badge.textContent = "Tester";
+    primary.appendChild(badge);
+  }
+
+  cell.appendChild(primary);
+}
 function buildSearchHaystack(product) {
   return normalizeText(
-    [product.upc, product.brand, product.itemName, formatSizeOz(product.sizeOz), product.strength].join(" ")
+    [product.upc, product.brand, product.itemName, formatSizeDisplay(product.sizeOz, product.sizeMl), product.strength].join(" ")
   );
 }
 
@@ -379,7 +379,7 @@ function renderCatalog() {
 
   for (const product of state.filteredProducts) {
     const fragment = elements.catalogRowTemplate.content.cloneNode(true);
-    const rowImage = fragment.querySelector(".table-image");
+    const imageSearchButton = fragment.querySelector(".image-search-button");
     const upcCell = fragment.querySelector(".upc-cell");
     const brandCell = fragment.querySelector(".brand-cell");
     const nameCell = fragment.querySelector(".name-cell");
@@ -387,8 +387,12 @@ function renderCatalog() {
     const priceCell = fragment.querySelector(".price-cell");
     const qtyInput = fragment.querySelector(".row-qty-input");
 
-    rowImage.src = product.image || fallbackImage;
-    rowImage.alt = product.itemName;
+    imageSearchButton.addEventListener("click", () => {
+      const query = buildGoogleSearchQuery(product);
+      if (!query) return;
+      const url = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    });
     upcCell.textContent = product.upc || "";
     brandCell.textContent = product.brand;
     renderItemNameCell(nameCell, product);
@@ -574,12 +578,12 @@ function wireEvents() {
     state.view = "cart";
     renderView();
   });
+  elements.clearCartHeaderButton.addEventListener("click", clearCart);
   elements.backToProductsButton.addEventListener("click", () => {
     clearSuccessRedirectTimeout();
     state.view = "catalog";
     renderView();
   });
-  elements.clearCartButton.addEventListener("click", clearCart);
   elements.completeOrderButton.addEventListener("click", () => {
     clearSuccessRedirectTimeout();
     state.view = "checkout";
@@ -637,3 +641,4 @@ async function init() {
 }
 
 init();
+

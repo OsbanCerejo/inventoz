@@ -34,6 +34,25 @@ interface BarcodeScan {
   } | null;
 }
 
+interface FulfillmentCheckSource {
+  source: string;
+  found: boolean;
+  shipmentIds: string[];
+  matchedRows: number;
+  closed: boolean;
+  open: boolean;
+  closedRows: number;
+  openRows: number;
+}
+
+interface FulfillmentCheck {
+  tracking: string;
+  status: 'not_checked' | 'not_found' | 'open' | 'closed';
+  alert: boolean;
+  message: string;
+  sources: FulfillmentCheckSource[];
+}
+
 interface SearchResult {
   success: boolean;
   barcode: string;
@@ -53,6 +72,7 @@ const BarcodeScan: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [showScanSuccessCue, setShowScanSuccessCue] = useState(false);
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
+  const [fulfillmentCheck, setFulfillmentCheck] = useState<FulfillmentCheck | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const successCueTimerRef = useRef<number | null>(null);
@@ -91,6 +111,7 @@ const BarcodeScan: React.FC = () => {
     }
     setError('');
     setSuccess('');
+    setFulfillmentCheck(null);
     setLoading(true);
     
     try {
@@ -103,6 +124,7 @@ const BarcodeScan: React.FC = () => {
           ? ` by ${response.data.scan.user.name || response.data.scan.user.username}`
           : '';
         setSuccess(`Barcode ${barcode.trim()} scanned successfully at ${formatLocalTime(response.data.scan.scannedAt)}${userInfo}`);
+        setFulfillmentCheck(response.data.fulfillmentCheck || null);
         setShowScanSuccessCue(true);
         if (successCueTimerRef.current) {
           window.clearTimeout(successCueTimerRef.current);
@@ -228,6 +250,15 @@ const BarcodeScan: React.FC = () => {
         {success && (
           <Alert severity="success" sx={{ mt: 2 }} onClose={() => setSuccess(null)}>
             {success}
+          </Alert>
+        )}
+        {fulfillmentCheck && (
+          <Alert
+            severity={fulfillmentCheck.alert ? "warning" : fulfillmentCheck.status === "closed" ? "success" : "info"}
+            sx={{ mt: 2 }}
+            onClose={() => setFulfillmentCheck(null)}
+          >
+            {fulfillmentCheck.message}
           </Alert>
         )}
       </Paper>

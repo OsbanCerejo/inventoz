@@ -7,6 +7,7 @@ body {
   font-family: Arial, sans-serif;
   background: #f5f5f5;
   color: #222;
+  font-size: 17px;
 }
 
 .page-shell {
@@ -49,28 +50,73 @@ body {
 .page-subtitle {
   margin: 0;
   color: #666;
+  font-size: 18px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .cart-summary-button {
   min-width: 190px;
   padding: 10px 14px;
-  border: 1px solid #d0d0d0;
+  border: 1px solid #1f7a45;
   border-radius: 6px;
-  background: #fff;
+  background: #1f9d55;
+  color: #fff;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
   font: inherit;
+  box-shadow: 0 1px 2px rgba(10, 77, 38, 0.15);
+}
+
+.cart-summary-button:hover {
+  background: #18864a;
+}
+
+.clear-cart-header-button {
+  min-width: 140px;
+  padding: 10px 14px;
+  border: 1px solid #c33b32;
+  border-radius: 6px;
+  background: #e14d43;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(122, 28, 22, 0.15);
+}
+
+.clear-cart-header-button:hover {
+  background: #c93d34;
 }
 
 .cart-summary-button strong {
-  font-size: 18px;
+  font-size: 20px;
 }
 
 .cart-icon {
-  font-size: 20px;
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+}
+
+.cart-icon svg {
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .table-panel,
@@ -98,7 +144,7 @@ body {
 }
 
 .category-filter-label {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   color: #555;
 }
@@ -116,7 +162,7 @@ body {
   border-radius: 999px;
   padding: 7px 12px;
   font: inherit;
-  font-size: 13px;
+  font-size: 15px;
   cursor: pointer;
 }
 
@@ -133,7 +179,7 @@ body {
 }
 
 .toolbar-field label {
-  font-size: 13px;
+  font-size: 15px;
   color: #555;
 }
 
@@ -157,26 +203,59 @@ body {
 
 .catalog-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0 5px;
 }
 
 .catalog-table th,
 .catalog-table td {
-  padding: 10px 8px;
-  border-bottom: 1px solid #e6e6e6;
+  padding: 7px 8px;
   text-align: left;
   vertical-align: middle;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .catalog-table thead th {
   background: #fafafa;
   font-weight: 700;
   white-space: nowrap;
+  font-size: 15px;
+  border-bottom: 1px solid #e6e6e6;
+}
+
+.catalog-table th + th,
+.catalog-table td + td {
+  border-left: 1px solid #edf1f5;
+}
+
+.catalog-table tbody tr:nth-child(odd) {
+  background: #fdfefe;
+}
+
+.catalog-table tbody tr:nth-child(even) {
+  background: #f7faff;
 }
 
 .catalog-table tbody tr:hover {
-  background: #fcfcfc;
+  background: #eef5ff;
+}
+
+.catalog-table tbody td {
+  background: inherit;
+  border-top: 1px solid #edf1f5;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.catalog-table tbody td:first-child {
+  border-left: 1px solid #edf1f5;
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+
+.catalog-table tbody td:last-child {
+  border-right: 1px solid #edf1f5;
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
 }
 
 .sort-button {
@@ -200,16 +279,34 @@ body {
 }
 
 .image-cell {
-  width: 74px;
+  width: 56px;
 }
 
-.table-image {
-  width: 48px;
-  height: 48px;
-  object-fit: contain;
-  border: 1px solid #e5e5e5;
-  border-radius: 4px;
+.image-cell-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-search-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #d4dbe4;
+  border-radius: 999px;
   background: #fff;
+  color: #285ea8;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+}
+
+.image-search-button:hover {
+  background: #eef5ff;
+  border-color: #8bb8ea;
 }
 
 .upc-cell,
@@ -226,16 +323,17 @@ body {
 .item-name-primary {
   font-weight: 700;
   color: #222;
-}
-
-.item-name-meta {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #6a6a6a;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  line-height: 1.35;
+}
+
+.item-name-meta-inline {
+  font-size: inherit;
+  color: inherit;
+  font-weight: inherit;
 }
 
 .item-meta-separator {
@@ -250,13 +348,13 @@ body {
   color: #8a5b00;
   border-radius: 999px;
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
 }
 
 .qty-cell {
-  width: 90px;
+  width: 110px;
 }
 
 .row-qty-input:focus,
@@ -351,7 +449,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  font-size: 15px;
   color: #555;
 }
 

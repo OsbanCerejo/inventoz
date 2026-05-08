@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { BarcodeScan, User } = require("../models");
+const { BarcodeScan, User, WhatnotShipmentItem, TikTokShipmentItem } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 const { sequelize } = require("../models");
@@ -39,6 +39,87 @@ const parseDateRange = (query) => {
   return { from, to };
 };
 
+const normalizeTracking = (value) => String(value || "").trim();
+
+const summarizeFulfillmentSource = (source, rows) => {
+  const shipmentIds = [...new Set(rows.map((row) => String(row.shipmentId || "").trim()).filter(Boolean))];
+  const closedRows = rows.filter((row) => Boolean(row.closedAt));
+  const openRows = rows.filter((row) => !row.closedAt);
+
+  return {
+    source,
+    found: rows.length > 0,
+    shipmentIds,
+    matchedRows: rows.length,
+    closed: openRows.length === 0 && closedRows.length > 0,
+    open: openRows.length > 0,
+    closedRows: closedRows.length,
+    openRows: openRows.length,
+  };
+};
+
+const buildFulfillmentCheck = async (tracking) => {
+  const normalizedTracking = normalizeTracking(tracking);
+  if (!normalizedTracking) {
+    return {
+      tracking: normalizedTracking,
+      status: "not_checked",
+      alert: false,
+      message: "No tracking number provided for fulfillment verification.",
+      sources: [],
+    };
+  }
+
+  const [whatnotRows, tiktokRows] = await Promise.all([
+    WhatnotShipmentItem.findAll({
+      where: { tracking: normalizedTracking },
+      attributes: ["shipmentId", "tracking", "closedAt"],
+      raw: true,
+    }),
+    TikTokShipmentItem.findAll({
+      where: { tracking: normalizedTracking },
+      attributes: ["shipmentId", "tracking", "closedAt"],
+      raw: true,
+    }),
+  ]);
+
+  const sources = [
+    summarizeFulfillmentSource("whatnot", whatnotRows),
+    summarizeFulfillmentSource("tiktok", tiktokRows),
+  ].filter((source) => source.found);
+
+  if (sources.length === 0) {
+    return {
+      tracking: normalizedTracking,
+      status: "not_found",
+      alert: false,
+      message: "Tracking not found in Whatnot or TikTok fulfillment.",
+      sources: [],
+    };
+  }
+
+  const openSources = sources.filter((source) => source.open);
+  if (openSources.length > 0) {
+    const sourceList = openSources.map((source) => source.source).join(" and ");
+    return {
+      tracking: normalizedTracking,
+      status: "open",
+      alert: true,
+      message: `Tracking exists in ${sourceList} fulfillment but is not closed yet.`,
+      sources,
+    };
+  }
+
+  const sourceList = sources.map((source) => source.source).join(" and ");
+  return {
+    tracking: normalizedTracking,
+    status: "closed",
+    alert: false,
+    message: `Tracking is closed in ${sourceList} fulfillment.`,
+    sources,
+  };
+};
+
 
 // Simplified analytics schedule:
 // Count all scans in each day, but for average/hour calculations use:
@@ -75,6 +156,7 @@ router.post("/", auth, checkPermission('barcodeScan', 'create'), async (req, res
         attributes: ['id', 'name', 'username', 'email']
       }]
     });
+    const fulfillmentCheck = await buildFulfillmentCheck(barcode.trim());
     
     // Format timestamp to ISO string (UTC) - frontend will convert to local time
     const scannedAtDate = savedScan.scannedAt instanceof Date 
@@ -94,7 +176,8 @@ router.post("/", auth, checkPermission('barcodeScan', 'create'), async (req, res
           name: savedScan.user.name,
           username: savedScan.user.username
         } : null
-      }
+      },
+      fulfillmentCheck,
     });
   } catch (error) {
     console.error("Error saving barcode scan:", error);
