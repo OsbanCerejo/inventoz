@@ -18,9 +18,14 @@ import {
   TableHead,
   TableRow,
   Divider,
-  Fade
+  Fade,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 
 interface BarcodeScan {
   id: number;
@@ -73,6 +78,7 @@ const BarcodeScan: React.FC = () => {
   const [showScanSuccessCue, setShowScanSuccessCue] = useState(false);
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [fulfillmentCheck, setFulfillmentCheck] = useState<FulfillmentCheck | null>(null);
+  const [openFulfillmentAlert, setOpenFulfillmentAlert] = useState<FulfillmentCheck | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const successCueTimerRef = useRef<number | null>(null);
@@ -124,7 +130,11 @@ const BarcodeScan: React.FC = () => {
           ? ` by ${response.data.scan.user.name || response.data.scan.user.username}`
           : '';
         setSuccess(`Barcode ${barcode.trim()} scanned successfully at ${formatLocalTime(response.data.scan.scannedAt)}${userInfo}`);
-        setFulfillmentCheck(response.data.fulfillmentCheck || null);
+        const nextFulfillmentCheck = response.data.fulfillmentCheck || null;
+        setFulfillmentCheck(nextFulfillmentCheck);
+        if (nextFulfillmentCheck?.status === 'open' && nextFulfillmentCheck?.alert) {
+          setOpenFulfillmentAlert(nextFulfillmentCheck);
+        }
         setShowScanSuccessCue(true);
         if (successCueTimerRef.current) {
           window.clearTimeout(successCueTimerRef.current);
@@ -141,6 +151,11 @@ const BarcodeScan: React.FC = () => {
         }, 100);
       }
     } catch (error: any) {
+      const blockedFulfillmentCheck = error?.response?.data?.fulfillmentCheck || null;
+      if (blockedFulfillmentCheck?.status === 'open' && blockedFulfillmentCheck?.alert) {
+        setFulfillmentCheck(blockedFulfillmentCheck);
+        setOpenFulfillmentAlert(blockedFulfillmentCheck);
+      }
       setError(error.response?.data?.error || 'Error scanning barcode');
     } finally {
       setLoading(false);
@@ -263,6 +278,72 @@ const BarcodeScan: React.FC = () => {
         )}
       </Paper>
       )}
+
+      <Dialog
+        open={Boolean(openFulfillmentAlert)}
+        onClose={() => setOpenFulfillmentAlert(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            color: 'error.main',
+            fontWeight: 700,
+            fontSize: 30,
+            pb: 1,
+          }}
+        >
+          <WarningAmberRoundedIcon sx={{ fontSize: 42 }} />
+          Stop - Intervention Required
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="error" sx={{ mb: 2, fontSize: 18, alignItems: 'center' }}>
+            This tracking number exists in fulfillment but the shipment is not closed.
+          </Alert>
+          <Typography sx={{ fontSize: 18, fontWeight: 700, mb: 1 }}>
+            {openFulfillmentAlert?.message}
+          </Typography>
+          <Typography sx={{ fontSize: 16, color: 'text.secondary', mb: 2 }}>
+            Do not continue packing this order until a lead or fulfillment manager reviews it and closes the shipment correctly.
+          </Typography>
+          {openFulfillmentAlert?.sources?.map((source) => (
+            <Box
+              key={source.source}
+              sx={{
+                border: '1px solid',
+                borderColor: source.open ? 'error.light' : 'success.light',
+                borderRadius: 2,
+                p: 2,
+                mb: 1.5,
+                backgroundColor: source.open ? '#fff5f5' : '#f4fbf6',
+              }}
+            >
+              <Typography sx={{ fontWeight: 700, fontSize: 17, textTransform: 'capitalize', mb: 0.5 }}>
+                {source.source} Fulfillment
+              </Typography>
+              <Typography sx={{ fontSize: 15 }}>
+                Shipment IDs: {source.shipmentIds.length ? source.shipmentIds.join(', ') : 'N/A'}
+              </Typography>
+              <Typography sx={{ fontSize: 15 }}>
+                Status: {source.open ? 'Open / Not Closed' : 'Closed'}
+              </Typography>
+            </Box>
+          ))}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button
+            variant="contained"
+            color="error"
+            size="large"
+            onClick={() => setOpenFulfillmentAlert(null)}
+          >
+            Acknowledge And Get Help
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {canScanBarcode && canSearchBarcode && <Divider sx={{ my: 4 }} />}
 

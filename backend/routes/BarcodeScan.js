@@ -139,11 +139,21 @@ router.post("/", auth, checkPermission('barcodeScan', 'create'), async (req, res
       return res.status(400).json({ error: 'Barcode is required' });
     }
 
+    const normalizedBarcode = barcode.trim();
+    const fulfillmentCheck = await buildFulfillmentCheck(normalizedBarcode);
+
+    if (fulfillmentCheck.status === "open" && fulfillmentCheck.alert) {
+      return res.status(409).json({
+        error: "Shipment is present in fulfillment but not closed. Packing intervention is required.",
+        fulfillmentCheck,
+      });
+    }
+
     // Use database NOW() function to get server's actual local time
     // This bypasses Sequelize timezone conversion issues
     // Capture userId from authenticated user
     const scan = await BarcodeScan.create({
-      barcode: barcode.trim(),
+      barcode: normalizedBarcode,
       scannedAt: Sequelize.literal('NOW()'),
       userId: req.user.id
     });
@@ -156,8 +166,6 @@ router.post("/", auth, checkPermission('barcodeScan', 'create'), async (req, res
         attributes: ['id', 'name', 'username', 'email']
       }]
     });
-    const fulfillmentCheck = await buildFulfillmentCheck(barcode.trim());
-    
     // Format timestamp to ISO string (UTC) - frontend will convert to local time
     const scannedAtDate = savedScan.scannedAt instanceof Date 
       ? savedScan.scannedAt 
