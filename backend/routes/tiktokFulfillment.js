@@ -32,8 +32,12 @@ const ITEM_CATEGORY_RANDOM_GIVEAWAY = 'random_giveaway';
 const ITEM_CATEGORY_COFFEE = 'coffee';
 const ITEM_CATEGORY_SPONSORED_GIVEAWAY = 'sponsored_giveaway';
 const ITEM_CATEGORY_OTHERS = 'others';
+const ITEM_CATEGORY_CANCELLED_ORDER = 'cancelled_order';
+const ITEM_CATEGORY_FAILED_ORDER = 'failed_order';
 const EXCLUDED_PENDING_SHIPMENT_CATEGORIES = new Set([
   ITEM_CATEGORY_RANDOM_GIVEAWAY,
+  ITEM_CATEGORY_CANCELLED_ORDER,
+  ITEM_CATEGORY_FAILED_ORDER,
 ]);
 const FLASH_SALE_TOKEN = FLASH_SALE_STICKER.replace(/[^A-Z0-9-]/g, '');
 const RAID_GIVEAWAY_TOKEN = RAID_GIVEAWAY_STICKER.replace(/[^A-Z0-9-]/g, '');
@@ -70,6 +74,7 @@ const upload = multer({
 });
 
 const normalizeText = (value) => String(value || '').trim();
+const normalizeLowerText = (value) => normalizeText(value).toLowerCase();
 const normalizeTracking = (value) => {
   const raw = normalizeText(value);
   const digitsOnly = raw.replace(/\D/g, '');
@@ -243,6 +248,60 @@ const parseDateTime = (rawValue) => {
   return parsed;
 };
 
+const isCancelledOrderRow = ({
+  orderStatus = '',
+  orderSubstatus = '',
+  cancellationType = '',
+  cancelledAt = null,
+}) => {
+  if (cancelledAt) return true;
+  const haystack = [orderStatus, orderSubstatus, cancellationType]
+    .map(normalizeLowerText)
+    .filter(Boolean)
+    .join(' ');
+  return haystack.includes('cancel');
+};
+
+const isFailedOrderRow = ({
+  orderStatus = '',
+  orderSubstatus = '',
+  cancellationType = '',
+}) => {
+  const haystack = [orderStatus, orderSubstatus, cancellationType]
+    .map(normalizeLowerText)
+    .filter(Boolean)
+    .join(' ');
+  return ['fail', 'return', 'refund'].some((token) => haystack.includes(token));
+};
+
+const deriveTerminalOrderCategory = ({
+  orderStatus = '',
+  orderSubstatus = '',
+  cancellationType = '',
+  cancelledAt = null,
+}) => {
+  if (
+    isCancelledOrderRow({
+      orderStatus,
+      orderSubstatus,
+      cancellationType,
+      cancelledAt,
+    })
+  ) {
+    return ITEM_CATEGORY_CANCELLED_ORDER;
+  }
+  if (
+    isFailedOrderRow({
+      orderStatus,
+      orderSubstatus,
+      cancellationType,
+    })
+  ) {
+    return ITEM_CATEGORY_FAILED_ORDER;
+  }
+  return null;
+};
+
 const normalizeCsvHeader = (value) =>
   normalizeText(value)
     .toLowerCase()
@@ -376,6 +435,8 @@ const getNonAuctionDisplayTitle = (rowOrCategory) => {
     typeof rowOrCategory === 'string' ? rowOrCategory : getRowItemCategory(rowOrCategory);
   const productName =
     typeof rowOrCategory === 'string' ? '' : normalizeText(rowOrCategory?.productName);
+  if (category === ITEM_CATEGORY_CANCELLED_ORDER) return 'Cancelled Order';
+  if (category === ITEM_CATEGORY_FAILED_ORDER) return 'Failed Order';
   if (category === ITEM_CATEGORY_TIKTOK_FLASH_SALE) return 'TikTok Flash Sale';
   if (productName) return productName;
   if (category === ITEM_CATEGORY_RAID_GIVEAWAY) return 'Raid Giveaway';
@@ -405,7 +466,14 @@ const extractStickerNumber = (productName) => {
 };
 
 const getAuctionRows = (rows) => rows.filter((row) => Boolean(row.isAuctionItem));
-const getNonAuctionRows = (rows) => rows.filter((row) => !row.isAuctionItem);
+const getNonAuctionRows = (rows) =>
+  rows.filter(
+    (row) =>
+      !row.isAuctionItem &&
+      ![ITEM_CATEGORY_CANCELLED_ORDER, ITEM_CATEGORY_FAILED_ORDER].includes(getRowItemCategory(row))
+  );
+const isTerminalOrderCategory = (category) =>
+  [ITEM_CATEGORY_CANCELLED_ORDER, ITEM_CATEGORY_FAILED_ORDER].includes(category);
 const isAutoApprovedNonAuctionRow = (row) =>
   !row?.isAuctionItem && isAutoApprovedNonAuctionCategory(getRowItemCategory(row));
 const getActionableNonAuctionRows = (rows) =>
@@ -884,6 +952,7 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
         completedShipments: [],
         categoryCounts: {},
         failedOrders: [],
+        terminalOrders: [],
       });
     }
 
@@ -913,8 +982,16 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
         importId: activeImport.id,
       },
       attributes: [
+        'id',
         'shipmentId',
         'tracking',
+        'buyer',
+        'stickerNumber',
+        'orderId',
+        'orderStatus',
+        'orderSubstatus',
+        'cancelledAt',
+        'soldPrice',
         'expectedQty',
         'expectedProductLinks',
         'scannedQty',
@@ -930,9 +1007,26 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
     const shipmentCloseMap = new Map();
     const shipmentSummaryMap = new Map();
     const categoryCounts = {};
+    const terminalOrders = [];
     for (const row of shipmentStatusRows) {
       const shipmentId = normalizeText(row.shipmentId);
       if (!shipmentId) continue;
+      const rowCategory = getRowItemCategory(row);
+      if (isTerminalOrderCategory(rowCategory)) {
+        terminalOrders.push({
+          id: row.id,
+          shipmentId,
+          tracking: normalizeText(row.tracking) || null,
+          buyer: normalizeText(row.buyer) || 'N/A',
+          stickerNumber: normalizeSticker(row.stickerNumber),
+          orderId: normalizeText(row.orderId) || null,
+          orderStatus: normalizeText(row.orderStatus) || null,
+          orderSubstatus: normalizeText(row.orderSubstatus) || null,
+          cancelledAt: row.cancelledAt || null,
+          mismatchReason: normalizeText(row.mismatchReason) || null,
+          soldPrice: row.soldPrice || null,
+        });
+      }
       const existing = shipmentCloseMap.get(shipmentId) || false;
       shipmentCloseMap.set(shipmentId, existing || Boolean(row.closedAt));
 
@@ -955,11 +1049,10 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
       const summaryEntry = shipmentSummaryMap.get(shipmentId);
       summaryEntry.expectedItems += Number(row.expectedQty || 0);
       summaryEntry.scannedItems += Number(row.scannedQty || 0);
-      const rowCategory = getRowItemCategory(row);
       if (!EXCLUDED_PENDING_SHIPMENT_CATEGORIES.has(rowCategory)) {
         summaryEntry.countsTowardOpenShipments = true;
       }
-      if (rowCategory !== ITEM_CATEGORY_RANDOM_GIVEAWAY) {
+      if (rowCategory !== ITEM_CATEGORY_RANDOM_GIVEAWAY && !isTerminalOrderCategory(rowCategory)) {
         summaryEntry.visibleInShipmentLists = true;
       }
       if (normalizeText(row.status) === 'pending_review') {
@@ -1111,6 +1204,13 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
       pendingShipments,
       completedShipments: completedShipmentsWithNames,
       categoryCounts,
+      terminalOrders: terminalOrders
+        .sort((a, b) => {
+          const aTime = a.cancelledAt ? new Date(a.cancelledAt).getTime() : 0;
+          const bTime = b.cancelledAt ? new Date(b.cancelledAt).getTime() : 0;
+          return bTime - aTime;
+        })
+        .slice(0, 2000),
       failedOrders: failedOrders.map((entry) => ({
         id: entry.id,
         buyer: normalizeText(entry.buyer) || 'N/A',
@@ -1243,15 +1343,25 @@ router.post(
       const numericSellerSkus = new Set();
       let parsedRows = 0;
 
-      for (const row of records) {
+      for (const [rowIndex, row] of records.entries()) {
         const productName = normalizeText(getCsvValue(row, 'product name', 'product_name'));
         const sellerSku = normalizeSticker(getCsvValue(row, 'seller sku', 'seller_sku'));
         const orderId = normalizeText(getCsvValue(row, 'order id', 'order_id'));
         const buyer = normalizeText(
           getCsvValue(row, 'buyer username', 'buyer nickname', 'buyer_username', 'buyer_nickname')
         );
+        const orderStatus = normalizeText(getCsvValue(row, 'order status', 'order_status'));
+        const orderSubstatus = normalizeText(getCsvValue(row, 'order substatus', 'order_substatus'));
+        const cancellationType = normalizeText(
+          getCsvValue(
+            row,
+            'cancelation/return type',
+            'cancellation/return type',
+            'cancelation return type',
+            'cancellation return type'
+          )
+        );
         const tracking = normalizeTracking(getCsvValue(row, 'tracking id', 'tracking_id'));
-        const shipmentId = tracking;
         const quantity = parseQuantity(getCsvValue(row, 'quantity'));
         const placedAt = parseDateTime(getCsvValue(row, 'created time', 'created_time'));
         const paidAt = parseDateTime(getCsvValue(row, 'paid time', 'paid_time'));
@@ -1270,13 +1380,22 @@ router.post(
         );
         const platformDiscount = parseMoney(getCsvValue(row, 'sku platform discount', 'sku_platform_discount'));
         const sellerDiscount = parseMoney(getCsvValue(row, 'sku seller discount', 'sku_seller_discount'));
+        const terminalCategory = deriveTerminalOrderCategory({
+          orderStatus,
+          orderSubstatus,
+          cancellationType,
+          cancelledAt,
+        });
+        const shipmentId = terminalCategory
+          ? `${terminalCategory.toUpperCase()}:${orderId || sellerSku || rowIndex + 1}`
+          : tracking;
 
         if (!shipmentId) continue;
 
         if (!grouped.has(shipmentId)) {
           grouped.set(shipmentId, {
             shipmentId,
-            tracking,
+            tracking: terminalCategory ? null : tracking,
             rows: new Map(),
             reasons: new Set(),
           });
@@ -1284,10 +1403,10 @@ router.post(
 
         const bucket = grouped.get(shipmentId);
 
-        if (!tracking) {
+        if (!tracking && !terminalCategory) {
           bucket.reasons.add('Missing tracking number in one or more rows.');
         }
-        if (!sellerSku) {
+        if (!sellerSku && !terminalCategory) {
           bucket.reasons.add('One or more rows are missing Seller SKU / item number.');
         }
 
@@ -1296,10 +1415,12 @@ router.post(
           numericSellerSkus.add(numericSellerSku);
         }
 
-        const rowKey = sellerSku || '__MISSING_ITEM_NUMBER__';
+        const rowKey = terminalCategory
+          ? `${terminalCategory}:${orderId || sellerSku || rowIndex + 1}`
+          : sellerSku || '__MISSING_ITEM_NUMBER__';
         if (!bucket.rows.has(rowKey)) {
           bucket.rows.set(rowKey, {
-            tracking: tracking || null,
+            tracking: terminalCategory ? null : tracking || null,
             productName: productName || null,
             variation: normalizeText(getCsvValue(row, 'variation')),
             skuId: normalizeText(getCsvValue(row, 'sku id', 'sku_id')),
@@ -1307,10 +1428,10 @@ router.post(
               getCsvValue(row, 'virtual bundle seller sku', 'virtual_bundle_seller_sku')
             ),
             combinedListing: normalizeText(getCsvValue(row, 'combined listing', 'combined_listing')),
-            itemCategory: ITEM_CATEGORY_AUCTION,
-            isAuctionItem: true,
+            itemCategory: terminalCategory || ITEM_CATEGORY_AUCTION,
+            isAuctionItem: !terminalCategory,
             stickerNumber: sellerSku || null,
-            expectedQty: 1,
+            expectedQty: terminalCategory ? 0 : 1,
             expectedProductLinks: 0,
             groupedQuantity: 0,
             soldPrice,
@@ -1329,6 +1450,7 @@ router.post(
             orderIds: new Set(),
             orderStatuses: new Set(),
             orderSubstatuses: new Set(),
+            cancellationTypes: new Set(),
             packageIds: new Set(),
             recipient: normalizeText(getCsvValue(row, 'recipient')) || null,
             phone: normalizeText(getCsvValue(row, 'phone #', 'phone')) || null,
@@ -1357,13 +1479,14 @@ router.post(
         }
 
         const aggregated = bucket.rows.get(rowKey);
-        aggregated.expectedProductLinks += quantity;
-        aggregated.groupedQuantity += quantity;
+        if (!terminalCategory) {
+          aggregated.expectedProductLinks += quantity;
+          aggregated.groupedQuantity += quantity;
+        }
         if (orderId) aggregated.orderIds.add(orderId);
-        const orderStatus = normalizeText(getCsvValue(row, 'order status', 'order_status'));
-        const orderSubstatus = normalizeText(getCsvValue(row, 'order substatus', 'order_substatus'));
         if (orderStatus) aggregated.orderStatuses.add(orderStatus);
         if (orderSubstatus) aggregated.orderSubstatuses.add(orderSubstatus);
+        if (cancellationType) aggregated.cancellationTypes.add(cancellationType);
         const packageId = normalizeText(getCsvValue(row, 'package id', 'package_id'));
         if (packageId) aggregated.packageIds.add(packageId);
         aggregated.rawOrderData.push(row);
@@ -1393,7 +1516,7 @@ router.post(
           uploadedBy: req.user ? String(req.user.id) : null,
           isActive: true,
           totalRows: parsedRows,
-          totalShipments: grouped.size,
+          totalShipments: 0,
           readyShipments: 0,
           pendingReviewShipments: 0,
         },
@@ -1403,14 +1526,31 @@ router.post(
       const itemRows = [];
       let readyShipments = 0;
       let pendingReviewShipments = 0;
+      let actionableShipmentCount = 0;
 
       for (const bucket of grouped.values()) {
+        const aggregatedRows = Array.from(bucket.rows.values());
+        const hasActionableRows = aggregatedRows.some(
+          (aggregated) => !isTerminalOrderCategory(aggregated.itemCategory)
+        );
         const reasonText = Array.from(bucket.reasons).join(' ');
         const status = reasonText ? 'pending_review' : 'ready';
-        if (status === 'pending_review') pendingReviewShipments += 1;
-        else readyShipments += 1;
+        if (hasActionableRows) {
+          actionableShipmentCount += 1;
+          if (status === 'pending_review') pendingReviewShipments += 1;
+          else readyShipments += 1;
+        }
 
-        for (const aggregated of bucket.rows.values()) {
+        for (const aggregated of aggregatedRows) {
+          const isTerminalRow = isTerminalOrderCategory(aggregated.itemCategory);
+          const aggregatedOrderStatuses = Array.from(aggregated.orderStatuses);
+          const aggregatedOrderSubstatuses = Array.from(aggregated.orderSubstatuses);
+          const aggregatedCancellationTypes = Array.from(aggregated.cancellationTypes || []);
+          const terminalReason = isTerminalRow
+            ? `Imported as ${
+                aggregated.itemCategory === ITEM_CATEGORY_CANCELLED_ORDER ? 'cancelled' : 'failed'
+              } TikTok order and excluded from fulfillment scanning.`
+            : null;
           itemRows.push({
             tiktokShowId: showId,
             importId: importRecord.id,
@@ -1424,9 +1564,9 @@ router.post(
             itemCategory: aggregated.itemCategory,
             isAuctionItem: aggregated.isAuctionItem,
             stickerNumber: aggregated.stickerNumber,
-            expectedQty: aggregated.expectedQty,
-            expectedProductLinks: Math.max(1, aggregated.expectedProductLinks),
-            groupedQuantity: Math.max(1, aggregated.groupedQuantity),
+            expectedQty: isTerminalRow ? 0 : aggregated.expectedQty,
+            expectedProductLinks: isTerminalRow ? 0 : Math.max(1, aggregated.expectedProductLinks),
+            groupedQuantity: isTerminalRow ? 0 : Math.max(1, aggregated.groupedQuantity),
             soldPrice: aggregated.soldPrice,
             orderAmount: aggregated.orderAmount,
             taxes: aggregated.taxes,
@@ -1440,12 +1580,12 @@ router.post(
             deliveredAt: aggregated.deliveredAt,
             cancelledAt: aggregated.cancelledAt,
             scannedQty: 0,
-            status,
-            mismatchReason: reasonText || null,
+            status: isTerminalRow ? 'completed' : status,
+            mismatchReason: reasonText || terminalReason,
             buyer: aggregated.buyer || null,
             orderId: Array.from(aggregated.orderIds).join(', ') || null,
-            orderStatus: Array.from(aggregated.orderStatuses).join(', ') || null,
-            orderSubstatus: Array.from(aggregated.orderSubstatuses).join(', ') || null,
+            orderStatus: aggregatedOrderStatuses.join(', ') || null,
+            orderSubstatus: [...aggregatedOrderSubstatuses, ...aggregatedCancellationTypes].join(', ') || null,
             paymentMethod: aggregated.paymentMethod,
             recipient: aggregated.recipient,
             phone: aggregated.phone,
@@ -1503,6 +1643,7 @@ router.post(
 
       await importRecord.update(
         {
+          totalShipments: actionableShipmentCount,
           readyShipments,
           pendingReviewShipments,
         },
@@ -1515,9 +1656,11 @@ router.post(
         importId: importRecord.id,
         summary: {
           totalRows: parsedRows,
-          totalShipments: grouped.size,
+          totalShipments: actionableShipmentCount,
           readyShipments,
           pendingReviewShipments,
+          cancelledOrders: itemRows.filter((row) => row.itemCategory === ITEM_CATEGORY_CANCELLED_ORDER).length,
+          failedStatusOrders: itemRows.filter((row) => row.itemCategory === ITEM_CATEGORY_FAILED_ORDER).length,
         },
       });
     } catch (error) {

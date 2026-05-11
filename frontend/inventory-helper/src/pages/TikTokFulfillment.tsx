@@ -80,6 +80,20 @@ interface FailedOrderRow {
   attemptCount?: number;
 }
 
+interface TerminalOrderRow {
+  id: number;
+  shipmentId: string;
+  tracking?: string | null;
+  buyer: string;
+  stickerNumber?: string | null;
+  orderId?: string | null;
+  orderStatus?: string | null;
+  orderSubstatus?: string | null;
+  cancelledAt?: string | null;
+  mismatchReason?: string | null;
+  soldPrice?: string | number | null;
+}
+
 interface FulfillmentSummary {
   readyToBegin: boolean;
   activeImport: null | {
@@ -108,6 +122,7 @@ interface FulfillmentSummary {
   pendingShipments?: PendingShipmentRow[];
   completedShipments?: CompletedShipmentRow[];
   failedOrders?: FailedOrderRow[];
+  terminalOrders?: TerminalOrderRow[];
 }
 
 interface ShipmentChecklistItem {
@@ -175,16 +190,17 @@ interface ProductLookupResult {
 }
 
 interface ShipmentHistorySectionProps {
-  shipmentTab: "completed" | "pending" | "underReview" | "failed";
+  shipmentTab: "completed" | "pending" | "underReview" | "failed" | "terminal";
   completedSearch: string;
   filteredCompletedShipments: Array<
-    CompletedShipmentRow | PendingShipmentRow | UnderReviewShipmentRow | FailedOrderRow
+    CompletedShipmentRow | PendingShipmentRow | UnderReviewShipmentRow | FailedOrderRow | TerminalOrderRow
   >;
   completedCount: number;
   pendingCount: number;
   underReviewCount: number;
   failedCount: number;
-  onShipmentTabChange: (value: "completed" | "pending" | "underReview" | "failed") => void;
+  terminalCount: number;
+  onShipmentTabChange: (value: "completed" | "pending" | "underReview" | "failed" | "terminal") => void;
   onCompletedSearchChange: (value: string) => void;
   onOpenShipmentView: (shipmentId: string) => void;
 }
@@ -198,6 +214,7 @@ const ShipmentHistorySection = memo(
     pendingCount,
     underReviewCount,
     failedCount,
+    terminalCount,
     onShipmentTabChange,
     onCompletedSearchChange,
     onOpenShipmentView,
@@ -240,10 +257,21 @@ const ShipmentHistorySection = memo(
             label={`Failed Orders (${failedCount})`}
             sx={{ minHeight: 36, textTransform: "none" }}
           />
+          <Tab
+            value="terminal"
+            label={`Cancelled / Failed (${terminalCount})`}
+            sx={{ minHeight: 36, textTransform: "none" }}
+          />
         </Tabs>
         <TextField
           size="small"
-          label={shipmentTab === "failed" ? "Search Buyer / Item #" : "Search Shipment / Tracking"}
+          label={
+            shipmentTab === "failed"
+              ? "Search Buyer / Item #"
+              : shipmentTab === "terminal"
+              ? "Search Buyer / Order / Item #"
+              : "Search Shipment / Tracking"
+          }
           value={completedSearch}
           onChange={(e) => onCompletedSearchChange(e.target.value)}
           sx={{ width: { xs: "100%", md: 280 } }}
@@ -257,6 +285,14 @@ const ShipmentHistorySection = memo(
                 <TableCell>Username</TableCell>
                 <TableCell>Item #</TableCell>
                 <TableCell align="right">Price</TableCell>
+              </>
+            ) : shipmentTab === "terminal" ? (
+              <>
+                <TableCell>Username</TableCell>
+                <TableCell>Item #</TableCell>
+                <TableCell>Order ID</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Cancelled / Updated</TableCell>
               </>
             ) : (
               <>
@@ -272,7 +308,7 @@ const ShipmentHistorySection = memo(
         <TableBody>
           {filteredCompletedShipments.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={shipmentTab === "failed" ? 3 : 5}>
+              <TableCell colSpan={shipmentTab === "failed" ? 3 : shipmentTab === "terminal" ? 5 : 5}>
                 <Typography variant="body2" color="text.secondary">
                   {shipmentTab === "completed"
                     ? "No completed shipments found."
@@ -280,6 +316,8 @@ const ShipmentHistorySection = memo(
                     ? "No pending shipments found."
                     : shipmentTab === "underReview"
                     ? "No under-review shipments found."
+                    : shipmentTab === "terminal"
+                    ? "No cancelled or failed TikTok orders found."
                     : "No failed orders found."}
                 </Typography>
               </TableCell>
@@ -296,6 +334,23 @@ const ShipmentHistorySection = memo(
                       style: "currency",
                       currency: "USD",
                     })}
+                  </TableCell>
+                </TableRow>
+              );
+            })
+          ) : shipmentTab === "terminal" ? (
+            filteredCompletedShipments.map((row) => {
+              const terminalRow = row as TerminalOrderRow;
+              return (
+                <TableRow key={`terminal-${terminalRow.id}`}>
+                  <TableCell>{terminalRow.buyer}</TableCell>
+                  <TableCell>{terminalRow.stickerNumber ? `#${terminalRow.stickerNumber}` : "N/A"}</TableCell>
+                  <TableCell>{terminalRow.orderId || "N/A"}</TableCell>
+                  <TableCell>
+                    {[terminalRow.orderStatus, terminalRow.orderSubstatus].filter(Boolean).join(" / ") || "Terminal"}
+                  </TableCell>
+                  <TableCell>
+                    {terminalRow.cancelledAt ? new Date(terminalRow.cancelledAt).toLocaleString() : "N/A"}
                   </TableCell>
                 </TableRow>
               );
@@ -396,7 +451,7 @@ const TikTokFulfillment = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [interventionAlert, setInterventionAlert] = useState<string | null>(null);
   const [completedSearch, setCompletedSearch] = useState("");
-  const [shipmentTab, setShipmentTab] = useState<"completed" | "pending" | "underReview" | "failed">("completed");
+  const [shipmentTab, setShipmentTab] = useState<"completed" | "pending" | "underReview" | "failed" | "terminal">("completed");
   const [shipmentView, setShipmentView] = useState<ShipmentViewDetails | null>(null);
   const [shipmentViewLoading, setShipmentViewLoading] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -533,6 +588,7 @@ const TikTokFulfillment = () => {
     const pendingRows = summary?.pendingShipments || [];
     const underReviewRows = summary?.underReviewShipments || summary?.pendingReview || [];
     const failedRows = summary?.failedOrders || [];
+    const terminalRows = summary?.terminalOrders || [];
     const rows =
       shipmentTab === "completed"
         ? completedRows
@@ -540,6 +596,8 @@ const TikTokFulfillment = () => {
         ? pendingRows
         : shipmentTab === "underReview"
         ? underReviewRows
+        : shipmentTab === "terminal"
+        ? terminalRows
         : failedRows;
     const token = completedSearch.trim().toLowerCase();
     if (!token) return rows;
@@ -550,6 +608,16 @@ const TikTokFulfillment = () => {
         return (
           String(failedRow.buyer || "").toLowerCase().includes(token) ||
           String(failedRow.stickerNumber || "").toLowerCase().includes(token)
+        );
+      }
+      if (shipmentTab === "terminal") {
+        const terminalRow = row as TerminalOrderRow;
+        return (
+          String(terminalRow.buyer || "").toLowerCase().includes(token) ||
+          String(terminalRow.stickerNumber || "").toLowerCase().includes(token) ||
+          String(terminalRow.orderId || "").toLowerCase().includes(token) ||
+          String(terminalRow.orderStatus || "").toLowerCase().includes(token) ||
+          String(terminalRow.orderSubstatus || "").toLowerCase().includes(token)
         );
       }
       const shipmentMatch = String(row.shipmentId || "").toLowerCase().includes(token);
@@ -564,6 +632,7 @@ const TikTokFulfillment = () => {
     summary?.underReviewShipments,
     summary?.pendingReview,
     summary?.failedOrders,
+    summary?.terminalOrders,
     completedSearch,
     shipmentTab,
   ]);
@@ -572,6 +641,7 @@ const TikTokFulfillment = () => {
   const expectedProductLinkCount = Number(categoryCounts.auction?.expectedProductLinks || 0);
   const completedShipmentCount = Number(summary?.activeImport?.closedShipments || 0);
   const failedOrderCount = Number(summary?.failedOrders?.length || 0);
+  const terminalOrderCount = Number(summary?.terminalOrders?.length || 0);
 
   const fetchShows = async () => {
     setShowsLoading(true);
@@ -672,6 +742,8 @@ const TikTokFulfillment = () => {
       setSuccess(
         `CSV imported. Ready shipments: ${summaryData?.readyShipments || 0}, Pending review: ${
           summaryData?.pendingReviewShipments || 0
+        }, Cancelled orders: ${summaryData?.cancelledOrders || 0}, Failed status orders: ${
+          summaryData?.failedStatusOrders || 0
         }.`
       );
       setUploadFile(null);
@@ -1115,7 +1187,7 @@ const TikTokFulfillment = () => {
   }, [selectedShowId]);
 
   const handleShipmentTabChange = useCallback(
-    (value: "completed" | "pending" | "underReview" | "failed") => {
+    (value: "completed" | "pending" | "underReview" | "failed" | "terminal") => {
       setShipmentTab(value);
     },
     []
@@ -1256,10 +1328,20 @@ const TikTokFulfillment = () => {
               <Grid item xs={12} sm={6} md={3}>
                 <Paper variant="outlined" sx={{ p: 1.25 }}>
                   <Typography variant="caption" color="text.secondary">
-                    Failed Orders
+                    Missing Order #s
                   </Typography>
                   <Typography variant="h6" color="error.main">
                     {failedOrderCount}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper variant="outlined" sx={{ p: 1.25 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Cancelled / Failed Orders
+                  </Typography>
+                  <Typography variant="h6" color="warning.main">
+                    {terminalOrderCount}
                   </Typography>
                 </Paper>
               </Grid>
@@ -1781,6 +1863,7 @@ const TikTokFulfillment = () => {
         pendingCount={summary?.pendingShipments?.length || 0}
         underReviewCount={summary?.underReviewShipments?.length || summary?.pendingReview?.length || 0}
         failedCount={summary?.failedOrders?.length || 0}
+        terminalCount={summary?.terminalOrders?.length || 0}
         onShipmentTabChange={handleShipmentTabChange}
         onCompletedSearchChange={handleCompletedSearchChange}
         onOpenShipmentView={handleOpenShipmentView}
