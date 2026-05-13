@@ -321,7 +321,7 @@ body {
 }
 
 .item-name-primary {
-  font-weight: 700;
+  font-weight: 400;
   color: #222;
   display: flex;
   flex-wrap: wrap;

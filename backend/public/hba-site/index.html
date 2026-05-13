@@ -51,11 +51,9 @@
               />
             </div>
             <div class="toolbar-field">
-              <label for="availability-filter">Availability</label>
-              <select id="availability-filter">
+              <label for="brand-filter">Brand</label>
+              <select id="brand-filter">
                 <option value="all">All</option>
-                <option value="in-stock">In Stock</option>
-                <option value="sold-out">Sold Out</option>
               </select>
             </div>
           </div>
@@ -87,6 +85,7 @@
                     </button>
                   </th>
                   <th>Qty</th>
+                  <th>Subtotal</th>
                 </tr>
               </thead>
               <tbody id="catalog-body"></tbody>
@@ -264,6 +263,7 @@
           <td class="qty-cell">
             <input class="row-qty-input" type="number" min="0" />
           </td>
+          <td class="line-total-cell"></td>
         </tr>
       </template>
 

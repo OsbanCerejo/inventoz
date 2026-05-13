@@ -5,6 +5,7 @@ const state = {
   view: "catalog",
   successRedirectTimeoutId: null,
   selectedCategory: "all",
+  selectedBrand: "all",
   sortKey: "",
   sortDirection: "asc",
   eventsWired: false,
@@ -14,7 +15,7 @@ const apiBaseUrl = String(window.HBA_CONFIG?.apiBaseUrl || "").replace(/\/$/, ""
 
 const elements = {
   search: document.getElementById("catalog-search"),
-  availabilityFilter: document.getElementById("availability-filter"),
+  brandFilter: document.getElementById("brand-filter"),
   categoryFilterButtons: document.getElementById("category-filter-buttons"),
   catalogView: document.getElementById("catalog-view"),
   cartView: document.getElementById("cart-view"),
@@ -275,6 +276,39 @@ function renderCategoryFilters() {
   }
 }
 
+function getAvailableBrands() {
+  return Array.from(
+    new Set(
+      state.products
+        .map((product) => String(product.brand || "").trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
+function renderBrandFilter() {
+  const previousValue = state.selectedBrand || "all";
+  elements.brandFilter.innerHTML = "";
+
+  const allOption = document.createElement("option");
+  allOption.value = "all";
+  allOption.textContent = "All";
+  elements.brandFilter.appendChild(allOption);
+
+  for (const brand of getAvailableBrands()) {
+    const option = document.createElement("option");
+    option.value = brand;
+    option.textContent = brand;
+    elements.brandFilter.appendChild(option);
+  }
+
+  const hasSelectedBrand = Array.from(elements.brandFilter.options).some(
+    (option) => option.value === previousValue
+  );
+  elements.brandFilter.value = hasSelectedBrand ? previousValue : "all";
+  state.selectedBrand = elements.brandFilter.value;
+}
+
 function getCartSummary() {
   return Object.values(state.cart).reduce(
     (summary, line) => {
@@ -285,6 +319,15 @@ function getCartSummary() {
     },
     { totalUnits: 0, totalPrice: 0, lineCount: 0 }
   );
+}
+
+function formatLineTotal(quantity, price) {
+  const sanitizedQuantity = Number(quantity || 0);
+  if (!sanitizedQuantity || sanitizedQuantity <= 0) {
+    return "";
+  }
+
+  return currencyFormatter.format(sanitizedQuantity * Number(price || 0));
 }
 
 function updateCartForProduct(product, rawQuantity) {
@@ -332,24 +375,24 @@ function applySort(rows) {
 
 function applyFilters() {
   const searchValue = elements.search.value.trim();
-  const availability = elements.availabilityFilter.value;
   const selectedCategory = state.selectedCategory;
+  const selectedBrand = state.selectedBrand;
 
   const rows = state.products.filter((product) => {
     const matchesSearch = matchesRobustSearch(product, searchValue);
-    const matchesAvailability =
-      availability === "all" ||
-      (availability === "in-stock" && product.inStock) ||
-      (availability === "sold-out" && !product.inStock);
     const matchesCategory =
       selectedCategory === "all" ||
       normalizeCategoryLabel(product.category) === selectedCategory;
+    const matchesBrand =
+      selectedBrand === "all" ||
+      String(product.brand || "").trim() === selectedBrand;
 
-    return matchesSearch && matchesAvailability && matchesCategory;
+    return matchesSearch && matchesCategory && matchesBrand;
   });
 
   state.filteredProducts = applySort(rows);
   renderCategoryFilters();
+  renderBrandFilter();
   renderCatalog();
   renderSortIndicators();
 }
@@ -386,6 +429,7 @@ function renderCatalog() {
     const availableCell = fragment.querySelector(".available-cell");
     const priceCell = fragment.querySelector(".price-cell");
     const qtyInput = fragment.querySelector(".row-qty-input");
+    const subtotalCell = fragment.querySelector(".line-total-cell");
 
     imageSearchButton.addEventListener("click", () => {
       const query = buildGoogleSearchQuery(product);
@@ -403,8 +447,13 @@ function renderCatalog() {
 
     const existingLine = state.cart[product.sku];
     qtyInput.value = existingLine ? String(existingLine.quantity) : "";
+    subtotalCell.textContent = formatLineTotal(existingLine?.quantity || 0, product.hbaPrice);
 
     const commitValue = () => updateCartForProduct(product, qtyInput.value);
+    qtyInput.addEventListener("input", () => {
+      const previewQuantity = sanitizeQuantity(qtyInput.value, product.hbaQuantity);
+      subtotalCell.textContent = formatLineTotal(previewQuantity, product.hbaPrice);
+    });
     qtyInput.addEventListener("blur", commitValue);
     qtyInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
@@ -572,7 +621,10 @@ function wireEvents() {
   state.eventsWired = true;
 
   elements.search.addEventListener("input", applyFilters);
-  elements.availabilityFilter.addEventListener("change", applyFilters);
+  elements.brandFilter.addEventListener("change", () => {
+    state.selectedBrand = elements.brandFilter.value;
+    applyFilters();
+  });
   elements.cartSummaryButton.addEventListener("click", () => {
     clearSuccessRedirectTimeout();
     state.view = "cart";
@@ -608,6 +660,7 @@ function wireEvents() {
         state.sortDirection = "asc";
       }
 
+      renderBrandFilter();
       applyFilters();
     });
   });
@@ -622,6 +675,7 @@ async function init() {
     renderView();
     state.products = await fetchCatalog();
     state.filteredProducts = [...state.products];
+    renderBrandFilter();
     applyFilters();
     renderCartView();
     renderCheckoutView();
