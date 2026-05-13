@@ -3,10 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ProductList from "../components/ProductList";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button, Box, Stack, Typography } from "@mui/material";
-import PermissionGuard from "../components/PermissionGuard";
 import { getApiUrl } from "../config/api";
+import { useAuth } from "../context/AuthContext";
 
 function Products() {
+  const { hasPermission, hasMenuAccess } = useAuth();
   const [listOfProducts, setListOfProducts] = useState<any[]>([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
@@ -197,6 +198,9 @@ function Products() {
     }
   };
 
+  const canAddProduct =
+    hasPermission("addProduct", "create") && hasMenuAccess("addProduct");
+
   return (
     <div>
       <Box mt={4} mb={3} px={2} display="flex" justifyContent="space-between" alignItems="center">
@@ -204,23 +208,7 @@ function Products() {
           Products
         </Typography>
         <Stack direction="row" spacing={2} alignItems="center">
-          <PermissionGuard
-            resource="products"
-            action="create"
-            fallback={
-              <Button
-                variant="contained"
-                color="primary"
-                size="large"
-                style={{ fontWeight: 500, textTransform: "none", boxShadow: "none" }}
-                disabled
-                title="You don't have permission to create products"
-              >
-                Add Product
-              </Button>
-            }
-            showError={false}
-          >
+          {canAddProduct && (
             <Button
               variant="contained"
               color="primary"
@@ -230,7 +218,7 @@ function Products() {
             >
               Add Product
             </Button>
-          </PermissionGuard>
+          )}
           <Button
             variant="contained"
             color="error"

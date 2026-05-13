@@ -132,6 +132,14 @@ function EditProduct() {
   const [isEditingExisting, setIsEditingExisting] = useState(false);
 
   const canViewPricing = !authLoading && hasPermission("pricing", "view");
+  const canViewHbaListing =
+    !authLoading &&
+    (user?.role === "admin" ||
+      hasPermission("hbaListing", "view") ||
+      hasPermission("hbaListing", "edit"));
+  const canEditHbaListing =
+    !authLoading &&
+    (user?.role === "admin" || hasPermission("hbaListing", "edit"));
 
   const formikInitialValues = useMemo(
     () => ({
@@ -1375,6 +1383,10 @@ function EditProduct() {
                           </Box>
                         </Grid>
                       )}
+                    </>
+                  )}
+                  {canViewHbaListing && (
+                    <>
                       <Grid item xs={6}>
                         HBA
                       </Grid>
@@ -1384,6 +1396,7 @@ function EditProduct() {
                           name="hbaEnabled"
                           checked={formik.values.hbaEnabled}
                           onChange={formik.handleChange}
+                          disabled={!canEditHbaListing}
                           inputProps={{ "aria-label": "controlled" }}
                         />
                       </Grid>
@@ -1400,6 +1413,7 @@ function EditProduct() {
                                 value={formik.values.hbaQuantity}
                                 onChange={formik.handleChange}
                                 onBlur={formik.handleBlur}
+                                disabled={!canEditHbaListing}
                                 error={
                                   formik.touched.hbaQuantity &&
                                   Boolean(formik.errors.hbaQuantity)
@@ -1423,6 +1437,7 @@ function EditProduct() {
                                 value={formik.values.hbaPrice}
                                 onChange={formik.handleChange}
                                 onBlur={formik.handleBlur}
+                                disabled={!canEditHbaListing}
                                 error={
                                   formik.touched.hbaPrice &&
                                   Boolean(formik.errors.hbaPrice)

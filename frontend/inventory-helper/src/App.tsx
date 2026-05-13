@@ -263,7 +263,7 @@ function AppContent() {
             <Route
               path="/whatnot-fulfillment"
               element={
-                <ProtectedRoute resource="whatnot" action="view" menuItem="whatnot">
+                <ProtectedRoute resource="whatnotFulfillment" action="view" menuItem="whatnotFulfillment">
                   <WhatnotFulfillment />
                 </ProtectedRoute>
               }
@@ -271,7 +271,7 @@ function AppContent() {
             <Route
               path="/tiktok-fulfillment"
               element={
-                <ProtectedRoute resource="whatnot" action="view" menuItem="whatnot">
+                <ProtectedRoute resource="tiktokFulfillment" action="view" menuItem="tiktokFulfillment">
                   <TikTokFulfillment />
                 </ProtectedRoute>
               }
@@ -375,7 +375,7 @@ function AppContent() {
             <Route
               path="/label-generator"
               element={
-                <ProtectedRoute resource="whatnot" action="view" menuItem="whatnot">
+                <ProtectedRoute resource="labelGenerator" action="view" menuItem="labelGenerator">
                   <LabelGenerator />
                 </ProtectedRoute>
               }

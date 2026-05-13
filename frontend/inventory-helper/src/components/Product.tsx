@@ -36,7 +36,7 @@ function Product() {
   let { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, hasPermission } = useAuth();
+  const { user, hasPermission, hasMenuAccess } = useAuth();
   const [productObject, setProductObject]: any = useState({});
   const [barcodeValue, setBarcodeValue] = useState(productObject.sku);
   const [productDetails, setProductDetails]: any = useState({});
@@ -49,6 +49,16 @@ function Product() {
   const isAdmin = user?.role === "admin";
   const canViewInboundHistory = isAdmin || hasPermission("inbound", "view");
   const canEditProducts = isAdmin || hasPermission("products", "edit");
+  const canAddProduct =
+    (isAdmin || hasPermission("addProduct", "create")) &&
+    hasMenuAccess("addProduct");
+  const canAccessSalesTracker =
+    (isAdmin || hasPermission("sales", "view")) && hasMenuAccess("sales");
+  const canViewHbaListing =
+    isAdmin ||
+    hasPermission("hbaListing", "view") ||
+    hasPermission("hbaListing", "edit");
+  const canEditHbaListing = isAdmin || hasPermission("hbaListing", "edit");
 
   const [vendorPrices, setVendorPrices] = useState<any[]>([]);
   const [averagePrice, setAveragePrice] = useState<number | null>(null);
@@ -392,7 +402,9 @@ function Product() {
                       <p>Discontinued</p>
                     </Box>
                   )}
-                  <button onClick={handleAddSimilar}>Add Similar</button>
+                  {canAddProduct && (
+                    <button onClick={handleAddSimilar}>Add Similar</button>
+                  )}
                 </CardContent>
               </Card>
             </Box>
@@ -447,59 +459,74 @@ function Product() {
                   ))}
                   <Typography variant="body1" fontWeight="bold">Warehouse Location</Typography>
                   <Box display="flex" justifyContent="space-between" py={1}>
-                    <Typography variant="body1">{productObject.warehouseLocations || "—"}</Typography>
+                    <Typography variant="body1">{productObject.warehouseLocations || "-"}</Typography>
                   </Box>
-                  <Divider sx={{ my: 1.5 }} />
-                  <Typography variant="subtitle2" fontWeight="bold" mb={0.5}>
-                    HBA Listing
-                  </Typography>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={hbaEnabled}
-                        onChange={(event) => setHbaEnabled(event.target.checked)}
-                        disabled={!canEditProducts}
-                      />
-                    }
-                    label={hbaEnabled ? "Enabled" : "Disabled"}
-                  />
-                  {hbaEnabled ? (
-                    <Box display="flex" flexDirection="column" gap={1.5} mt={1}>
-                      <TextField
-                        label="HBA Quantity"
-                        type="number"
-                        size="small"
-                        value={hbaQuantity}
-                        onChange={(event) => setHbaQuantity(event.target.value)}
-                        disabled={!canEditProducts}
-                        inputProps={{ min: 0 }}
-                      />
-                      <TextField
-                        label="HBA Price"
-                        type="number"
-                        size="small"
-                        value={hbaPrice}
-                        onChange={(event) => setHbaPrice(event.target.value)}
-                        disabled={!canEditProducts}
-                        inputProps={{ min: 0, step: "0.01" }}
-                      />
-                    </Box>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary" mt={1}>
-                      This SKU is currently hidden from the standalone HBA site.
-                    </Typography>
+                  {productDetails.description && (
+                    <>
+                      <Divider sx={{ my: 1.5 }} />
+                      <Typography variant="subtitle2" fontWeight="bold" mb={0.5}>
+                        Description
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {productDetails.description}
+                      </Typography>
+                    </>
                   )}
-                  {canEditProducts && (
-                    <Box mt={1.5}>
-                      <Button
-                        variant="contained"
-                        size="small"
-                        onClick={handleSaveHba}
-                        disabled={savingHba}
-                      >
-                        {savingHba ? "Saving..." : "Save HBA"}
-                      </Button>
-                    </Box>
+                  {canViewHbaListing && (
+                    <>
+                      <Divider sx={{ my: 1.5 }} />
+                      <Typography variant="subtitle2" fontWeight="bold" mb={0.5}>
+                        HBA Listing
+                      </Typography>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={hbaEnabled}
+                            onChange={(event) => setHbaEnabled(event.target.checked)}
+                            disabled={!canEditHbaListing}
+                          />
+                        }
+                        label={hbaEnabled ? "Enabled" : "Disabled"}
+                      />
+                      {hbaEnabled ? (
+                        <Box display="flex" flexDirection="column" gap={1.5} mt={1}>
+                          <TextField
+                            label="HBA Quantity"
+                            type="number"
+                            size="small"
+                            value={hbaQuantity}
+                            onChange={(event) => setHbaQuantity(event.target.value)}
+                            disabled={!canEditHbaListing}
+                            inputProps={{ min: 0 }}
+                          />
+                          <TextField
+                            label="HBA Price"
+                            type="number"
+                            size="small"
+                            value={hbaPrice}
+                            onChange={(event) => setHbaPrice(event.target.value)}
+                            disabled={!canEditHbaListing}
+                            inputProps={{ min: 0, step: "0.01" }}
+                          />
+                        </Box>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary" mt={1}>
+                          This SKU is currently hidden from the standalone HBA site.
+                        </Typography>
+                      )}
+                      {canEditHbaListing && (
+                        <Box mt={1.5}>
+                          <Button
+                            variant="contained"
+                            size="small"
+                            onClick={handleSaveHba}
+                            disabled={savingHba}
+                          >
+                            {savingHba ? "Saving..." : "Save HBA"}
+                          </Button>
+                        </Box>
+                      )}
+                    </>
                   )}
 
                   {/* Vendor Pricing — admin only, fixed height scrollable */}
@@ -686,14 +713,16 @@ function Product() {
           </Grid>
         </Grid>
         <Box mt={2} display="flex" justifyContent="center" gap={1}>
-          <Button
-            variant="contained"
-            color="success"
-            startIcon={<EditIcon />}
-            onClick={handleEditOnClick}
-          >
-            Edit
-          </Button>
+          {canEditProducts && (
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<EditIcon />}
+              onClick={handleEditOnClick}
+            >
+              Edit
+            </Button>
+          )}
           <Button
             variant="contained"
             startIcon={<SellIcon />}
@@ -726,13 +755,15 @@ function Product() {
               Delete
             </Button>
           )}
-          <Button
-            variant="contained"
-            startIcon={<SellIcon />}
-            onClick={handleSalesClick}
-          >
-            Sold
-          </Button>
+          {canAccessSalesTracker && (
+            <Button
+              variant="contained"
+              startIcon={<SellIcon />}
+              onClick={handleSalesClick}
+            >
+              Sold
+            </Button>
+          )}
           {isAdmin && (
             <Button
               variant="contained"

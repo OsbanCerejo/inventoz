@@ -4,6 +4,7 @@ const { Products, ProductDetails, ProductHistory, StockUpdateHistory, Logs, HbaO
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 const StockUpdateService = require("../Services/StockUpdateService");
+const PermissionService = require("../Services/PermissionService");
 const { auth } = require('../middleware/auth');
 const { checkPermission } = require('../middleware/permissions');
 
@@ -715,6 +716,38 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
       return res.status(404).json({ error: "Product not found" });
     }
 
+    const requestedHbaEnabled =
+      product.hbaEnabled !== undefined
+        ? Boolean(product.hbaEnabled)
+        : currentProduct.hbaEnabled;
+    const requestedHbaQuantity =
+      product.hbaQuantity !== undefined
+        ? normalizeNullableInteger(product.hbaQuantity)
+        : currentProduct.hbaQuantity;
+    const requestedHbaPrice =
+      product.hbaPrice !== undefined
+        ? normalizeNullableDecimal(product.hbaPrice)
+        : currentProduct.hbaPrice;
+
+    const requestedHbaChange =
+      requestedHbaEnabled !== currentProduct.hbaEnabled ||
+      requestedHbaQuantity !== currentProduct.hbaQuantity ||
+      requestedHbaPrice !== currentProduct.hbaPrice;
+
+    if (requestedHbaChange) {
+      const canEditHbaListing = await PermissionService.hasResourceAction(
+        req.user,
+        "hbaListing",
+        "edit"
+      );
+
+      if (!canEditHbaListing) {
+        return res.status(403).json({
+          error: "Access denied. You do not have permission to edit HBA listing settings.",
+        });
+      }
+    }
+
     // Store the previous state
     const previousState = currentProduct.toJSON();
 
@@ -745,18 +778,9 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
           product.minimumQuantity !== undefined
             ? normalizeMinimumQuantity(product.minimumQuantity)
             : currentProduct.minimumQuantity,
-        hbaEnabled:
-          product.hbaEnabled !== undefined
-            ? Boolean(product.hbaEnabled)
-            : currentProduct.hbaEnabled,
-        hbaQuantity:
-          product.hbaQuantity !== undefined
-            ? normalizeNullableInteger(product.hbaQuantity)
-            : currentProduct.hbaQuantity,
-        hbaPrice:
-          product.hbaPrice !== undefined
-            ? normalizeNullableDecimal(product.hbaPrice)
-            : currentProduct.hbaPrice,
+        hbaEnabled: requestedHbaEnabled,
+        hbaQuantity: requestedHbaQuantity,
+        hbaPrice: requestedHbaPrice,
       },
       { where: { sku: product.sku } }
     );

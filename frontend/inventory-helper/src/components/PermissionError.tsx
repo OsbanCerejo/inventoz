@@ -46,8 +46,12 @@ const PermissionError: React.FC<PermissionErrorProps> = ({
       case 'sales': return 'Sales';
       case 'pricelist': return 'Price List';
       case 'whatnot': return 'Whatnot';
+      case 'whatnotFulfillment': return 'Whatnot Fulfillment';
+      case 'tiktokFulfillment': return 'TikTok Fulfillment';
       case 'packing': return 'Packing';
       case 'whatnotAnalytics': return 'Whatnot Analytics';
+      case 'labelGenerator': return 'Label Generator';
+      case 'hbaListing': return 'HBA Listing';
       case 'sortingAnalytics': return 'Sorting Analytics';
       case 'packingAnalytics': return 'Packing Analytics';
       case 'walmartIntegration': return 'Walmart Integration';
@@ -67,8 +71,12 @@ const PermissionError: React.FC<PermissionErrorProps> = ({
       case 'sales': return 'Sales';
       case 'pricelist': return 'Price List';
       case 'whatnot': return 'Whatnot';
+      case 'whatnotFulfillment': return 'Whatnot Fulfillment';
+      case 'tiktokFulfillment': return 'TikTok Fulfillment';
       case 'packing': return 'Packing';
       case 'whatnotAnalytics': return 'Whatnot Analytics';
+      case 'labelGenerator': return 'Label Generator';
+      case 'hbaListing': return 'HBA Listing';
       case 'sortingAnalytics': return 'Sorting Analytics';
       case 'packingAnalytics': return 'Packing Analytics';
       case 'walmartIntegration': return 'Walmart Integration';

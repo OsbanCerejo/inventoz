@@ -73,7 +73,7 @@ function Home() {
       path: "/price-list",
       color: "#e8f5e9"
     },
-    whatnot: {
+    whatnotFulfillment: {
       title: "Whatnot Fulfilment",
       description: "Fulfilment workflow for Whatnot shipments",
       icon: <WhatnotIcon sx={{ fontSize: 40, color: '#6a1b9a' }} />,
@@ -177,7 +177,7 @@ function Home() {
     "walmartIntegration",
     "walmartOrders",
     "tickets",
-    "whatnot",
+    "whatnotFulfillment",
     "pricelist",
     "users",
   ];

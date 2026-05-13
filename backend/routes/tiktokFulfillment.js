@@ -933,7 +933,7 @@ const resolveShipmentByTracking = async (showId, tracking, importId, transaction
   };
 };
 
-router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res) => {
+router.get('/summary', auth, checkPermission('tiktokFulfillment', 'view'), async (req, res) => {
   try {
     const showId = Number(req.query.showId);
     if (!showId) {
@@ -1226,7 +1226,7 @@ router.get('/summary', auth, checkPermission('whatnot', 'view'), async (req, res
   }
 });
 
-router.get('/shipment-details', auth, checkPermission('whatnot', 'view'), async (req, res) => {
+router.get('/shipment-details', auth, checkPermission('tiktokFulfillment', 'view'), async (req, res) => {
   try {
     const showId = Number(req.query.showId);
     const shipmentId = normalizeText(req.query.shipmentId);
@@ -1302,7 +1302,7 @@ router.get('/shipment-details', auth, checkPermission('whatnot', 'view'), async 
 router.post(
   '/import',
   auth,
-  checkPermission('whatnot', 'create'),
+  checkPermission('tiktokFulfillment', 'create'),
   upload.single('file'),
   async (req, res) => {
     const transaction = await sequelize.transaction();
@@ -1671,7 +1671,7 @@ router.post(
   }
 );
 
-router.post('/shipment', auth, checkPermission('whatnot', 'view'), async (req, res) => {
+router.post('/shipment', auth, checkPermission('tiktokFulfillment', 'view'), async (req, res) => {
   try {
     const showId = Number(req.body.showId);
     const tracking = normalizeTracking(req.body.tracking);
@@ -1792,7 +1792,7 @@ router.post('/shipment', auth, checkPermission('whatnot', 'view'), async (req, r
   }
 });
 
-router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, res) => {
+router.post('/scan-item', auth, checkPermission('tiktokFulfillment', 'view'), async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
     const showId = Number(req.body.showId);
@@ -2042,7 +2042,7 @@ router.post('/scan-item', auth, checkPermission('whatnot', 'view'), async (req, 
   }
 });
 
-router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (req, res) => {
+router.post('/scan-product', auth, checkPermission('tiktokFulfillment', 'view'), async (req, res) => {
   try {
     const showId = Number(req.body.showId);
     const tracking = normalizeTracking(req.body.tracking);
@@ -2317,7 +2317,7 @@ router.post('/scan-product', auth, checkPermission('whatnot', 'view'), async (re
   }
 });
 
-router.post('/close-shipment', auth, checkPermission('whatnot', 'view'), async (req, res) => {
+router.post('/close-shipment', auth, checkPermission('tiktokFulfillment', 'view'), async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
     const showId = Number(req.body.showId);
@@ -2505,7 +2505,7 @@ router.post('/close-shipment', auth, checkPermission('whatnot', 'view'), async (
   }
 });
 
-router.post('/delete-link', auth, checkPermission('whatnot', 'view'), async (req, res) => {
+router.post('/delete-link', auth, checkPermission('tiktokFulfillment', 'view'), async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
     const showId = Number(req.body.showId);
@@ -2760,7 +2760,7 @@ router.post('/delete-link', auth, checkPermission('whatnot', 'view'), async (req
   }
 });
 
-router.post('/reset-unlinked-auction-scans', auth, checkPermission('whatnot', 'view'), async (req, res) => {
+router.post('/reset-unlinked-auction-scans', auth, checkPermission('tiktokFulfillment', 'view'), async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
     const showId = Number(req.body.showId);
