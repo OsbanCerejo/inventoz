@@ -36,9 +36,24 @@
 
       <main id="catalog-view">
         <section class="table-panel">
-          <div class="category-filter-bar">
-            <div class="category-filter-label">Category</div>
-            <div id="category-filter-buttons" class="category-filter-buttons"></div>
+          <div class="filters-panel">
+            <div class="filters-section">
+              <div class="filters-section-label">Categories</div>
+              <div id="category-filter-checkboxes" class="checkbox-filter-group"></div>
+            </div>
+            <div class="filters-section">
+              <div class="filters-section-label">Item Category</div>
+              <div class="checkbox-filter-group">
+                <label class="checkbox-filter-option">
+                  <input id="item-category-tester-checkbox" type="checkbox" />
+                  <span>Tester</span>
+                </label>
+                <label class="checkbox-filter-option">
+                  <input id="item-category-discontinued-checkbox" type="checkbox" />
+                  <span>Discontinued</span>
+                </label>
+              </div>
+            </div>
           </div>
 
           <div class="toolbar">
@@ -49,12 +64,6 @@
                 type="search"
                 placeholder="Search by UPC, brand, or item name"
               />
-            </div>
-            <div class="toolbar-field">
-              <label for="brand-filter">Brand</label>
-              <select id="brand-filter">
-                <option value="all">All</option>
-              </select>
             </div>
           </div>
 

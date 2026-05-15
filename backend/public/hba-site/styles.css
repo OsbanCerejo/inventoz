@@ -130,46 +130,28 @@ body {
 
 .toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 180px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   margin-bottom: 16px;
 }
 
-.category-filter-bar {
+.filters-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.filters-section {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.category-filter-label {
+.filters-section-label {
   font-size: 15px;
   font-weight: 700;
   color: #555;
-}
-
-.category-filter-buttons {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.category-filter-button {
-  border: 1px solid #d0d0d0;
-  background: #fff;
-  color: #444;
-  border-radius: 999px;
-  padding: 7px 12px;
-  font: inherit;
-  font-size: 15px;
-  cursor: pointer;
-}
-
-.category-filter-button.active {
-  background: #1f6fd1;
-  border-color: #1f6fd1;
-  color: #fff;
 }
 
 .toolbar-field {
@@ -181,6 +163,32 @@ body {
 .toolbar-field label {
   font-size: 15px;
   color: #555;
+}
+
+.checkbox-filter-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 42px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid #cfcfcf;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.checkbox-filter-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  color: #333;
+}
+
+.checkbox-filter-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
 }
 
 .toolbar-field input,
@@ -321,7 +329,7 @@ body {
 }
 
 .item-name-primary {
-  font-weight: 400;
+  font-weight: 400 !important;
   color: #222;
   display: flex;
   flex-wrap: wrap;
@@ -330,10 +338,10 @@ body {
   line-height: 1.35;
 }
 
-.item-name-meta-inline {
+.item-name-text {
   font-size: inherit;
   color: inherit;
-  font-weight: inherit;
+  font-weight: 400 !important;
 }
 
 .item-meta-separator {
@@ -351,6 +359,10 @@ body {
   font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
+}
+
+.item-name-primary .tester-badge {
+  font-weight: 700 !important;
 }
 
 .qty-cell {
@@ -491,9 +503,14 @@ body {
     align-items: stretch;
   }
 
+  .filters-panel,
   .toolbar,
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .checkbox-filter-group {
+    min-height: 0;
   }
 }
 

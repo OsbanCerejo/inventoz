@@ -235,6 +235,7 @@ router.get("/hba/public-catalog", async (req, res) => {
         "itemName",
         "category",
         "sizeOz",
+        "sizeMl",
         "strength",
         "image",
         "upc",
@@ -246,7 +247,7 @@ router.get("/hba/public-catalog", async (req, res) => {
         {
           model: ProductDetails,
           required: false,
-          attributes: ["tester"],
+          attributes: ["tester", "discontinued"],
         },
       ],
       where: {
@@ -265,8 +266,10 @@ router.get("/hba/public-catalog", async (req, res) => {
           itemName: row.itemName,
           category: row.category || "",
           sizeOz: row.sizeOz,
+          sizeMl: row.sizeMl,
           strength: row.strength,
           tester: Boolean(details?.tester),
+          discontinued: Boolean(details?.discontinued),
           image: row.image || "",
           upc: row.upc,
           inventoryQuantity: row.quantity,
