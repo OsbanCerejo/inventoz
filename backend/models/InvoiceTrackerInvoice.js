@@ -39,12 +39,16 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: "pending",
       },
       paymentStatus: {
-        type: DataTypes.ENUM("paid", "unpaid", "credit"),
+        type: DataTypes.ENUM("paid", "unpaid", "credit", "partial"),
         allowNull: false,
         defaultValue: "unpaid",
       },
       paymentDueBy: {
         type: DataTypes.DATEONLY,
+        allowNull: true,
+      },
+      partialPaymentAmount: {
+        type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
       },
       miscellaneousAmount: {
@@ -168,6 +172,11 @@ module.exports = (sequelize, DataTypes) => {
     InvoiceTrackerInvoice.hasMany(models.InvoiceTrackerPaymentReminderLog, {
       foreignKey: "invoiceId",
       as: "paymentReminderLogs",
+      onDelete: "CASCADE",
+    });
+    InvoiceTrackerInvoice.hasMany(models.InvoiceTrackerPaymentProof, {
+      foreignKey: "invoiceId",
+      as: "paymentProofs",
       onDelete: "CASCADE",
     });
     InvoiceTrackerInvoice.belongsTo(models.User, {

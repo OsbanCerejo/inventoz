@@ -6,6 +6,7 @@ const { Op } = require("sequelize");
 const {
   InvoiceTrackerInvoice,
   InvoiceTrackerInvoiceItem,
+  InvoiceTrackerPaymentProof,
   InvoiceTrackerVendor,
   InvoiceTrackerInboundBatch,
   InvoiceTrackerInboundRow,
@@ -88,7 +89,7 @@ const invoiceAttachmentUpload = multer({
 const VALID_SHIPMENT_STATUSES = ["order_placed", "shipped", "received"];
 const VALID_ITEM_CHECK_STATUSES = ["not_checked", "working_on_it", "verified", "missing_items"];
 const VALID_INBOUND_STATUSES = ["pending", "partial", "done"];
-const VALID_PAYMENT_STATUSES = ["paid", "unpaid", "credit"];
+const VALID_PAYMENT_STATUSES = ["paid", "unpaid", "credit", "partial"];
 const VALID_MISMATCH_REASONS = [
   "short_shipped",
   "damaged",
@@ -194,6 +195,21 @@ const detailInvoiceIncludes = [
     as: "invoiceAttachmentUploader",
     attributes: ["id", "name", "username"],
     required: false,
+  },
+  {
+    model: InvoiceTrackerPaymentProof,
+    as: "paymentProofs",
+    required: false,
+    separate: true,
+    order: [["uploadedAt", "DESC"], ["id", "DESC"]],
+    include: [
+      {
+        model: User,
+        as: "uploader",
+        attributes: ["id", "name", "username"],
+        required: false,
+      },
+    ],
   },
 ];
 
@@ -322,8 +338,13 @@ const serializeInvoice = (invoice) => {
   const items = Array.isArray(plain.items) ? plain.items : [];
   const inboundRows = Array.isArray(plain.inboundRows) ? plain.inboundRows : [];
   const inboundBatches = Array.isArray(plain.inboundBatches) ? plain.inboundBatches : [];
+  const paymentProofs = Array.isArray(plain.paymentProofs) ? plain.paymentProofs : [];
   const miscellaneousAmount = Number(plain.miscellaneousAmount || 0);
   const shippingAmount = Number(plain.shippingAmount || 0);
+  const partialPaymentAmount =
+    plain.partialPaymentAmount === null || plain.partialPaymentAmount === undefined
+      ? null
+      : Number(plain.partialPaymentAmount);
 
   const serializedItems = items.map((item) => {
     const unitPrice = Number(item.unitPrice || 0);
@@ -345,6 +366,7 @@ const serializeInvoice = (invoice) => {
     vendorId: plain.vendorId || plain.vendor?.id || null,
     miscellaneousAmount,
     shippingAmount,
+    partialPaymentAmount,
     items: serializedItems,
     itemsTotal: Number(itemsTotal.toFixed(2)),
     totalAmount: Number(totalAmount.toFixed(2)),
@@ -353,6 +375,16 @@ const serializeInvoice = (invoice) => {
     paymentProofOriginalName: plain.paymentProofOriginalName || null,
     paymentProofUploadedAt: plain.paymentProofUploadedAt || null,
     paymentProofUploaderDisplay: getDisplayUser(plain.paymentProofUploader),
+    paymentProofs: paymentProofs.map((proof) => {
+      const proofPlain = proof.get ? proof.get({ plain: true }) : proof;
+      return {
+        id: proofPlain.id,
+        originalName: proofPlain.originalName || null,
+        mimeType: proofPlain.mimeType || null,
+        uploadedAt: proofPlain.uploadedAt || proofPlain.createdAt || null,
+        uploaderDisplay: getDisplayUser(proofPlain.uploader),
+      };
+    }),
     invoiceAttachmentAvailable: Boolean(plain.invoiceAttachmentPath),
     invoiceAttachmentOriginalName: plain.invoiceAttachmentOriginalName || null,
     invoiceAttachmentMimeType: plain.invoiceAttachmentMimeType || null,
@@ -457,6 +489,16 @@ const buildItems = async (items) => {
   return builtItems;
 };
 
+const computeInvoiceGrandTotal = ({ items = [], miscellaneousAmount = 0, shippingAmount = 0 }) => {
+  const itemsTotal = (Array.isArray(items) ? items : []).reduce((sum, item) => {
+    const unitPrice = Number(item?.unitPrice || 0);
+    const quantity = Number(item?.quantity || 0);
+    return sum + unitPrice * quantity;
+  }, 0);
+
+  return Number((itemsTotal + Number(miscellaneousAmount || 0) + Number(shippingAmount || 0)).toFixed(2));
+};
+
 const validateHeaderFields = ({
   vendorId,
   vendorName,
@@ -469,6 +511,8 @@ const validateHeaderFields = ({
   paymentStatus,
   paymentDueBy,
   paymentDate,
+  partialPaymentAmount,
+  invoiceGrandTotal,
   receivedDate,
   trackingInfo,
   miscellaneousAmount,
@@ -491,8 +535,17 @@ const validateHeaderFields = ({
   if (paymentStatus === "paid" && !paymentDate) {
     return "Payment Date is required when payment status is Paid";
   }
-  if (paymentStatus === "credit" && !paymentDueBy) {
-    return "Payment Due By date is required for credit invoices";
+  if ((paymentStatus === "credit" || paymentStatus === "partial") && !paymentDueBy) {
+    return "Payment Due By date is required for credit and partial-payment invoices";
+  }
+  if (paymentStatus === "partial" && partialPaymentAmount === null) {
+    return "Partial payment amount is required when payment status is Partial";
+  }
+  if (paymentStatus === "partial" && partialPaymentAmount <= 0) {
+    return "Partial payment amount must be greater than 0";
+  }
+  if (paymentStatus === "partial" && partialPaymentAmount > invoiceGrandTotal) {
+    return "Partial payment amount cannot be more than the invoice total";
   }
   if (miscellaneousAmount === null || shippingAmount === null) {
     return "Miscellaneous and Shipping must be valid amounts";
@@ -500,13 +553,22 @@ const validateHeaderFields = ({
   return null;
 };
 
-const validatePaymentFields = ({ paymentStatus, paymentDueBy, paymentDate }) => {
+const validatePaymentFields = ({ paymentStatus, paymentDueBy, paymentDate, partialPaymentAmount, invoiceGrandTotal }) => {
   if (!VALID_PAYMENT_STATUSES.includes(paymentStatus)) return "Invalid payment status";
   if (paymentStatus === "paid" && !paymentDate) {
     return "Payment Date is required when payment status is Paid";
   }
-  if (paymentStatus === "credit" && !paymentDueBy) {
-    return "Payment Due By date is required for credit invoices";
+  if ((paymentStatus === "credit" || paymentStatus === "partial") && !paymentDueBy) {
+    return "Payment Due By date is required for credit and partial-payment invoices";
+  }
+  if (paymentStatus === "partial" && partialPaymentAmount === null) {
+    return "Partial payment amount is required when payment status is Partial";
+  }
+  if (paymentStatus === "partial" && partialPaymentAmount <= 0) {
+    return "Partial payment amount must be greater than 0";
+  }
+  if (paymentStatus === "partial" && partialPaymentAmount > invoiceGrandTotal) {
+    return "Partial payment amount cannot be more than the invoice total";
   }
   return null;
 };
@@ -1187,6 +1249,148 @@ router.delete("/:id/payment-proof", auth, checkPermission("invoiceTracker", "edi
   }
 });
 
+router.get("/:id/payment-proofs/:proofId", auth, checkPermission("invoiceTracker", "view"), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const proofId = Number(req.params.proofId);
+    if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(proofId) || proofId <= 0) {
+      return res.status(400).json({ error: "Invalid invoice or payment proof id" });
+    }
+
+    const proof = await InvoiceTrackerPaymentProof.findOne({
+      where: { id: proofId, invoiceId: id },
+      raw: true,
+    });
+    if (!proof) {
+      return res.status(404).json({ error: "Payment proof not found" });
+    }
+    if (!proof.filePath || !fs.existsSync(proof.filePath)) {
+      return res.status(404).json({ error: "Payment proof file not found" });
+    }
+
+    const downloadName = sanitizeString(proof.originalName) || path.basename(proof.filePath);
+    return res.sendFile(path.resolve(proof.filePath), {
+      headers: {
+        "Content-Disposition": `inline; filename="${downloadName.replace(/"/g, "")}"`,
+      },
+    });
+  } catch (error) {
+    console.error("Error serving invoice tracker payment proof:", error);
+    return res.status(500).json({ error: "Failed to load payment proof" });
+  }
+});
+
+router.post("/:id/payment-proofs", auth, checkPermission("invoiceTracker", "edit"), (req, res) => {
+  paymentProofUpload.array("files")(req, res, async (uploadError) => {
+    const uploadedPaths = Array.isArray(req.files) ? req.files.map((file) => file.path).filter(Boolean) : [];
+    if (uploadError) {
+      console.error("Error uploading payment proofs:", uploadError);
+      return res.status(400).json({ error: uploadError.message || "Failed to upload payment proofs" });
+    }
+
+    const transaction = await sequelize.transaction();
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        uploadedPaths.forEach(removeFileIfExists);
+        await transaction.rollback();
+        return res.status(400).json({ error: "Invalid invoice id" });
+      }
+      if (!Array.isArray(req.files) || req.files.length < 1) {
+        await transaction.rollback();
+        return res.status(400).json({ error: "No payment proof files uploaded" });
+      }
+
+      const invoice = await loadInvoiceById(id, {
+        transaction,
+        include: [],
+        lock: true,
+      });
+      if (!invoice) {
+        uploadedPaths.forEach(removeFileIfExists);
+        await transaction.rollback();
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+      if (invoice.isArchived) {
+        uploadedPaths.forEach(removeFileIfExists);
+        await transaction.rollback();
+        return res.status(400).json({ error: "Archived invoices cannot be updated" });
+      }
+
+      await InvoiceTrackerPaymentProof.bulkCreate(
+        req.files.map((file) => ({
+          invoiceId: invoice.id,
+          filePath: file.path,
+          originalName: file.originalname,
+          mimeType: file.mimetype || null,
+          uploadedAt: new Date(),
+          uploadedBy: req.user?.id || null,
+        })),
+        { transaction }
+      );
+
+      invoice.lastUpdatedBy = req.user?.id || invoice.lastUpdatedBy;
+      await invoice.save({ transaction });
+      await transaction.commit();
+
+      const updated = await loadInvoiceById(id);
+      return res.json(serializeInvoice(updated));
+    } catch (error) {
+      uploadedPaths.forEach(removeFileIfExists);
+      await transaction.rollback();
+      console.error("Error saving invoice tracker payment proofs:", error);
+      return res.status(error.status || 500).json({ error: error.message || "Failed to save payment proofs" });
+    }
+  });
+});
+
+router.delete("/:id/payment-proofs/:proofId", auth, checkPermission("invoiceTracker", "edit"), async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const id = Number(req.params.id);
+    const proofId = Number(req.params.proofId);
+    if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(proofId) || proofId <= 0) {
+      await transaction.rollback();
+      return res.status(400).json({ error: "Invalid invoice or payment proof id" });
+    }
+
+    const invoice = await loadInvoiceById(id, {
+      transaction,
+      include: [],
+      lock: true,
+    });
+    if (!invoice) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+
+    const proof = await InvoiceTrackerPaymentProof.findOne({
+      where: { id: proofId, invoiceId: id },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!proof) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Payment proof not found" });
+    }
+
+    const proofPath = proof.filePath;
+    await proof.destroy({ transaction });
+    invoice.lastUpdatedBy = req.user?.id || invoice.lastUpdatedBy;
+    await invoice.save({ transaction });
+    await transaction.commit();
+
+    removeFileIfExists(proofPath);
+
+    const updated = await loadInvoiceById(id);
+    return res.json(serializeInvoice(updated));
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error deleting invoice tracker payment proof:", error);
+    return res.status(error.status || 500).json({ error: error.message || "Failed to delete payment proof" });
+  }
+});
+
 router.get("/:id/invoice-attachment", auth, checkPermission("invoiceTracker", "view"), async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -1340,8 +1544,8 @@ router.post("/:id/send-payment-reminder", auth, checkPermission("invoiceTracker"
     if (!invoice) {
       return res.status(404).json({ error: "Invoice not found" });
     }
-    if (sanitizeString(invoice.paymentStatus) !== "credit") {
-      return res.status(400).json({ error: "Reminder emails can only be sent for credit invoices." });
+    if (!["credit", "partial"].includes(sanitizeString(invoice.paymentStatus))) {
+      return res.status(400).json({ error: "Reminder emails can only be sent for credit or partial-payment invoices." });
     }
     if (!sanitizeString(invoice.paymentDueBy)) {
       return res.status(400).json({ error: "Payment due date is required before sending a reminder." });
@@ -1408,12 +1612,18 @@ router.post("/", auth, checkPermission("invoiceTracker", "create"), async (req, 
     const paymentStatus = sanitizeString(req.body?.paymentStatus) || "unpaid";
     const paymentDueBy = sanitizeString(req.body?.paymentDueBy) || null;
     const paymentDate = sanitizeString(req.body?.paymentDate) || null;
+    const partialPaymentAmount = toMoneyNumber(req.body?.partialPaymentAmount);
     const receivedDate = sanitizeString(req.body?.receivedDate) || null;
     const trackingInfo = sanitizeString(req.body?.trackingInfo) || null;
     const miscellaneousAmount = toMoneyNumber(req.body?.miscellaneousAmount);
     const shippingAmount = toMoneyNumber(req.body?.shippingAmount);
     const notes = sanitizeString(req.body?.notes) || null;
     const items = await buildItems(req.body?.items);
+    const invoiceGrandTotal = computeInvoiceGrandTotal({
+      items,
+      miscellaneousAmount,
+      shippingAmount,
+    });
 
     const resolvedVendor = await resolveInvoiceVendor({
       vendorId: vendorIdInput,
@@ -1434,6 +1644,8 @@ router.post("/", auth, checkPermission("invoiceTracker", "create"), async (req, 
       paymentStatus,
       paymentDueBy,
       paymentDate,
+      partialPaymentAmount,
+      invoiceGrandTotal,
       receivedDate,
       trackingInfo,
       miscellaneousAmount,
@@ -1465,8 +1677,9 @@ router.post("/", auth, checkPermission("invoiceTracker", "create"), async (req, 
         itemCheckStatus,
         inboundStatus: "pending",
         paymentStatus,
-        paymentDueBy: paymentStatus === "credit" ? paymentDueBy : null,
+        paymentDueBy: paymentStatus === "credit" || paymentStatus === "partial" ? paymentDueBy : null,
         paymentDate: paymentStatus === "paid" ? paymentDate : null,
+        partialPaymentAmount: paymentStatus === "partial" ? partialPaymentAmount : null,
         receivedDate: shipmentStatus === "received" ? receivedDate : null,
         trackingInfo,
         miscellaneousAmount,
@@ -1534,13 +1747,27 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
     const paymentStatus = sanitizeString(req.body?.paymentStatus) || "unpaid";
     const paymentDueBy = sanitizeString(req.body?.paymentDueBy) || null;
     const paymentDate = sanitizeString(req.body?.paymentDate) || null;
+    const partialPaymentAmount = toMoneyNumber(req.body?.partialPaymentAmount);
     const isPaymentOnlyEdit = invoice.inboundStatus !== "pending";
+    const existingItemsForTotal = await InvoiceTrackerInvoiceItem.findAll({
+      where: { invoiceId: invoice.id },
+      attributes: ["unitPrice", "quantity"],
+      raw: true,
+      transaction,
+    });
+    const existingInvoiceGrandTotal = computeInvoiceGrandTotal({
+      items: existingItemsForTotal,
+      miscellaneousAmount: invoice.miscellaneousAmount,
+      shippingAmount: invoice.shippingAmount,
+    });
 
     if (isPaymentOnlyEdit) {
       const paymentValidationError = validatePaymentFields({
         paymentStatus,
         paymentDueBy,
         paymentDate,
+        partialPaymentAmount,
+        invoiceGrandTotal: existingInvoiceGrandTotal,
       });
       if (paymentValidationError) {
         await transaction.rollback();
@@ -1550,8 +1777,9 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
       await invoice.update(
         {
           paymentStatus,
-          paymentDueBy: paymentStatus === "credit" ? paymentDueBy : null,
+          paymentDueBy: paymentStatus === "credit" || paymentStatus === "partial" ? paymentDueBy : null,
           paymentDate: paymentStatus === "paid" ? paymentDate : null,
+          partialPaymentAmount: paymentStatus === "partial" ? partialPaymentAmount : null,
           lastUpdatedBy: req.user?.id || null,
         },
         { transaction }
@@ -1578,6 +1806,11 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
     const shippingAmount = toMoneyNumber(req.body?.shippingAmount);
     const notes = sanitizeString(req.body?.notes) || null;
     const items = await buildItems(req.body?.items);
+    const updatedInvoiceGrandTotal = computeInvoiceGrandTotal({
+      items,
+      miscellaneousAmount,
+      shippingAmount,
+    });
     const resolvedVendor = await resolveInvoiceVendor({
       vendorId: vendorIdInput,
       vendorName,
@@ -1597,6 +1830,8 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
       paymentStatus,
       paymentDueBy,
       paymentDate,
+      partialPaymentAmount,
+      invoiceGrandTotal: updatedInvoiceGrandTotal,
       receivedDate,
       trackingInfo,
       miscellaneousAmount,
@@ -1628,8 +1863,9 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
         shipmentStatus,
         itemCheckStatus,
         paymentStatus,
-        paymentDueBy: paymentStatus === "credit" ? paymentDueBy : null,
+        paymentDueBy: paymentStatus === "credit" || paymentStatus === "partial" ? paymentDueBy : null,
         paymentDate: paymentStatus === "paid" ? paymentDate : null,
+        partialPaymentAmount: paymentStatus === "partial" ? partialPaymentAmount : null,
         receivedDate: shipmentStatus === "received" ? receivedDate : null,
         trackingInfo,
         miscellaneousAmount,

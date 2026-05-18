@@ -32,6 +32,7 @@ import {
   InputLabel,
   FormControlLabel,
   MenuItem,
+  Pagination,
   Paper,
   Select,
   Stack,
@@ -62,6 +63,14 @@ type UserMini = {
   username?: string;
 };
 
+type PaymentProofAttachment = {
+  id: number;
+  originalName?: string | null;
+  mimeType?: string | null;
+  uploadedAt?: string | null;
+  uploaderDisplay?: string | null;
+};
+
 type Invoice = {
   id: number;
   vendorId?: number | null;
@@ -75,10 +84,12 @@ type Invoice = {
   paymentStatus: string;
   paymentDueBy?: string | null;
   paymentDate?: string | null;
+  partialPaymentAmount?: number | null;
   paymentProofImageAvailable?: boolean;
   paymentProofOriginalName?: string | null;
   paymentProofUploadedAt?: string | null;
   paymentProofUploaderDisplay?: string | null;
+  paymentProofs?: PaymentProofAttachment[];
   invoiceAttachmentAvailable?: boolean;
   invoiceAttachmentOriginalName?: string | null;
   invoiceAttachmentMimeType?: string | null;
@@ -165,9 +176,12 @@ const INBOUND_STATUS_OPTIONS = [
 
 const PAYMENT_STATUS_OPTIONS = [
   { value: "paid", label: "Paid" },
+  { value: "partial", label: "Partial" },
   { value: "unpaid", label: "Unpaid" },
   { value: "credit", label: "Credit" },
 ];
+
+const INVOICES_PER_PAGE = 20;
 
 const MISMATCH_REASON_OPTIONS = [
   { value: "short_shipped", label: "Short Shipped" },
@@ -193,10 +207,12 @@ const emptyForm = {
   paymentStatus: "unpaid",
   paymentDueBy: "",
   paymentDate: "",
+  partialPaymentAmount: 0,
   paymentProofImageAvailable: false,
   paymentProofOriginalName: "",
   paymentProofUploadedAt: "",
   paymentProofUploaderDisplay: "",
+  paymentProofs: [] as PaymentProofAttachment[],
   invoiceAttachmentAvailable: false,
   invoiceAttachmentOriginalName: "",
   invoiceAttachmentMimeType: "",
@@ -219,7 +235,9 @@ function InvoiceTracker() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"create" | "edit" | "view">("create");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [shipmentStatusFilter, setShipmentStatusFilter] = useState("all");
@@ -284,10 +302,12 @@ function InvoiceTracker() {
       paymentStatus: target.paymentStatus,
       paymentDueBy: target.paymentDueBy,
       paymentDate: target.paymentDate,
+      partialPaymentAmount: Number(target.partialPaymentAmount || 0),
       paymentProofImageAvailable: target.paymentProofImageAvailable,
       paymentProofOriginalName: target.paymentProofOriginalName,
       paymentProofUploadedAt: target.paymentProofUploadedAt,
       paymentProofUploaderDisplay: target.paymentProofUploaderDisplay,
+      paymentProofs: target.paymentProofs,
       invoiceAttachmentAvailable: target.invoiceAttachmentAvailable,
       invoiceAttachmentOriginalName: target.invoiceAttachmentOriginalName,
       invoiceAttachmentMimeType: target.invoiceAttachmentMimeType,
@@ -312,7 +332,9 @@ function InvoiceTracker() {
 
   const metrics = useMemo(() => {
     const totalAmount = invoices.reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0);
-    const dueInvoices = invoices.filter((invoice) => invoice.paymentStatus === "credit").length;
+    const dueInvoices = invoices.filter(
+      (invoice) => invoice.paymentStatus === "credit" || invoice.paymentStatus === "partial"
+    ).length;
     const receivedInvoices = invoices.filter((invoice) => invoice.shipmentStatus === "received").length;
     const pendingInbound = invoices.filter((invoice) => invoice.inboundStatus !== "done").length;
 
@@ -325,6 +347,13 @@ function InvoiceTracker() {
     };
   }, [invoices]);
 
+  const totalPages = Math.max(1, Math.ceil(invoices.length / INVOICES_PER_PAGE));
+
+  const paginatedInvoices = useMemo(() => {
+    const startIndex = (page - 1) * INVOICES_PER_PAGE;
+    return invoices.slice(startIndex, startIndex + INVOICES_PER_PAGE);
+  }, [invoices, page]);
+
   const loadInvoices = async () => {
     if (!token) return;
     try {
@@ -332,7 +361,7 @@ function InvoiceTracker() {
       const response = await axios.get<Invoice[]>(getApiUrl("invoice-tracker"), {
         headers: { Authorization: `Bearer ${token}` },
         params: {
-          search: search || undefined,
+          search: debouncedSearch || undefined,
           dateFrom: dateFrom || undefined,
           dateTo: dateTo || undefined,
           shipmentStatus: shipmentStatusFilter !== "all" ? shipmentStatusFilter : undefined,
@@ -387,8 +416,45 @@ function InvoiceTracker() {
   };
 
   useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
     loadInvoices();
-  }, [token, dateFrom, dateTo, shipmentStatusFilter, itemCheckStatusFilter, inboundStatusFilter, paymentStatusFilter, showArchived]);
+  }, [
+    token,
+    debouncedSearch,
+    dateFrom,
+    dateTo,
+    shipmentStatusFilter,
+    itemCheckStatusFilter,
+    inboundStatusFilter,
+    paymentStatusFilter,
+    showArchived,
+  ]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [
+    debouncedSearch,
+    dateFrom,
+    dateTo,
+    shipmentStatusFilter,
+    itemCheckStatusFilter,
+    inboundStatusFilter,
+    paymentStatusFilter,
+    showArchived,
+  ]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   useEffect(() => {
     loadVendorOptions();
@@ -409,10 +475,12 @@ function InvoiceTracker() {
     paymentStatus: detail.paymentStatus,
     paymentDueBy: detail.paymentDueBy || "",
     paymentDate: detail.paymentDate || "",
+    partialPaymentAmount: Number(detail.partialPaymentAmount || 0),
     paymentProofImageAvailable: !!detail.paymentProofImageAvailable,
     paymentProofOriginalName: detail.paymentProofOriginalName || "",
     paymentProofUploadedAt: detail.paymentProofUploadedAt || "",
     paymentProofUploaderDisplay: detail.paymentProofUploaderDisplay || "",
+    paymentProofs: Array.isArray(detail.paymentProofs) ? detail.paymentProofs : [],
     invoiceAttachmentAvailable: !!detail.invoiceAttachmentAvailable,
     invoiceAttachmentOriginalName: detail.invoiceAttachmentOriginalName || "",
     invoiceAttachmentMimeType: detail.invoiceAttachmentMimeType || "",
@@ -571,6 +639,42 @@ function InvoiceTracker() {
     }
   };
 
+  const handleUploadPaymentProofs = async (files?: FileList | null) => {
+    if (!token || !form.id || !files || files.length < 1) return;
+    if (hasUnsavedChanges) {
+      toast.error("Save invoice changes before uploading payment proofs.");
+      return;
+    }
+
+    const formData = new FormData();
+    Array.from(files).forEach((file) => {
+      formData.append("files", file);
+    });
+
+    try {
+      setUploadingPaymentProof(true);
+      const response = await axios.post<Invoice>(
+        getApiUrl(`invoice-tracker/${form.id}/payment-proofs`),
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+      const normalizedForm = normalizeInvoiceToForm(response.data);
+      setForm(normalizedForm);
+      setSavedFormSnapshot(buildFormSnapshot(normalizedForm));
+      toast.success(`${files.length} payment proof${files.length === 1 ? "" : "s"} uploaded.`);
+    } catch (error: any) {
+      console.error("Failed to upload payment proofs:", error);
+      toast.error(error?.response?.data?.error || "Failed to upload payment proofs");
+    } finally {
+      setUploadingPaymentProof(false);
+    }
+  };
+
   const handleDeletePaymentProof = async () => {
     if (!token || !form.id || !form.paymentProofImageAvailable) return;
     if (hasUnsavedChanges) {
@@ -643,6 +747,48 @@ function InvoiceTracker() {
       toast.error(error?.response?.data?.error || "Failed to upload invoice attachment");
     } finally {
       setUploadingInvoiceAttachment(false);
+    }
+  };
+
+  const openPaymentProofAttachment = async (proofId: number) => {
+    if (!token || !form.id || !proofId) return;
+    try {
+      const response = await axios.get(getApiUrl(`invoice-tracker/${form.id}/payment-proofs/${proofId}`), {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: "blob",
+      });
+      const objectUrl = window.URL.createObjectURL(response.data);
+      window.open(objectUrl, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => {
+        window.URL.revokeObjectURL(objectUrl);
+      }, 60000);
+    } catch (error: any) {
+      console.error("Failed to open payment proof attachment:", error);
+      toast.error(error?.response?.data?.error || "Failed to open payment proof attachment");
+    }
+  };
+
+  const handleDeletePaymentProofAttachment = async (proofId: number) => {
+    if (!token || !form.id || !proofId) return;
+    if (hasUnsavedChanges) {
+      toast.error("Save invoice changes before deleting payment proofs.");
+      return;
+    }
+
+    try {
+      setRemovingPaymentProof(true);
+      const response = await axios.delete<Invoice>(getApiUrl(`invoice-tracker/${form.id}/payment-proofs/${proofId}`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const normalizedForm = normalizeInvoiceToForm(response.data);
+      setForm(normalizedForm);
+      setSavedFormSnapshot(buildFormSnapshot(normalizedForm));
+      toast.success("Payment proof removed.");
+    } catch (error: any) {
+      console.error("Failed to delete payment proof attachment:", error);
+      toast.error(error?.response?.data?.error || "Failed to delete payment proof");
+    } finally {
+      setRemovingPaymentProof(false);
     }
   };
 
@@ -828,6 +974,17 @@ function InvoiceTracker() {
       toast.error("Every invoice line needs a valid SKU and resolved item name");
       return;
     }
+    if (form.paymentStatus === "partial") {
+      const partialAmount = Number(form.partialPaymentAmount);
+      if (!Number.isFinite(partialAmount) || partialAmount <= 0) {
+        toast.error("Partial payment amount must be greater than 0");
+        return;
+      }
+      if (partialAmount > invoiceGrandTotal) {
+        toast.error("Partial payment amount cannot be more than the invoice total");
+        return;
+      }
+    }
 
     const runSave = async () => {
       const payload = {
@@ -840,8 +997,9 @@ function InvoiceTracker() {
         trackingInfo: form.trackingInfo.trim() || null,
         itemCheckStatus: form.itemCheckStatus,
         paymentStatus: form.paymentStatus,
-        paymentDueBy: form.paymentStatus === "credit" ? form.paymentDueBy : null,
+        paymentDueBy: form.paymentStatus === "credit" || form.paymentStatus === "partial" ? form.paymentDueBy : null,
         paymentDate: form.paymentStatus === "paid" ? form.paymentDate : null,
+        partialPaymentAmount: form.paymentStatus === "partial" ? Number(form.partialPaymentAmount || 0) : null,
         receivedDate: form.shipmentStatus === "received" ? form.receivedDate : null,
         miscellaneousAmount: Number(form.miscellaneousAmount || 0),
         shippingAmount: Number(form.shippingAmount || 0),
@@ -958,12 +1116,13 @@ function InvoiceTracker() {
   };
   const getPaymentChipColor = (value: string) => {
     if (value === "paid") return "success";
+    if (value === "partial") return "warning";
     if (value === "credit") return "info";
     return "default";
   };
 
   const getPaymentReminderDayOffset = (paymentStatus: string, paymentDueBy?: string | null) => {
-    if (paymentStatus !== "credit" || !paymentDueBy) return null;
+    if (!["credit", "partial"].includes(paymentStatus) || !paymentDueBy) return null;
     const today = new Date();
     const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const dueDate = new Date(`${paymentDueBy}T00:00:00`);
@@ -1008,7 +1167,7 @@ function InvoiceTracker() {
   const canSendPaymentReminder =
     !!form.id &&
     !form.isArchived &&
-    form.paymentStatus === "credit" &&
+    (form.paymentStatus === "credit" || form.paymentStatus === "partial") &&
     !!form.paymentDueBy;
 
   const canSelectInboundRow = (row: InboundRow) => row.resolutionStatus === "resolved";
@@ -1135,27 +1294,22 @@ function InvoiceTracker() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ minWidth: { lg: "auto" } }}>
-                <Button variant="contained" sx={{ minWidth: 120, height: "56px" }} onClick={loadInvoices}>
-                  Apply
-                </Button>
-                <Button
-                  variant="outlined"
-                  sx={{ minWidth: 120, height: "56px" }}
-                  onClick={() => {
-                    setSearch("");
-                    setDateFrom("");
-                    setDateTo("");
-                    setShipmentStatusFilter("all");
-                    setItemCheckStatusFilter("all");
-                    setInboundStatusFilter("all");
-                    setPaymentStatusFilter("all");
-                    setShowArchived(false);
-                  }}
-                >
-                  Clear
-                </Button>
-              </Stack>
+              <Button
+                variant="outlined"
+                sx={{ minWidth: 120, height: "56px" }}
+                onClick={() => {
+                  setSearch("");
+                  setDateFrom("");
+                  setDateTo("");
+                  setShipmentStatusFilter("all");
+                  setItemCheckStatusFilter("all");
+                  setInboundStatusFilter("all");
+                  setPaymentStatusFilter("all");
+                  setShowArchived(false);
+                }}
+              >
+                Clear
+              </Button>
             </Stack>
 
             <Grid container spacing={2}>
@@ -1314,7 +1468,7 @@ function InvoiceTracker() {
           <Typography variant="h5" fontWeight={700}>{metrics.pendingInbound}</Typography>
         </Paper>
         <Paper variant="outlined" sx={{ p: 2 }}>
-          <Typography variant="body2" color="text.secondary">Credit Invoices</Typography>
+          <Typography variant="body2" color="text.secondary">Payment Pending</Typography>
           <Typography variant="h5" fontWeight={700} color={metrics.creditInvoices > 0 ? "error.main" : "text.primary"}>
             {metrics.creditInvoices}
           </Typography>
@@ -1330,115 +1484,136 @@ function InvoiceTracker() {
           ) : invoices.length === 0 ? (
             <Alert severity="info">No invoices found.</Alert>
           ) : (
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Vendor</TableCell>
-                    <TableCell>Invoice #</TableCell>
-                    <TableCell>Order Date</TableCell>
-                    <TableCell>Payment</TableCell>
-                    <TableCell>Shipment</TableCell>
-                    <TableCell>Items Check</TableCell>
-                    <TableCell>Inbound</TableCell>
-                    <TableCell>Total</TableCell>
-                    <TableCell align="right">Action</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {invoices.map((invoice) => (
-                    <TableRow
-                      key={invoice.id}
-                      hover
-                      sx={{ cursor: "pointer" }}
-                      onClick={() => openInvoiceDialog(invoice.id)}
-                    >
-                      <TableCell>{invoice.vendorName}</TableCell>
-                      <TableCell>{invoice.invoiceNumber}</TableCell>
-                      <TableCell>{new Date(`${invoice.orderDate}T00:00:00`).toLocaleDateString()}</TableCell>
-                      <TableCell>
-                        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                          <Chip
-                            size="small"
-                            color={getPaymentChipColor(invoice.paymentStatus) as any}
-                            label={
-                              PAYMENT_STATUS_OPTIONS.find((option) => option.value === invoice.paymentStatus)?.label ||
-                              invoice.paymentStatus
-                            }
-                          />
-                          {getPaymentReminderLabel(invoice.paymentStatus, invoice.paymentDueBy) && (
+            <>
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Vendor</TableCell>
+                      <TableCell>Invoice #</TableCell>
+                      <TableCell>Order Date</TableCell>
+                      <TableCell>Payment</TableCell>
+                      <TableCell>Shipment</TableCell>
+                      <TableCell>Items Check</TableCell>
+                      <TableCell>Inbound</TableCell>
+                      <TableCell>Total</TableCell>
+                      <TableCell align="right">Action</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {paginatedInvoices.map((invoice) => (
+                      <TableRow
+                        key={invoice.id}
+                        hover
+                        sx={{ cursor: "pointer" }}
+                        onClick={() => openInvoiceDialog(invoice.id)}
+                      >
+                        <TableCell>{invoice.vendorName}</TableCell>
+                        <TableCell>{invoice.invoiceNumber}</TableCell>
+                        <TableCell>{new Date(`${invoice.orderDate}T00:00:00`).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
                             <Chip
                               size="small"
-                              variant="outlined"
-                              color={getPaymentReminderChipColor(invoice.paymentStatus, invoice.paymentDueBy) as any}
-                              label={getPaymentReminderLabel(invoice.paymentStatus, invoice.paymentDueBy)}
+                              color={getPaymentChipColor(invoice.paymentStatus) as any}
+                              label={
+                                PAYMENT_STATUS_OPTIONS.find((option) => option.value === invoice.paymentStatus)?.label ||
+                                invoice.paymentStatus
+                              }
                             />
-                          )}
-                        </Stack>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          color={getShipmentChipColor(invoice.shipmentStatus) as any}
-                          label={
-                            SHIPMENT_STATUS_OPTIONS.find((option) => option.value === invoice.shipmentStatus)?.label ||
-                            invoice.shipmentStatus
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          color={getItemCheckChipColor(invoice.itemCheckStatus) as any}
-                          label={
-                            ITEM_CHECK_STATUS_OPTIONS.find((option) => option.value === invoice.itemCheckStatus)?.label ||
-                            invoice.itemCheckStatus
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          color={getInboundChipColor(invoice.inboundStatus) as any}
-                          label={
-                            INBOUND_STATUS_OPTIONS.find((option) => option.value === invoice.inboundStatus)?.label ||
-                            invoice.inboundStatus
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>${Number(invoice.totalAmount || 0).toFixed(2)}</TableCell>
-                      <TableCell align="right">
-                        {canDelete && (
-                          <>
-                            {invoice.isArchived ? (
-                              <IconButton
-                                color="primary"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  restoreInvoice(invoice.id);
-                                }}
-                              >
-                                <RestoreIcon />
-                              </IconButton>
-                            ) : (
-                              <IconButton
-                                color="error"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  deleteInvoice(invoice.id);
-                                }}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
+                            {getPaymentReminderLabel(invoice.paymentStatus, invoice.paymentDueBy) && (
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                color={getPaymentReminderChipColor(invoice.paymentStatus, invoice.paymentDueBy) as any}
+                                label={getPaymentReminderLabel(invoice.paymentStatus, invoice.paymentDueBy)}
+                              />
                             )}
-                          </>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                          </Stack>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            color={getShipmentChipColor(invoice.shipmentStatus) as any}
+                            label={
+                              SHIPMENT_STATUS_OPTIONS.find((option) => option.value === invoice.shipmentStatus)?.label ||
+                              invoice.shipmentStatus
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            color={getItemCheckChipColor(invoice.itemCheckStatus) as any}
+                            label={
+                              ITEM_CHECK_STATUS_OPTIONS.find((option) => option.value === invoice.itemCheckStatus)?.label ||
+                              invoice.itemCheckStatus
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            color={getInboundChipColor(invoice.inboundStatus) as any}
+                            label={
+                              INBOUND_STATUS_OPTIONS.find((option) => option.value === invoice.inboundStatus)?.label ||
+                              invoice.inboundStatus
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>${Number(invoice.totalAmount || 0).toFixed(2)}</TableCell>
+                        <TableCell align="right">
+                          {canDelete && (
+                            <>
+                              {invoice.isArchived ? (
+                                <IconButton
+                                  color="primary"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    restoreInvoice(invoice.id);
+                                  }}
+                                >
+                                  <RestoreIcon />
+                                </IconButton>
+                              ) : (
+                                <IconButton
+                                  color="error"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    deleteInvoice(invoice.id);
+                                  }}
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              )}
+                            </>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1.5}
+                justifyContent="space-between"
+                alignItems={{ xs: "flex-start", sm: "center" }}
+                sx={{ mt: 2 }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Showing {(page - 1) * INVOICES_PER_PAGE + 1}-
+                  {Math.min(page * INVOICES_PER_PAGE, invoices.length)} of {invoices.length} invoices
+                </Typography>
+                <Pagination
+                  page={page}
+                  count={totalPages}
+                  color="primary"
+                  shape="rounded"
+                  onChange={(_, value) => setPage(value)}
+                />
+              </Stack>
+            </>
           )}
         </CardContent>
       </Card>
@@ -1554,7 +1729,18 @@ function InvoiceTracker() {
                 <Select
                   value={form.paymentStatus}
                         label="Payment Status"
-                        onChange={(e) => setForm((prev) => ({ ...prev, paymentStatus: String(e.target.value) }))}
+                        onChange={(e) =>
+                          setForm((prev) => {
+                            const nextStatus = String(e.target.value);
+                            return {
+                              ...prev,
+                              paymentStatus: nextStatus,
+                              paymentDueBy: nextStatus === "credit" || nextStatus === "partial" ? prev.paymentDueBy : "",
+                              paymentDate: nextStatus === "paid" ? prev.paymentDate : "",
+                              partialPaymentAmount: nextStatus === "partial" ? Number(prev.partialPaymentAmount || 0) : 0,
+                            };
+                          })
+                        }
                       >
                         {PAYMENT_STATUS_OPTIONS.map((option) => (
                           <MenuItem key={option.value} value={option.value}>
@@ -1564,7 +1750,7 @@ function InvoiceTracker() {
                 </Select>
               </FormControl>
             </Grid>
-                  {form.paymentStatus === "credit" && (
+                  {(form.paymentStatus === "credit" || form.paymentStatus === "partial") && (
                     <Grid item xs={12} md={3}>
                       <TextField
                         fullWidth
@@ -1573,6 +1759,35 @@ function InvoiceTracker() {
                         value={form.paymentDueBy}
                         onChange={(e) => setForm((prev) => ({ ...prev, paymentDueBy: e.target.value }))}
                         InputLabelProps={{ shrink: true }}
+                        disabled={isReadOnly}
+                      />
+                    </Grid>
+                  )}
+                  {form.paymentStatus === "partial" && (
+                    <Grid item xs={12} md={3}>
+                      <TextField
+                        fullWidth
+                        label="Partial Payment Amount *"
+                        value={form.partialPaymentAmount}
+                        onChange={(e) =>
+                          {
+                            const nextValue = e.target.value;
+                            if (!/^\d*\.?\d{0,2}$/.test(nextValue)) {
+                              return;
+                            }
+                            setForm((prev) => ({
+                              ...prev,
+                              partialPaymentAmount: nextValue === "" ? 0 : Number(nextValue),
+                            }));
+                          }
+                        }
+                        onKeyDown={(e) => {
+                          if (["e", "E", "+", "-"].includes(e.key)) {
+                            e.preventDefault();
+                          }
+                        }}
+                        inputProps={{ min: 0, max: invoiceGrandTotal, step: "0.01", inputMode: "decimal" }}
+                        helperText={`Cannot exceed invoice total of $${invoiceGrandTotal.toFixed(2)}`}
                         disabled={isReadOnly}
                       />
                     </Grid>
@@ -1590,7 +1805,10 @@ function InvoiceTracker() {
                       />
                     </Grid>
                   )}
-                  {(form.paymentStatus === "paid" || form.paymentProofImageAvailable) && (
+                  {(form.paymentStatus === "paid" ||
+                    form.paymentStatus === "partial" ||
+                    form.paymentProofImageAvailable ||
+                    form.paymentProofs.length > 0) && (
                     <Grid item xs={12}>
                       <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#fcfcfd" }}>
                         <Stack spacing={1.5}>
@@ -1599,7 +1817,7 @@ function InvoiceTracker() {
                               Payment Proof
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                              Upload the payment proof as an attachment and open it when needed.
+                              Keep the old proof if one already exists, and add as many extra proof attachments as needed.
                             </Typography>
                           </Box>
 
@@ -1620,7 +1838,57 @@ function InvoiceTracker() {
                             </Stack>
                           ) : (
                             <Typography variant="body2" color="text.secondary">
-                              No payment proof uploaded yet.
+                              No legacy payment proof uploaded.
+                            </Typography>
+                          )}
+
+                          {form.paymentProofs.length > 0 ? (
+                            <Stack spacing={1}>
+                              <Typography variant="body2" fontWeight={700}>
+                                Additional Payment Proofs
+                              </Typography>
+                              {form.paymentProofs.map((proof) => (
+                                <Paper key={proof.id} variant="outlined" sx={{ p: 1.5, backgroundColor: "#fff" }}>
+                                  <Stack
+                                    direction={{ xs: "column", md: "row" }}
+                                    spacing={1}
+                                    justifyContent="space-between"
+                                    alignItems={{ xs: "flex-start", md: "center" }}
+                                  >
+                                    <Typography variant="body2" color="text.secondary">
+                                      {proof.originalName || "Payment proof attachment"}
+                                      {proof.uploadedAt
+                                        ? ` - Uploaded ${new Date(proof.uploadedAt).toLocaleString()}`
+                                        : ""}
+                                      {proof.uploaderDisplay ? ` - By ${proof.uploaderDisplay}` : ""}
+                                    </Typography>
+                                    <Stack direction="row" spacing={1}>
+                                      <Button
+                                        variant="text"
+                                        onClick={() => openPaymentProofAttachment(proof.id)}
+                                        sx={{ px: 0, minWidth: "fit-content" }}
+                                      >
+                                        Open
+                                      </Button>
+                                      {!isReadOnly && (
+                                        <Button
+                                          color="error"
+                                          variant="text"
+                                          onClick={() => handleDeletePaymentProofAttachment(proof.id)}
+                                          disabled={uploadingPaymentProof || removingPaymentProof || hasUnsavedChanges || saving}
+                                          sx={{ px: 0, minWidth: "fit-content" }}
+                                        >
+                                          Remove
+                                        </Button>
+                                      )}
+                                    </Stack>
+                                  </Stack>
+                                </Paper>
+                              ))}
+                            </Stack>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary">
+                              No additional payment proofs uploaded yet.
                             </Typography>
                           )}
 
@@ -1644,6 +1912,24 @@ function InvoiceTracker() {
                                   onChange={(event) => {
                                     const file = event.target.files?.[0] || null;
                                     handleUploadPaymentProof(file);
+                                    event.currentTarget.value = "";
+                                  }}
+                                />
+                              </Button>
+                              <Button
+                                component="label"
+                                variant="outlined"
+                                startIcon={<UploadIcon />}
+                                disabled={uploadingPaymentProof || removingPaymentProof || hasUnsavedChanges || saving}
+                              >
+                                {uploadingPaymentProof ? "Uploading..." : "Add More Proofs"}
+                                <input
+                                  type="file"
+                                  hidden
+                                  multiple
+                                  accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp,.pdf,.png,.jpg,.jpeg,.webp"
+                                  onChange={(event) => {
+                                    handleUploadPaymentProofs(event.target.files);
                                     event.currentTarget.value = "";
                                   }}
                                 />

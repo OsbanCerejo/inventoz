@@ -93,6 +93,10 @@ const serializeInvoiceForReminder = (invoice) => {
     orderDate: sanitizeString(plain.orderDate),
     paymentStatus: sanitizeString(plain.paymentStatus),
     paymentDueBy: sanitizeString(plain.paymentDueBy),
+    partialPaymentAmount:
+      plain.partialPaymentAmount === null || plain.partialPaymentAmount === undefined
+        ? null
+        : Number(plain.partialPaymentAmount),
     miscellaneousAmount,
     shippingAmount,
     items: serializedItems,
@@ -102,6 +106,10 @@ const serializeInvoiceForReminder = (invoice) => {
 
 const buildReminderEmailContent = (invoice, reminderLabel, dayOffset, triggerSource) => {
   const totalAmount = Number(invoice.totalAmount || 0).toFixed(2);
+  const partialPaymentAmount =
+    invoice.partialPaymentAmount === null || invoice.partialPaymentAmount === undefined
+      ? null
+      : Number(invoice.partialPaymentAmount || 0).toFixed(2);
   const paymentDueBy = sanitizeString(invoice.paymentDueBy) || "N/A";
   const orderDate = sanitizeString(invoice.orderDate) || "N/A";
   const subject = `${reminderLabel}: Invoice ${invoice.invoiceNumber} (${invoice.vendorName})`;
@@ -135,6 +143,11 @@ const buildReminderEmailContent = (invoice, reminderLabel, dayOffset, triggerSou
           <tr><td style="padding:6px 0;font-weight:bold;">Order Date</td><td style="padding:6px 0;">${orderDate}</td></tr>
           <tr><td style="padding:6px 0;font-weight:bold;">Payment Due By</td><td style="padding:6px 0;">${paymentDueBy}</td></tr>
           <tr><td style="padding:6px 0;font-weight:bold;">Payment Status</td><td style="padding:6px 0;">${invoice.paymentStatus}</td></tr>
+          ${
+            partialPaymentAmount !== null
+              ? `<tr><td style="padding:6px 0;font-weight:bold;">Partial Payment Received</td><td style="padding:6px 0;">$${partialPaymentAmount}</td></tr>`
+              : ""
+          }
           <tr><td style="padding:6px 0;font-weight:bold;">Reminder Status</td><td style="padding:6px 0;">${reminderLabel}</td></tr>
           <tr><td style="padding:6px 0;font-weight:bold;">Total Amount</td><td style="padding:6px 0;">$${totalAmount}</td></tr>
         </table>
@@ -167,6 +180,7 @@ const buildReminderEmailContent = (invoice, reminderLabel, dayOffset, triggerSou
     `Order Date: ${orderDate}`,
     `Payment Due By: ${paymentDueBy}`,
     `Payment Status: ${invoice.paymentStatus}`,
+    ...(partialPaymentAmount !== null ? [`Partial Payment Received: $${partialPaymentAmount}`] : []),
     `Days Offset: ${dayOffset === null ? "N/A" : dayOffset}`,
     `Total Amount: $${totalAmount}`,
     "",
@@ -242,8 +256,8 @@ const sendReminderForInvoice = async (invoiceOrId, { triggerSource = "manual", i
   }
 
   const invoice = serializeInvoiceForReminder(invoiceRecord);
-  if (invoice.paymentStatus !== "credit") {
-    const error = new Error("Reminder emails can only be sent for credit invoices.");
+  if (!["credit", "partial"].includes(invoice.paymentStatus)) {
+    const error = new Error("Reminder emails can only be sent for credit or partial-payment invoices.");
     error.status = 400;
     throw error;
   }
@@ -337,7 +351,7 @@ const runDailyReminderSweep = async () => {
   const invoices = await InvoiceTrackerInvoice.findAll({
     where: {
       isArchived: false,
-      paymentStatus: "credit",
+      paymentStatus: { [Op.in]: ["credit", "partial"] },
       paymentDueBy: { [Op.ne]: null },
     },
     include: [
