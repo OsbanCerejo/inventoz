@@ -10,6 +10,7 @@ import {
   Paper,
   Select,
   Slider,
+  Stack,
   TextField,
   Typography,
 } from "@mui/material";
@@ -30,6 +31,8 @@ const LabelGenerator = () => {
   const [startNumber, setStartNumber] = useState("1");
   const [endNumber, setEndNumber] = useState("100");
   const [customValues, setCustomValues] = useState("");
+  const [labelPrefix, setLabelPrefix] = useState("");
+  const [barcodePrefix, setBarcodePrefix] = useState("");
   const [barcodeFormat, setBarcodeFormat] = useState<BarcodeFormat>("CODE128");
   const [copiesPerOrder, setCopiesPerOrder] = useState("1");
   const [includeText, setIncludeText] = useState("yes");
@@ -38,6 +41,23 @@ const LabelGenerator = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  const normalizePrefix = (value: string) =>
+    value
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9-]/g, "");
+
+  const applyPrefix = (value: string, prefix: string) => {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) return "";
+    const normalizedPrefix = normalizePrefix(prefix);
+    if (!normalizedPrefix) return trimmedValue;
+    if (trimmedValue.toUpperCase().startsWith(`${normalizedPrefix}-`)) {
+      return trimmedValue.toUpperCase();
+    }
+    return `${normalizedPrefix}-${trimmedValue}`;
+  };
 
   const parsedValues = useMemo(() => {
     const trimmedCustom = customValues.trim();
@@ -58,6 +78,21 @@ const LabelGenerator = () => {
     }
     return values;
   }, [customValues, startNumber, endNumber]);
+
+  const labelEntries = useMemo(
+    () =>
+      parsedValues
+        .map((value) => {
+          const trimmedValue = value.trim();
+          const suffix = trimmedValue.includes("-") ? trimmedValue.split("-").pop() || trimmedValue : trimmedValue;
+          return {
+            displayValue: applyPrefix(trimmedValue, labelPrefix),
+            barcodeValue: applyPrefix(suffix, barcodePrefix),
+          };
+        })
+        .filter((entry) => entry.displayValue && entry.barcodeValue),
+    [parsedValues, labelPrefix, barcodePrefix]
+  );
 
   const buildBarcodeCanvas = (value: string) => {
     const canvas = document.createElement("canvas");
@@ -119,17 +154,17 @@ const LabelGenerator = () => {
       setError("Copies per order must be a whole number of 1 or more.");
       return;
     }
-    if (!parsedValues.length) {
+    if (!labelEntries.length) {
       setError("No order numbers found. Use a valid range or custom order list.");
       return;
     }
 
     setIsGenerating(true);
     try {
-      const allLabels: string[] = [];
-      for (const value of parsedValues) {
+      const allLabels: Array<{ displayValue: string; barcodeValue: string }> = [];
+      for (const entry of labelEntries) {
         for (let i = 0; i < copies; i += 1) {
-          allLabels.push(value);
+          allLabels.push(entry);
         }
       }
 
@@ -139,7 +174,7 @@ const LabelGenerator = () => {
         format: [LABEL_WIDTH_IN, LABEL_HEIGHT_IN],
       });
 
-      allLabels.forEach((value, index) => {
+      allLabels.forEach((entry, index) => {
         if (index > 0) {
           doc.addPage([LABEL_WIDTH_IN, LABEL_HEIGHT_IN], "landscape");
         }
@@ -152,7 +187,7 @@ const LabelGenerator = () => {
             ? Math.min(BARCODE_TOP_SECTION_HEIGHT_IN, pageHeight * 0.5 - TOP_MARGIN_IN)
             : Math.max(0.22, pageHeight - TOP_MARGIN_IN - BOTTOM_MARGIN_IN);
         const targetAspect = maxImageW / maxImageH;
-        const image = buildCroppedBarcodeImage(value, targetAspect);
+        const image = buildCroppedBarcodeImage(entry.barcodeValue, targetAspect);
         const imageY = TOP_MARGIN_IN;
         const imageW = maxImageW;
         const imageH = maxImageH;
@@ -163,9 +198,9 @@ const LabelGenerator = () => {
         if (includeText === "yes") {
           doc.setTextColor(0, 0, 0);
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(15);
+          doc.setFontSize(13);
           const textY = Math.min(pageHeight - 0.07, NUMBER_TEXT_Y_IN);
-          doc.text(value, pageWidth / 2, textY, {
+          doc.text(entry.displayValue, pageWidth / 2, textY, {
             align: "center",
             baseline: "middle",
           });
@@ -222,6 +257,26 @@ const LabelGenerator = () => {
               label="Copies Per Order"
               value={copiesPerOrder}
               onChange={(e) => setCopiesPerOrder(e.target.value)}
+            />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <TextField
+              fullWidth
+              label="Label Prefix (optional)"
+              placeholder="AUC1"
+              value={labelPrefix}
+              onChange={(e) => setLabelPrefix(e.target.value)}
+              helperText="Printed text, like AUC1-1"
+            />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <TextField
+              fullWidth
+              label="Barcode Prefix (optional)"
+              placeholder="A1"
+              value={barcodePrefix}
+              onChange={(e) => setBarcodePrefix(e.target.value)}
+              helperText="Scanned value, like A1-1"
             />
           </Grid>
           <Grid item xs={12} md={3}>
@@ -293,8 +348,18 @@ const LabelGenerator = () => {
 
       <Paper elevation={2} sx={{ p: 2.5, mb: 3 }}>
         <Typography variant="body2" color="text.secondary">
-          Total distinct orders: <strong>{parsedValues.length}</strong>
+          Total distinct labels: <strong>{labelEntries.length}</strong>
         </Typography>
+        {(normalizePrefix(labelPrefix) || normalizePrefix(barcodePrefix)) && (
+          <Stack spacing={0.5} sx={{ mt: 0.75 }}>
+            <Typography variant="body2" color="text.secondary">
+              Printed example: <strong>{applyPrefix(startNumber || "1", labelPrefix)}</strong>
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Barcode scans as: <strong>{applyPrefix(startNumber || "1", barcodePrefix)}</strong>
+            </Typography>
+          </Stack>
+        )}
       </Paper>
 
       {error && (

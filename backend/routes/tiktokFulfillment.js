@@ -94,7 +94,59 @@ const normalizeScanToken = (value) =>
     .replace(/[^A-Z0-9-]/g, '');
 const looksLikeAuctionSticker = (value) => {
   const token = normalizeSticker(value);
-  return token.length > 0 && token.length <= 4;
+  return (
+    (token.length > 0 && token.length <= 4) ||
+    /^[A-Z]+\d+-[A-Z0-9-]+$/i.test(token)
+  );
+};
+const getAuctionStickerAliases = (value) => {
+  const token = normalizeSticker(value).toUpperCase();
+  if (!token) return [];
+
+  const aliases = new Set([token]);
+  const canonicalMatch = token.match(/^AUC(\d+)-(.+)$/);
+  if (canonicalMatch) {
+    aliases.add(`A${canonicalMatch[1]}-${canonicalMatch[2]}`);
+  }
+
+  const shortMatch = token.match(/^A(\d+)-(.+)$/);
+  if (shortMatch) {
+    aliases.add(`AUC${shortMatch[1]}-${shortMatch[2]}`);
+  }
+
+  return Array.from(aliases);
+};
+const resolveCanonicalAuctionSticker = (value, shipmentRows = []) => {
+  const aliases = getAuctionStickerAliases(value);
+  if (!aliases.length) {
+    return {
+      aliases,
+      canonicalSticker: normalizeSticker(value),
+      matchingRows: [],
+    };
+  }
+
+  const matchingRows = shipmentRows.filter((row) => {
+    if (!row?.isAuctionItem) return false;
+    const rowSticker = normalizeSticker(row.stickerNumber).toUpperCase();
+    return aliases.includes(rowSticker);
+  });
+
+  const uniqueMatchingRows = Array.from(
+    new Map(
+      matchingRows.map((row) => [normalizeSticker(row.stickerNumber).toUpperCase(), row])
+    ).values()
+  );
+
+  const canonicalSticker = uniqueMatchingRows[0]?.stickerNumber
+    ? normalizeSticker(uniqueMatchingRows[0].stickerNumber).toUpperCase()
+    : aliases.find((alias) => alias.startsWith('AUC')) || aliases[0];
+
+  return {
+    aliases,
+    canonicalSticker,
+    matchingRows: uniqueMatchingRows,
+  };
 };
 const getSpecialNonAuctionContext = (value) => {
   const token = normalizeScanToken(value);
@@ -348,15 +400,34 @@ const extractCategoryTag = (descriptionText) => {
   const match = raw.match(/\[(AUC|WFS|CFE|RGY|BGY|GVY|SGY|OTH)\]/);
   return match ? match[1] : null;
 };
+const extractAuctionBatch = (descriptionText) => {
+  const raw = normalizeText(descriptionText).toUpperCase();
+  if (!raw) return null;
+  const match = raw.match(/\[(AUC\d+)\]/);
+  return match ? match[1] : null;
+};
 const extractAnyBracketedTag = (descriptionText) => {
   const raw = normalizeText(descriptionText).toUpperCase();
   if (!raw) return null;
   const match = raw.match(/\[([A-Z-]+)\]/);
   return match ? match[1] : null;
 };
+const formatAuctionStickerNumber = ({ auctionBatch, stickerNumber }) => {
+  const normalizedSticker = normalizeSticker(stickerNumber);
+  if (!normalizedSticker) return null;
+  const normalizedBatch = normalizeText(auctionBatch).toUpperCase();
+  if (!normalizedBatch) return normalizedSticker;
+  if (normalizedSticker.toUpperCase().startsWith(`${normalizedBatch}-`)) {
+    return normalizedSticker.toUpperCase();
+  }
+  return `${normalizedBatch}-${normalizedSticker.toUpperCase()}`;
+};
 const parseItemCategory = ({ productName, descriptionText }) => {
   const tag = extractCategoryTag(descriptionText);
   if (tag === 'AUC') return { itemCategory: ITEM_CATEGORY_AUCTION, reviewReason: null };
+  if (extractAuctionBatch(descriptionText)) {
+    return { itemCategory: ITEM_CATEGORY_AUCTION, reviewReason: null };
+  }
   if (tag === 'WFS') {
     return { itemCategory: ITEM_CATEGORY_TIKTOK_FLASH_SALE, reviewReason: null };
   }
@@ -1340,12 +1411,17 @@ router.post(
       }
 
       const grouped = new Map();
-      const numericSellerSkus = new Set();
+      const numericSellerSkusByBatch = new Map();
       let parsedRows = 0;
 
       for (const [rowIndex, row] of records.entries()) {
         const productName = normalizeText(getCsvValue(row, 'product name', 'product_name'));
+        const auctionBatch = extractAuctionBatch(productName);
         const sellerSku = normalizeSticker(getCsvValue(row, 'seller sku', 'seller_sku'));
+        const formattedSellerSku = formatAuctionStickerNumber({
+          auctionBatch,
+          stickerNumber: sellerSku,
+        });
         const orderId = normalizeText(getCsvValue(row, 'order id', 'order_id'));
         const buyer = normalizeText(
           getCsvValue(row, 'buyer username', 'buyer nickname', 'buyer_username', 'buyer_nickname')
@@ -1406,18 +1482,27 @@ router.post(
         if (!tracking && !terminalCategory) {
           bucket.reasons.add('Missing tracking number in one or more rows.');
         }
-        if (!sellerSku && !terminalCategory) {
+        if (!formattedSellerSku && !terminalCategory) {
           bucket.reasons.add('One or more rows are missing Seller SKU / item number.');
         }
 
         const numericSellerSku = Number(sellerSku);
-        if (sellerSku && Number.isInteger(numericSellerSku) && numericSellerSku > 0) {
-          numericSellerSkus.add(numericSellerSku);
+        if (
+          !terminalCategory &&
+          sellerSku &&
+          Number.isInteger(numericSellerSku) &&
+          numericSellerSku > 0
+        ) {
+          const batchKey = normalizeText(auctionBatch).toUpperCase() || '__NO_BATCH__';
+          if (!numericSellerSkusByBatch.has(batchKey)) {
+            numericSellerSkusByBatch.set(batchKey, new Set());
+          }
+          numericSellerSkusByBatch.get(batchKey).add(numericSellerSku);
         }
 
         const rowKey = terminalCategory
-          ? `${terminalCategory}:${orderId || sellerSku || rowIndex + 1}`
-          : sellerSku || '__MISSING_ITEM_NUMBER__';
+          ? `${terminalCategory}:${orderId || formattedSellerSku || rowIndex + 1}`
+          : formattedSellerSku || '__MISSING_ITEM_NUMBER__';
         if (!bucket.rows.has(rowKey)) {
           bucket.rows.set(rowKey, {
             tracking: terminalCategory ? null : tracking || null,
@@ -1430,7 +1515,7 @@ router.post(
             combinedListing: normalizeText(getCsvValue(row, 'combined listing', 'combined_listing')),
             itemCategory: terminalCategory || ITEM_CATEGORY_AUCTION,
             isAuctionItem: !terminalCategory,
-            stickerNumber: sellerSku || null,
+            stickerNumber: formattedSellerSku || null,
             expectedQty: terminalCategory ? 0 : 1,
             expectedProductLinks: 0,
             groupedQuantity: 0,
@@ -1614,19 +1699,25 @@ router.post(
         await TikTokShipmentItem.bulkCreate(itemRows, { transaction });
       }
 
-      const sortedNumericSellerSkus = Array.from(numericSellerSkus).sort((a, b) => a - b);
       const failedOrderRows = [];
-      if (sortedNumericSellerSkus.length >= 2) {
+      for (const [batchKey, valueSet] of numericSellerSkusByBatch.entries()) {
+        const sortedNumericSellerSkus = Array.from(valueSet).sort((a, b) => a - b);
+        if (sortedNumericSellerSkus.length < 2) continue;
+
         const availableSet = new Set(sortedNumericSellerSkus);
         const minValue = sortedNumericSellerSkus[0];
         const maxValue = sortedNumericSellerSkus[sortedNumericSellerSkus.length - 1];
         for (let candidate = minValue; candidate <= maxValue; candidate += 1) {
           if (availableSet.has(candidate)) continue;
+          const stickerNumber =
+            batchKey && batchKey !== '__NO_BATCH__'
+              ? formatAuctionStickerNumber({ auctionBatch: batchKey, stickerNumber: String(candidate) })
+              : String(candidate);
           failedOrderRows.push({
             tiktokShowId: showId,
             importId: importRecord.id,
             buyer: null,
-            stickerNumber: String(candidate),
+            stickerNumber,
             soldPrice: null,
             failureStatus: 'missing_in_sequence',
             attemptCount: 1,
@@ -1896,9 +1987,8 @@ router.post('/scan-item', auth, checkPermission('tiktokFulfillment', 'view'), as
       });
     }
     const auctionRows = sortAuctionRowsForOrder(getAuctionRows(shipmentRows));
-    const matchingAuctionRows = auctionRows.filter(
-      (row) => normalizeSticker(row.stickerNumber) === scannedValue
-    );
+    const resolvedAuctionSticker = resolveCanonicalAuctionSticker(scannedValue, auctionRows);
+    const matchingAuctionRows = resolvedAuctionSticker.matchingRows;
 
     let result = 'unexpected';
     let message = 'Scanned value is not expected for this shipment.';
@@ -1912,12 +2002,12 @@ router.post('/scan-item', auth, checkPermission('tiktokFulfillment', 'view'), as
 
       if (!fillableAuctionRow) {
         result = 'duplicate';
-        message = `Item number #${scannedValue} is already fully scanned.`;
+        message = `Item number #${resolvedAuctionSticker.canonicalSticker} is already fully scanned.`;
       } else {
         rowToIncrement = fillableAuctionRow;
         result = 'matched';
-        message = `Item number #${scannedValue} verified.`;
-        matchedAuctionSticker = scannedValue;
+        message = `Item number #${resolvedAuctionSticker.canonicalSticker} verified.`;
+        matchedAuctionSticker = resolvedAuctionSticker.canonicalSticker;
       }
     } else if (specialNonAuctionContext) {
       const nonAuctionRows = getActionableNonAuctionRows(shipmentRows).filter(
@@ -2046,11 +2136,11 @@ router.post('/scan-product', auth, checkPermission('tiktokFulfillment', 'view'),
   try {
     const showId = Number(req.body.showId);
     const tracking = normalizeTracking(req.body.tracking);
-    const auctionStickerNumber = normalizeSticker(req.body.auctionStickerNumber);
+    const rawAuctionStickerNumber = normalizeSticker(req.body.auctionStickerNumber);
     const barcode = normalizeText(req.body.barcode);
     const selectedSku = normalizeText(req.body.selectedSku);
 
-    if (!showId || !tracking || !auctionStickerNumber || !barcode) {
+    if (!showId || !tracking || !rawAuctionStickerNumber || !barcode) {
       return res.status(400).json({
         error: 'showId, tracking, auctionStickerNumber, and barcode are required',
       });
@@ -2104,7 +2194,7 @@ router.post('/scan-product', auth, checkPermission('tiktokFulfillment', 'view'),
         error: `Shipment is currently being processed by user ${lockResult.lockedBy}.`,
       });
     }
-    const nonAuctionContextScanId = parseNonAuctionInstanceId(auctionStickerNumber);
+    const nonAuctionContextScanId = parseNonAuctionInstanceId(rawAuctionStickerNumber);
     const contextScanRow = nonAuctionContextScanId
       ? await TikTokShipmentScan.findOne({
           where: {
@@ -2121,20 +2211,20 @@ router.post('/scan-product', auth, checkPermission('tiktokFulfillment', 'view'),
       : null;
     const specialNonAuctionContext =
       (contextScanRow && normalizeText(contextScanRow.auctionStickerNumber)) ||
-      getSpecialNonAuctionContext(auctionStickerNumber);
+      getSpecialNonAuctionContext(rawAuctionStickerNumber);
     const isSpecialNonAuctionContext = Boolean(specialNonAuctionContext);
-    const contextForLink = isNonAuctionInstanceKey(auctionStickerNumber)
-      ? auctionStickerNumber
+    const resolvedAuctionSticker = isSpecialNonAuctionContext
+      ? { canonicalSticker: rawAuctionStickerNumber, matchingRows: [] }
+      : resolveCanonicalAuctionSticker(rawAuctionStickerNumber, shipmentRows);
+    const auctionStickerNumber = resolvedAuctionSticker.canonicalSticker;
+    const contextForLink = isNonAuctionInstanceKey(rawAuctionStickerNumber)
+      ? rawAuctionStickerNumber
       : isSpecialNonAuctionContext
       ? null
       : auctionStickerNumber;
     const auctionRow = isSpecialNonAuctionContext
       ? null
-      : shipmentRows.find(
-          (row) =>
-            Boolean(row.isAuctionItem) &&
-            normalizeSticker(row.stickerNumber) === auctionStickerNumber
-        );
+      : resolvedAuctionSticker.matchingRows[0] || null;
     const nonAuctionRows = isSpecialNonAuctionContext
       ? getActionableNonAuctionRows(shipmentRows).filter(
           (row) => getNonAuctionContextForRow(row) === specialNonAuctionContext
@@ -2510,12 +2600,12 @@ router.post('/delete-link', auth, checkPermission('tiktokFulfillment', 'view'), 
   try {
     const showId = Number(req.body.showId);
     const tracking = normalizeTracking(req.body.tracking);
-    const auctionStickerNumber = normalizeSticker(req.body.auctionStickerNumber);
+    const rawAuctionStickerNumber = normalizeSticker(req.body.auctionStickerNumber);
     const sku = normalizeText(req.body.sku);
     const scanId = Number(req.body.scanId);
     const editPin = normalizeText(req.body.pin);
 
-    if (!showId || !tracking || !auctionStickerNumber || !sku) {
+    if (!showId || !tracking || !rawAuctionStickerNumber || !sku) {
       await transaction.rollback();
       return res
         .status(400)
@@ -2542,7 +2632,7 @@ router.post('/delete-link', auth, checkPermission('tiktokFulfillment', 'view'), 
           shipmentId: null,
           tracking,
           scannedValue: sku,
-          auctionStickerNumber,
+          auctionStickerNumber: rawAuctionStickerNumber,
           productSku: sku,
           scanType: 'item',
           result: 'unexpected',
@@ -2600,6 +2690,8 @@ router.post('/delete-link', auth, checkPermission('tiktokFulfillment', 'view'), 
         error: `Shipment is currently being processed by user ${lockResult.lockedBy}.`,
       });
     }
+    const resolvedAuctionSticker = resolveCanonicalAuctionSticker(rawAuctionStickerNumber, resolved.shipmentRows);
+    const auctionStickerNumber = resolvedAuctionSticker.canonicalSticker;
 
     const stagedWhere = {
       tiktokShowId: showId,
@@ -2765,7 +2857,7 @@ router.post('/reset-unlinked-auction-scans', auth, checkPermission('tiktokFulfil
   try {
     const showId = Number(req.body.showId);
     const tracking = normalizeTracking(req.body.tracking);
-    const targetContextSticker = normalizeText(req.body.contextStickerNumber);
+    const rawTargetContextSticker = normalizeText(req.body.contextStickerNumber);
 
     if (!showId || !tracking) {
       await transaction.rollback();
@@ -2817,6 +2909,9 @@ router.post('/reset-unlinked-auction-scans', auth, checkPermission('tiktokFulfil
         error: `Shipment is currently being processed by user ${lockResult.lockedBy}.`,
       });
     }
+    const targetContextSticker = rawTargetContextSticker
+      ? resolveCanonicalAuctionSticker(rawTargetContextSticker, resolved.shipmentRows).canonicalSticker
+      : '';
 
     const linkedSummary = await getLinkedProductSummaryBySticker({
       showId,

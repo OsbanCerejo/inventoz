@@ -481,7 +481,8 @@ const TikTokFulfillment = () => {
     const normalized = String(value || "").trim().replace(/^#/, "");
     if (!normalized) return "None";
     const specialContext = getSpecialNonAuctionContext(normalized);
-    return specialContext ? formatSpecialContextLabel(specialContext) : `#${normalized}`;
+    if (specialContext) return formatSpecialContextLabel(specialContext);
+    return /^[A-Z]+\d+-[A-Z0-9-]+$/i.test(normalized) ? normalized : `#${normalized}`;
   };
   const formatChecklistRowLabel = (item: ShipmentChecklistItem) => {
     const raw = String(item.stickerNumber || "").trim();
@@ -999,10 +1000,10 @@ const TikTokFulfillment = () => {
   const handleProductScan = async (selectedSku?: string) => {
     if (!selectedShowId || !activeShipment || !activeAuctionSticker || !productInput.trim()) return;
     const normalizedProductInput = productInput.trim();
-    if (normalizedProductInput.length <= 4 && !selectedSku) {
+    if ((normalizedProductInput.length <= 4 || /^[A-Z]+\d+-[A-Z0-9-]+$/i.test(normalizedProductInput)) && !selectedSku) {
       setError("This looks like an order barcode. Use Scan Order first, then scan UPC/SKU here.");
       setInterventionAlert(
-        "Short 4-character order code detected in product scan. Please scan product UPC/SKU (usually longer)."
+        "Order context code detected in product scan. Please scan product UPC/SKU instead."
       );
       playInterventionSound();
       return;
