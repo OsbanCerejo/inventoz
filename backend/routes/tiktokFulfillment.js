@@ -92,11 +92,12 @@ const normalizeScanToken = (value) =>
   normalizeText(value)
     .toUpperCase()
     .replace(/[^A-Z0-9-]/g, '');
+const isBatchAuctionSticker = (value) => /^A(?:UC)?\d+-[A-Z0-9-]+$/i.test(normalizeSticker(value));
 const looksLikeAuctionSticker = (value) => {
   const token = normalizeSticker(value);
   return (
     (token.length > 0 && token.length <= 4) ||
-    /^[A-Z]+\d+-[A-Z0-9-]+$/i.test(token)
+    isBatchAuctionSticker(token)
   );
 };
 const getAuctionStickerAliases = (value) => {

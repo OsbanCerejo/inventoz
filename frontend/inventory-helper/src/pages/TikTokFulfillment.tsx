@@ -419,6 +419,8 @@ const SPECIAL_NON_AUCTION_CONTEXTS = [
   SPONSORED_GIVEAWAY_STICKER,
   OTHERS_STICKER,
 ];
+const looksLikeBatchAuctionSticker = (value: string) =>
+  /^A(?:UC)?\d+-[A-Z0-9-]+$/i.test(String(value || "").trim().replace(/^#/, ""));
 
 const TikTokFulfillment = () => {
   const { user } = useAuth();
@@ -1000,7 +1002,7 @@ const TikTokFulfillment = () => {
   const handleProductScan = async (selectedSku?: string) => {
     if (!selectedShowId || !activeShipment || !activeAuctionSticker || !productInput.trim()) return;
     const normalizedProductInput = productInput.trim();
-    if ((normalizedProductInput.length <= 4 || /^[A-Z]+\d+-[A-Z0-9-]+$/i.test(normalizedProductInput)) && !selectedSku) {
+    if ((normalizedProductInput.length <= 4 || looksLikeBatchAuctionSticker(normalizedProductInput)) && !selectedSku) {
       setError("This looks like an order barcode. Use Scan Order first, then scan UPC/SKU here.");
       setInterventionAlert(
         "Order context code detected in product scan. Please scan product UPC/SKU instead."
