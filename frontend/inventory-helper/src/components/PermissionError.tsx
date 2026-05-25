@@ -51,6 +51,7 @@ const PermissionError: React.FC<PermissionErrorProps> = ({
       case 'packing': return 'Packing';
       case 'whatnotAnalytics': return 'Whatnot Analytics';
       case 'labelGenerator': return 'Label Generator';
+      case 'brands': return 'Brands';
       case 'hbaListing': return 'HBA Listing';
       case 'sortingAnalytics': return 'Sorting Analytics';
       case 'packingAnalytics': return 'Packing Analytics';
@@ -76,6 +77,7 @@ const PermissionError: React.FC<PermissionErrorProps> = ({
       case 'packing': return 'Packing';
       case 'whatnotAnalytics': return 'Whatnot Analytics';
       case 'labelGenerator': return 'Label Generator';
+      case 'brands': return 'Brands';
       case 'hbaListing': return 'HBA Listing';
       case 'sortingAnalytics': return 'Sorting Analytics';
       case 'packingAnalytics': return 'Packing Analytics';

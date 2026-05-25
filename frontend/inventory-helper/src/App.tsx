@@ -34,6 +34,7 @@ import Tickets from "./pages/Tickets";
 import InvoiceTracker from "./pages/InvoiceTracker";
 import Login from "./pages/Login";
 import LowStock from "./pages/LowStock";
+import Brands from "./pages/Brands";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleBasedHome from "./components/RoleBasedHome";
@@ -393,6 +394,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="invoiceTracker" action="view" menuItem="invoiceTracker">
                   <InvoiceTracker />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/brands"
+              element={
+                <ProtectedRoute resource="brands" action="view" menuItem="brands">
+                  <Brands />
                 </ProtectedRoute>
               }
             />

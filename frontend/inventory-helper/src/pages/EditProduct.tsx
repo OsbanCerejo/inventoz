@@ -39,6 +39,14 @@ import PermissionGuard from "../components/PermissionGuard";
 import { getApiUrl } from "../config/api";
 import { invalidateProductsCache } from "../utils/productCache";
 
+type BrandRecord = {
+  id: number;
+  brand: string;
+  abbreviation: string;
+  nextNumber: number;
+  productCount?: number;
+};
+
 const formikValidationSchema = Yup.object().shape({
   sku: Yup.string().required("Please enter a valid SKU"),
   brand: Yup.string().required("Please select a Brand"),
@@ -113,6 +121,8 @@ function EditProduct() {
   const navigate = useNavigate();
   const { user, hasPermission, isLoading: authLoading } = useAuth();
   const [showMoreDetails, setShowMoreDetails] = useState(false);
+  const [brands, setBrands] = useState<BrandRecord[]>([]);
+  const [brandsLoading, setBrandsLoading] = useState(false);
   const productObject = location.state.productObject;
   const productDetails = location.state.productDetails || {};
   const productListings = location.state.productListings || {};
@@ -237,6 +247,45 @@ function EditProduct() {
   useEffect(() => {
     loadVendorPrices();
   }, [loadVendorPrices]);
+
+  useEffect(() => {
+    const fetchBrands = async () => {
+      try {
+        setBrandsLoading(true);
+        const response = await axios.get(getApiUrl("brands"));
+        const rows = Array.isArray(response.data) ? response.data : [];
+        setBrands(rows);
+      } catch (error) {
+        console.error("Failed to fetch brands:", error);
+      } finally {
+        setBrandsLoading(false);
+      }
+    };
+
+    fetchBrands();
+  }, []);
+
+  const availableBrands = useMemo(() => {
+    const normalizedCurrentBrand = String(formikInitialValues.brand || "").trim();
+    const hasCurrentBrand = brands.some(
+      (brand) => String(brand.brand || "").trim().toLowerCase() === normalizedCurrentBrand.toLowerCase()
+    );
+    const combined = hasCurrentBrand
+      ? brands
+      : [
+          ...brands,
+          {
+            id: -1,
+            brand: normalizedCurrentBrand,
+            abbreviation: "",
+            nextNumber: 1,
+          },
+        ];
+
+    return combined
+      .filter((brand) => String(brand.brand || "").trim())
+      .sort((a, b) => String(a.brand || "").localeCompare(String(b.brand || "")));
+  }, [brands, formikInitialValues.brand]);
 
   const formik = useFormik({
     initialValues: formikInitialValues,
@@ -553,15 +602,14 @@ function EditProduct() {
                           onChange={(event) => {
                             formik.setFieldValue("brand", event.target.value);
                           }}
+                          disabled={brandsLoading}
                           input={<OutlinedInput label="Brand" />}
                         >
-                          {Object.entries(skuData.BRANDS).map(
-                            ([value], index) => (
-                              <MenuItem key={index} value={value}>
-                                {value}
-                              </MenuItem>
-                            )
-                          )}
+                          {availableBrands.map((brand) => (
+                            <MenuItem key={`${brand.id}-${brand.brand}`} value={brand.brand}>
+                              {brand.brand}
+                            </MenuItem>
+                          ))}
                         </Select>
                         <FormHelperText>
                           {formik.touched.brand && formik.errors.brand}

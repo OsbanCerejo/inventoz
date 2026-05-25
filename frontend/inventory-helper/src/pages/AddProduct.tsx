@@ -25,7 +25,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import skuData from "../data/skuData.json";
 import { toast } from "react-toastify";
@@ -41,6 +41,14 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { invalidateProductsCache } from "../utils/productCache";
 
+type BrandRecord = {
+  id: number;
+  brand: string;
+  abbreviation: string;
+  nextNumber: number;
+  productCount?: number;
+};
+
 function AddProduct() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -52,6 +60,8 @@ function AddProduct() {
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [currentInput, setCurrentInput] = useState<string>("");
+  const [brands, setBrands] = useState<BrandRecord[]>([]);
+  const [brandsLoading, setBrandsLoading] = useState(false);
 
   const toggleMoreDetails = () => {
     setShowMoreDetails(!showMoreDetails);
@@ -312,18 +322,20 @@ function AddProduct() {
           }
 
           // Fetch the brand object and update nextNumber
-          const brandResponse = await axios.get(
-            getApiUrl('brands'),
-            {
-              params: { brandName: data.brand },
-            }
-          );
-          const brandObjectOnSubmit = brandResponse.data[0];
-          brandObjectOnSubmit.nextNumber =
-            parseInt(brandObjectOnSubmit.nextNumber) + 1;
-
-          // Update the brand table with the next number for future
-          await axios.put(getApiUrl('brands'), brandObjectOnSubmit);
+          const selectedBrand = brandMap.get(String(data.brand || "").trim().toLowerCase());
+          if (selectedBrand) {
+            await axios.put(
+              getApiUrl(`brands/${selectedBrand.id}/next-number`),
+              {
+                nextNumber:
+                  Math.max(
+                    Number(selectedBrand.nextNumber || 0),
+                    Number.parseInt(String(generatedSku || "").slice(-5), 10) || 0,
+                    1
+                  ) + 1,
+              }
+            );
+          }
 
           invalidateProductsCache();
           toast.success("Product Added Successfully!", { position: "top-right" });
@@ -348,40 +360,71 @@ function AddProduct() {
     return map;
   };
 
-  // Convert skuData.BRANDS, skuData.CATEGORY, and skuData.CONDITION to maps with lowercase keys
-  const brandMap = createJsonDataMap(skuData.BRANDS);
+  const brandMap = useMemo(() => {
+    const map = new Map<string, BrandRecord>();
+    brands.forEach((brand) => {
+      map.set(String(brand.brand || "").trim().toLowerCase(), brand);
+    });
+    return map;
+  }, [brands]);
   const categoryMap = createJsonDataMap(skuData.CATEGORY);
   const conditionMap = createJsonDataMap(skuData.CONDITION);
+
+  const fetchBrands = async () => {
+    try {
+      setBrandsLoading(true);
+      const response = await axios.get(getApiUrl("brands"));
+      const rows = Array.isArray(response.data) ? response.data : [];
+      setBrands(
+        rows.sort((a: BrandRecord, b: BrandRecord) =>
+          String(a.brand || "").localeCompare(String(b.brand || ""))
+        )
+      );
+    } catch (error) {
+      console.error("Failed to fetch brands:", error);
+      toast.error("Failed to load brands");
+    } finally {
+      setBrandsLoading(false);
+    }
+  };
 
   const generateSku = async (fieldValue: string, factor: string) => {
     // Check if the factor is "1" to process brand-related SKU generation
     if (factor === "1") {
       // Check if the brand exists in the brandMap
       if (brandMap.has(fieldValue)) {
-        const brandForSku = brandMap.get(fieldValue);
-        // console.log("Level 1: Brand found for SKU - ", brandForSku);
-        // Fetch the brand object from the server
-        const brandResponse = await axios.get(getApiUrl('brands'), {
-          params: { brandName: fieldValue },
-        });
-        const brandObject = brandResponse.data[0];
-        // console.log("Level 2: Brand object - ", brandObject);
+        const brandObject = brandMap.get(fieldValue);
+        const brandForSku = brandObject?.abbreviation || "";
+
+        if (!brandObject) {
+          skuArray.fill("*", 0, 3);
+          setGeneratedSku(skuArray.join(""));
+          return;
+        }
+
+        let effectiveNextNumber = Number(brandObject.nextNumber || 0);
 
         // If the nextNumber is not set, fetch the product count and update it
-        if (brandObject.nextNumber.length === 0) {
+        if (!effectiveNextNumber || effectiveNextNumber < 1) {
           const productResponse = await axios.get(
             getApiUrl(`products/findAndCount/${brandForSku}`)
           );
-          // console.log("Level 3: Product count - ", productResponse.data);
-          // Update the brand object's nextNumber with the product count
-          brandObject.nextNumber = productResponse.data.toString();
-          await axios.put(getApiUrl('brands'), brandObject);
-          console.log("Level 4");
+          effectiveNextNumber = Math.max(Number(productResponse.data) || 0, 1);
+          await axios.put(getApiUrl(`brands/${brandObject.id}/next-number`), {
+            nextNumber: effectiveNextNumber,
+          });
+          setBrands((prev) =>
+            prev.map((row) =>
+              row.id === brandObject.id
+                ? { ...row, nextNumber: effectiveNextNumber }
+                : row
+            )
+          );
         }
         // Set the 10th position of the SKU with the formatted nextNumber
         skuArray[10] =
-          "0".repeat(5 - brandObject.nextNumber.toString().length) +
-          brandObject.nextNumber.toString();
+          "0".repeat(5 - effectiveNextNumber.toString().length) +
+          effectiveNextNumber.toString();
         setGeneratedSku(skuArray.join(""));
         // Set the first three characters of the SKU based on the brand initials
         skuArray[0] = brandForSku ? brandForSku.charAt(0) : "@";
@@ -426,6 +469,10 @@ function AddProduct() {
   };
 
   useEffect(() => {
+    fetchBrands();
+  }, []);
+
+  useEffect(() => {
     if (
       formik.values.brand &&
       formik.values.category &&
@@ -436,7 +483,7 @@ function AddProduct() {
       generateSku(formik.values.category.toLowerCase(), "2");
       generateSku(formik.values.condition.toLowerCase(), "4");
     }
-  }, [formik.values.brand, formik.values.category, formik.values.condition]);
+  }, [formik.values.brand, formik.values.category, formik.values.condition, brandMap]);
 
   const handleAddLocation = () => {
     if (currentInput.trim() !== "" && !tags.includes(currentInput.trim())) {
@@ -539,15 +586,14 @@ function AddProduct() {
                             formik.setFieldValue("brand", event.target.value);
                             generateSku(event.target.value.toLowerCase(), "1");
                           }}
+                          disabled={brandsLoading}
                           input={<OutlinedInput label="Brand" />}
                         >
-                          {Object.entries(skuData.BRANDS).map(
-                            ([value], index) => (
-                              <MenuItem key={index} value={value}>
-                                {value}
-                              </MenuItem>
-                            )
-                          )}
+                          {brands.map((brand) => (
+                            <MenuItem key={brand.id} value={brand.brand}>
+                              {brand.brand}
+                            </MenuItem>
+                          ))}
                         </Select>
                       </FormControl>
                     </Box>

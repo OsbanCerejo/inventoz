@@ -93,6 +93,7 @@ function NavBar() {
     { key: 'whatnot-fulfillment-tool', permissionKey: 'whatnotFulfillment', label: 'Whatnot Fulfillment', path: '/whatnot-fulfillment' },
     { key: 'tiktok-fulfillment-tool', permissionKey: 'tiktokFulfillment', label: 'TikTok Fulfillment', path: '/tiktok-fulfillment' },
     { key: 'label-generator-tool', permissionKey: 'labelGenerator', label: 'Label Generator', path: '/label-generator' },
+    { key: 'brands-tool', permissionKey: 'brands', label: 'Brands', path: '/brands' },
     { key: 'packing-tool', permissionKey: 'packing', label: 'Packing', path: '/orders/packingMode' },
     { key: 'pricelist-tool', permissionKey: 'pricelist', label: 'PriceList', path: '/price-list' },
     { key: 'lowstock-tool', permissionKey: 'lowStock', label: 'Low Stock', path: '/low-stock' },

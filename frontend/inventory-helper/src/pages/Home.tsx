@@ -17,6 +17,7 @@ import {
   ConfirmationNumber as TicketsIcon,
   ReceiptLong as InvoiceTrackerIcon,
   Storefront as WalmartIcon,
+  BrandingWatermark as BrandsIcon,
 } from '@mui/icons-material';
 import { useAuth } from "../context/AuthContext";
 
@@ -143,6 +144,13 @@ function Home() {
       path: "/invoice-tracker",
       color: "#efebe9"
     },
+    brands: {
+      title: "Brands",
+      description: "Manage SKU brand codes and next serial numbers",
+      icon: <BrandsIcon sx={{ fontSize: 40, color: '#283593' }} />,
+      path: "/brands",
+      color: "#e8eaf6"
+    },
     walmartIntegration: {
       title: "Walmart Integration",
       description: "Monitor Walmart connection health and sync items, orders, inventory, and pricing",
@@ -170,6 +178,7 @@ function Home() {
     "products",
     "orders",
     "invoiceTracker",
+    "brands",
     "packingAnalytics",
     "whatnotAnalytics",
     "sortingAnalytics",
