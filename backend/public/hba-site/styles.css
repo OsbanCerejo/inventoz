@@ -130,9 +130,17 @@ body {
 
 .toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   margin-bottom: 16px;
+  align-items: end;
+}
+
+.toolbar-compact-group {
+  display: grid;
+  grid-template-columns: minmax(150px, 190px) minmax(150px, 190px);
+  gap: 12px;
+  justify-self: end;
 }
 
 .filters-panel {
@@ -158,6 +166,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.toolbar-field.compact-field {
+  width: 100%;
+  max-width: 190px;
 }
 
 .toolbar-field label {
@@ -507,6 +520,11 @@ body {
   .toolbar,
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .toolbar-compact-group {
+    grid-template-columns: 1fr 1fr;
+    justify-self: stretch;
   }
 
   .checkbox-filter-group {

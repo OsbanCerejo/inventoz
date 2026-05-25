@@ -247,7 +247,7 @@ router.get("/hba/public-catalog", async (req, res) => {
         {
           model: ProductDetails,
           required: false,
-          attributes: ["tester", "discontinued"],
+          attributes: ["tester", "discontinued", "sizeType"],
         },
       ],
       where: {
@@ -258,7 +258,16 @@ router.get("/hba/public-catalog", async (req, res) => {
 
     return res.json(
       rows.map((row) => {
-        const details = row.ProductDetails || row.ProductDetail || null;
+        const details =
+          row.ProductDetails ||
+          row.ProductDetail ||
+          (typeof row.get === "function" ? row.get("ProductDetails") || row.get("ProductDetail") : null) ||
+          null;
+        const sizeType = String(
+          details?.sizeType ??
+            details?.dataValues?.sizeType ??
+            ""
+        ).trim();
 
         return {
           sku: row.sku,
@@ -268,6 +277,7 @@ router.get("/hba/public-catalog", async (req, res) => {
           sizeOz: row.sizeOz,
           sizeMl: row.sizeMl,
           strength: row.strength,
+          sizeType,
           tester: Boolean(details?.tester),
           discontinued: Boolean(details?.discontinued),
           image: row.image || "",

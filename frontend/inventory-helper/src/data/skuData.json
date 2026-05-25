@@ -38,7 +38,9 @@
     "Mini": "MIN",
     "Travel": "TRL",
     "Standard": "STD",
-    "Jumbo": "JUM"
+    "Jumbo": "JUM",
+    "Gift Set": "GST",
+    "Candles": "CDL"
   },
   "BRANDS": {
     "Abercrombie & Fitch": "ABE",

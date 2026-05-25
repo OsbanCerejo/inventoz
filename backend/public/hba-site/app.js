@@ -9,6 +9,8 @@ const state = {
     tester: false,
     discontinued: false,
   },
+  selectedBrand: "all",
+  selectedSizeType: "all",
   sortKey: "",
   sortDirection: "asc",
   eventsWired: false,
@@ -21,6 +23,8 @@ const elements = {
   categoryFilterCheckboxes: document.getElementById("category-filter-checkboxes"),
   itemCategoryTesterCheckbox: document.getElementById("item-category-tester-checkbox"),
   itemCategoryDiscontinuedCheckbox: document.getElementById("item-category-discontinued-checkbox"),
+  brandFilter: document.getElementById("brand-filter"),
+  sizeTypeFilter: document.getElementById("size-type-filter"),
   catalogView: document.getElementById("catalog-view"),
   cartView: document.getElementById("cart-view"),
   checkoutView: document.getElementById("checkout-view"),
@@ -234,6 +238,15 @@ function normalizeCategoryLabel(value) {
   return categoryDisplayMap.get(normalized) || normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function getHbaTypeLabel(product) {
+  const normalizedCategory = normalizeCategoryLabel(product?.category);
+  if (normalizedCategory === "Skincare" || normalizedCategory === "Cosmetics") {
+    return "Skincare & Cosmetics";
+  }
+
+  return String(product?.sizeType || "").trim();
+}
+
 function getAvailableCategories() {
   const categories = new Set();
   for (const product of state.products) {
@@ -252,6 +265,74 @@ function getAvailableCategories() {
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
   return ["all", ...orderedCategories.filter((category) => category !== "All"), ...remainingCategories];
+}
+
+function getAvailableSizeTypes() {
+  return Array.from(
+    new Set(
+      state.products
+        .map((product) => getHbaTypeLabel(product))
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }));
+}
+
+function getAvailableBrands() {
+  return Array.from(
+    new Set(
+      state.products
+        .map((product) => String(product.brand || "").trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }));
+}
+
+function renderBrandFilter() {
+  if (!elements.brandFilter) return;
+
+  const options = getAvailableBrands();
+  const currentValue = String(state.selectedBrand || "all").trim() || "all";
+  elements.brandFilter.innerHTML = "";
+
+  const allOption = document.createElement("option");
+  allOption.value = "all";
+  allOption.textContent = "All";
+  elements.brandFilter.appendChild(allOption);
+
+  for (const brand of options) {
+    const option = document.createElement("option");
+    option.value = brand;
+    option.textContent = brand;
+    elements.brandFilter.appendChild(option);
+  }
+
+  const availableValues = new Set(["all", ...options]);
+  elements.brandFilter.value = availableValues.has(currentValue) ? currentValue : "all";
+  state.selectedBrand = elements.brandFilter.value;
+}
+
+function renderSizeTypeFilter() {
+  if (!elements.sizeTypeFilter) return;
+
+  const options = getAvailableSizeTypes();
+  const currentValue = String(state.selectedSizeType || "all").trim() || "all";
+  elements.sizeTypeFilter.innerHTML = "";
+
+  const allOption = document.createElement("option");
+  allOption.value = "all";
+  allOption.textContent = "All";
+  elements.sizeTypeFilter.appendChild(allOption);
+
+  for (const sizeType of options) {
+    const option = document.createElement("option");
+    option.value = sizeType;
+    option.textContent = sizeType;
+    elements.sizeTypeFilter.appendChild(option);
+  }
+
+  const availableValues = new Set(["all", ...options]);
+  elements.sizeTypeFilter.value = availableValues.has(currentValue) ? currentValue : "all";
+  state.selectedSizeType = elements.sizeTypeFilter.value;
 }
 
 function renderCategoryFilters() {
@@ -332,6 +413,8 @@ function updateCartForProduct(product, rawQuantity) {
       sizeOz: product.sizeOz,
       sizeMl: product.sizeMl,
       strength: product.strength,
+      sizeType: String(product.sizeType || "").trim(),
+      hbaType: getHbaTypeLabel(product),
       tester: Boolean(product.tester),
       quantity,
       hbaPrice: Number(product.hbaPrice || 0),
@@ -366,6 +449,8 @@ function applyFilters() {
   const selectedCategories = state.selectedCategories;
   const includeTester = state.itemCategoryFilters.tester;
   const includeDiscontinued = state.itemCategoryFilters.discontinued;
+  const selectedBrand = String(state.selectedBrand || "all").trim() || "all";
+  const selectedSizeType = String(state.selectedSizeType || "all").trim() || "all";
 
   const rows = state.products.filter((product) => {
     const matchesSearch = matchesRobustSearch(product, searchValue);
@@ -378,12 +463,20 @@ function applyFilters() {
       (!includeTester && !includeDiscontinued) ||
       (includeTester && isTester) ||
       (includeDiscontinued && isDiscontinued);
+    const productBrand = String(product.brand || "").trim();
+    const matchesBrand =
+      selectedBrand === "all" || productBrand === selectedBrand;
+    const productSizeType = getHbaTypeLabel(product);
+    const matchesSizeType =
+      selectedSizeType === "all" || productSizeType === selectedSizeType;
 
-    return matchesSearch && matchesCategory && matchesItemCategory;
+    return matchesSearch && matchesCategory && matchesItemCategory && matchesBrand && matchesSizeType;
   });
 
   state.filteredProducts = applySort(rows);
   renderCategoryFilters();
+  renderBrandFilter();
+  renderSizeTypeFilter();
   renderCatalog();
   renderSortIndicators();
 }
@@ -618,6 +711,14 @@ function wireEvents() {
   });
   elements.itemCategoryDiscontinuedCheckbox.addEventListener("change", () => {
     state.itemCategoryFilters.discontinued = elements.itemCategoryDiscontinuedCheckbox.checked;
+    applyFilters();
+  });
+  elements.brandFilter.addEventListener("change", () => {
+    state.selectedBrand = elements.brandFilter.value || "all";
+    applyFilters();
+  });
+  elements.sizeTypeFilter.addEventListener("change", () => {
+    state.selectedSizeType = elements.sizeTypeFilter.value || "all";
     applyFilters();
   });
   elements.cartSummaryButton.addEventListener("click", () => {
