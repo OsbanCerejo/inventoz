@@ -1,6 +1,44 @@
 const { Products, ProductVendorPrice } = require("../models");
 
 class PricingService {
+  static getExpectedPriceConfig() {
+    const marginPercent = Number(process.env.PRICE_SCANNER_MARGIN_PERCENT || 30);
+    const fixedFee = Number(process.env.PRICE_SCANNER_FIXED_FEE || 0);
+
+    return {
+      marginPercent: Number.isFinite(marginPercent) ? marginPercent : 30,
+      fixedFee: Number.isFinite(fixedFee) ? fixedFee : 0,
+    };
+  }
+
+  /**
+   * Calculate an expected selling price from average cost.
+   * Default formula targets a profit margin: price = cost / (1 - margin).
+   * A fixed fee can be added, then the result is rounded up to the nearest dollar.
+   * @param {number|string|null} averageCost
+   */
+  static calculateExpectedSellingPrice(averageCost) {
+    const cost = Number(averageCost);
+    if (!Number.isFinite(cost) || cost <= 0) {
+      return {
+        expectedPrice: null,
+        averageCost: null,
+        formula: this.getExpectedPriceConfig(),
+      };
+    }
+
+    const formula = this.getExpectedPriceConfig();
+    const marginRate = Math.min(Math.max(formula.marginPercent / 100, 0), 0.95);
+    const basePrice = cost / (1 - marginRate) + formula.fixedFee;
+    const expectedPrice = Math.ceil(basePrice);
+
+    return {
+      expectedPrice: Number(Math.max(expectedPrice, cost).toFixed(2)),
+      averageCost: Number(cost.toFixed(2)),
+      formula,
+    };
+  }
+
   /**
    * Get all active vendor prices for a SKU with computed weighted average
    * @param {string} sku

@@ -89,6 +89,7 @@ function NavBar() {
     { key: 'tickets-tool', permissionKey: 'tickets', label: 'Tickets', path: '/tickets' },
     { key: 'invoice-tracker-tool', permissionKey: 'invoiceTracker', label: 'Invoice Tracker', path: '/invoice-tracker' },
     { key: 'sales-tool', permissionKey: 'sales', label: 'Sales Tracker', path: '/sales' },
+    { key: 'price-scanner-tool', permissionKey: 'priceScanner', label: 'Price Scanner', path: '/price-scanner' },
     { key: 'whatnot-tool', permissionKey: 'whatnot', label: 'Whatnot', path: '/whatnot' },
     { key: 'whatnot-fulfillment-tool', permissionKey: 'whatnotFulfillment', label: 'Whatnot Fulfillment', path: '/whatnot-fulfillment' },
     { key: 'tiktok-fulfillment-tool', permissionKey: 'tiktokFulfillment', label: 'TikTok Fulfillment', path: '/tiktok-fulfillment' },

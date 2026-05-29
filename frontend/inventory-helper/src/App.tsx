@@ -26,6 +26,7 @@ import WalmartIntegration from "./pages/WalmartIntegration";
 import WalmartOrders from "./pages/WalmartOrders";
 import WalmartProductCatalog from "./pages/WalmartProductCatalog";
 import PriceList from "./pages/PriceList";
+import PriceScanner from "./pages/PriceScanner";
 import Users from "./pages/Users";
 import BarcodeScan from "./pages/BarcodeScan";
 import PackingAnalytics from "./pages/PackingAnalytics";
@@ -338,6 +339,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="pricelist" action="view" menuItem="pricelist">
                   <PriceList />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/price-scanner"
+              element={
+                <ProtectedRoute resource="priceScanner" action="view" menuItem="priceScanner">
+                  <PriceScanner />
                 </ProtectedRoute>
               }
             />

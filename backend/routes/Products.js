@@ -5,6 +5,7 @@ const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 const StockUpdateService = require("../Services/StockUpdateService");
 const PermissionService = require("../Services/PermissionService");
+const PricingService = require("../Services/PricingService");
 const { auth } = require('../middleware/auth');
 const { checkPermission } = require('../middleware/permissions');
 
@@ -637,6 +638,104 @@ router.get("/hba/catalog", auth, checkPermission('products', 'view'), async (req
   } catch (error) {
     console.error("Error loading HBA catalog:", error);
     return res.status(500).json({ error: "Failed to load HBA catalog" });
+  }
+});
+
+router.get("/price-scanner/:barcode", auth, checkPermission('priceScanner', 'view'), async (req, res) => {
+  try {
+    const barcode = String(req.params.barcode || "").trim();
+    if (!barcode) {
+      return res.status(400).json({ error: "Barcode is required" });
+    }
+
+    const exactMatches = [
+      { sku: barcode },
+      { alternativeSku: barcode },
+      Sequelize.where(Sequelize.cast(Sequelize.col("Products.upc"), "CHAR"), barcode),
+    ];
+    const numericBarcode = Number(barcode);
+    if (Number.isFinite(numericBarcode)) {
+      exactMatches.push({ upc: numericBarcode });
+    }
+
+    const products = await Products.findAll({
+      attributes: [
+        "sku",
+        "alternativeSku",
+        "brand",
+        "itemName",
+        "quantity",
+        "location",
+        "sizeOz",
+        "sizeMl",
+        "strength",
+        "shade",
+        "category",
+        "condition",
+        "upc",
+        "image",
+      ],
+      include: [
+        {
+          model: ProductDetails,
+          required: false,
+          attributes: ["tester", "discontinued", "sizeType"],
+        },
+      ],
+      where: {
+        [Op.or]: exactMatches,
+      },
+      order: [["brand", "ASC"], ["itemName", "ASC"], ["sku", "ASC"]],
+    });
+
+    const seen = new Set();
+    const results = products
+      .filter((product) => {
+        if (seen.has(product.sku)) return false;
+        seen.add(product.sku);
+        return true;
+      })
+      .map(async (product) => {
+        const averagePrice = await PricingService.getAveragePriceForSku(product.sku);
+        const pricing = PricingService.calculateExpectedSellingPrice(averagePrice);
+        const details =
+          product.ProductDetails ||
+          product.ProductDetail ||
+          (typeof product.get === "function" ? product.get("ProductDetails") || product.get("ProductDetail") : null) ||
+          null;
+
+        return {
+          sku: product.sku,
+          alternativeSku: product.alternativeSku,
+          upc: product.upc,
+          brand: product.brand,
+          itemName: product.itemName,
+          quantity: product.quantity,
+          location: product.location,
+          sizeOz: product.sizeOz,
+          sizeMl: product.sizeMl,
+          strength: product.strength,
+          shade: product.shade,
+          category: product.category,
+          condition: product.condition,
+          image: product.image,
+          expectedPrice: pricing.expectedPrice,
+          tester: Boolean(details?.tester),
+          discontinued: Boolean(details?.discontinued),
+          sizeType: details?.sizeType || "",
+        };
+      });
+
+    const resolvedResults = await Promise.all(results);
+
+    return res.json({
+      barcode,
+      count: resolvedResults.length,
+      matches: resolvedResults,
+    });
+  } catch (error) {
+    console.error("Error scanning product price:", error);
+    return res.status(500).json({ error: "Failed to scan product price" });
   }
 });
 

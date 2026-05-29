@@ -18,6 +18,7 @@ import {
   ReceiptLong as InvoiceTrackerIcon,
   Storefront as WalmartIcon,
   BrandingWatermark as BrandsIcon,
+  QrCodeScanner as PriceScannerIcon,
 } from '@mui/icons-material';
 import { useAuth } from "../context/AuthContext";
 
@@ -73,6 +74,13 @@ function Home() {
       icon: <PriceListIcon sx={{ fontSize: 40, color: '#2e7d32' }} />,
       path: "/price-list",
       color: "#e8f5e9"
+    },
+    priceScanner: {
+      title: "Price Scanner",
+      description: "Scan an item barcode to view the expected selling price",
+      icon: <PriceScannerIcon sx={{ fontSize: 40, color: '#00838f' }} />,
+      path: "/price-scanner",
+      color: "#e0f7fa"
     },
     whatnotFulfillment: {
       title: "Whatnot Fulfilment",
@@ -188,6 +196,7 @@ function Home() {
     "tickets",
     "whatnotFulfillment",
     "pricelist",
+    "priceScanner",
     "users",
   ];
 
