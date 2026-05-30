@@ -594,7 +594,7 @@ router.post("/hba/submit-order", async (req, res) => {
 
     const html = buildHbaOrderEmailHtml({ customer, items: normalizedItems, totals });
     const text = buildHbaOrderEmailText({ customer, items: normalizedItems, totals });
-    const success = await EmailService.sendEmail({
+    const success = await EmailService.sendHbaEmail({
       to: recipients,
       subject: `HBA Order Request ${orderNumber} - ${customer.companyName} - ${customer.name}`,
       html,
@@ -629,7 +629,7 @@ router.post("/hba/submit-order", async (req, res) => {
         orderNumber,
       });
 
-      const customerEmailSent = await EmailService.sendEmail({
+      const customerEmailSent = await EmailService.sendHbaEmail({
         to: customer.email,
         subject: `HBA Order Request Received - ${orderNumber}`,
         html: customerHtml,

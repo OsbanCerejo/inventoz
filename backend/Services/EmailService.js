@@ -2,6 +2,29 @@ const nodemailer = require('nodemailer');
 
 class EmailService {
   static transporter = null;
+  static hbaTransporter = null;
+
+  static buildTransporter({ host, port, secure, user, pass, label }) {
+    if (!user || !pass) {
+      console.warn(`${label} email service not configured. SMTP credentials missing.`);
+      return null;
+    }
+
+    return nodemailer.createTransport({
+      host,
+      port,
+      secure: secure ? secure === 'true' : port === 465,
+      auth: {
+        user,
+        pass
+      },
+      tls: {
+        rejectUnauthorized: false
+      },
+      debug: false,
+      logger: false
+    });
+  }
 
   /**
    * Initialize email transporter with Hostinger SMTP configuration
@@ -17,27 +40,39 @@ class EmailService {
     const smtpPass = process.env.SMTP_PASS;
     const smtpSecure = String(process.env.SMTP_SECURE || '').trim().toLowerCase();
 
-    if (!smtpUser || !smtpPass) {
-      console.warn('Email service not configured. SMTP credentials missing.');
-      return null;
-    }
-
-    this.transporter = nodemailer.createTransport({
+    this.transporter = this.buildTransporter({
       host: smtpHost,
       port: smtpPort,
-      secure: smtpSecure ? smtpSecure === 'true' : smtpPort === 465,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass
-      },
-      tls: {
-        rejectUnauthorized: false
-      },
-      debug: false, // Set to true for detailed SMTP logs
-      logger: false // Set to true to log to console
+      secure: smtpSecure,
+      user: smtpUser,
+      pass: smtpPass,
+      label: 'Default'
     });
 
     return this.transporter;
+  }
+
+  static initializeHbaTransporter() {
+    if (this.hbaTransporter) {
+      return this.hbaTransporter;
+    }
+
+    const smtpHost = process.env.HBA_SMTP_HOST || 'smtpout.secureserver.net';
+    const smtpPort = parseInt(process.env.HBA_SMTP_PORT || '465');
+    const smtpUser = process.env.HBA_SMTP_USER;
+    const smtpPass = process.env.HBA_SMTP_PASS;
+    const smtpSecure = String(process.env.HBA_SMTP_SECURE || '').trim().toLowerCase();
+
+    this.hbaTransporter = this.buildTransporter({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      user: smtpUser,
+      pass: smtpPass,
+      label: 'HBA'
+    });
+
+    return this.hbaTransporter;
   }
 
   /**
@@ -61,6 +96,12 @@ class EmailService {
   static getFromAddress() {
     const emailFrom = process.env.EMAIL_FROM || process.env.SMTP_USER;
     const emailFromName = process.env.EMAIL_FROM_NAME || 'Inventoz Inventory System';
+    return { emailFrom, emailFromName };
+  }
+
+  static getHbaFromAddress() {
+    const emailFrom = process.env.HBA_EMAIL_FROM || process.env.HBA_SMTP_USER;
+    const emailFromName = process.env.HBA_EMAIL_FROM_NAME || 'HBA Deals';
     return { emailFrom, emailFromName };
   }
 
@@ -90,6 +131,41 @@ class EmailService {
       return true;
     } catch (error) {
       console.error('Error sending email:', error.message);
+      console.error('Full error:', {
+        code: error.code,
+        command: error.command,
+        response: error.response
+      });
+      return false;
+    }
+  }
+
+  static async sendHbaEmail({ to, subject, html, text, replyTo }) {
+    try {
+      const transporter = this.initializeHbaTransporter();
+      if (!transporter) {
+        console.warn('HBA email transporter not initialized. Skipping email send.');
+        return false;
+      }
+
+      const recipients = (Array.isArray(to) ? to : [to]).filter(Boolean);
+      if (recipients.length < 1) {
+        console.warn('No HBA email recipients provided. Skipping email send.');
+        return false;
+      }
+
+      const { emailFrom, emailFromName } = this.getHbaFromAddress();
+      await transporter.sendMail({
+        from: `"${emailFromName}" <${emailFrom}>`,
+        to: recipients.join(', '),
+        subject,
+        html,
+        text,
+        replyTo: replyTo || process.env.HBA_REPLY_TO || emailFrom
+      });
+      return true;
+    } catch (error) {
+      console.error('Error sending HBA email:', error.message);
       console.error('Full error:', {
         code: error.code,
         command: error.command,

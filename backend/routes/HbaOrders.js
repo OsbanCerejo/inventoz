@@ -328,7 +328,7 @@ router.post("/:id/resend-internal-email", auth, checkPermission("hbaOrders", "ed
   }
 
   const payload = toEmailPayload(order);
-  const success = await EmailService.sendEmail({
+  const success = await EmailService.sendHbaEmail({
     to: recipients,
     subject: `HBA Order Request ${payload.orderNumber} - ${payload.customer.companyName} - ${payload.customer.name}`,
     html: buildInternalEmailHtml(payload),
@@ -350,7 +350,7 @@ router.post("/:id/resend-customer-email", auth, checkPermission("hbaOrders", "ed
   if (!order) return res.status(404).json({ error: "HBA order not found" });
 
   const payload = toEmailPayload(order);
-  const success = await EmailService.sendEmail({
+  const success = await EmailService.sendHbaEmail({
     to: payload.customer.email,
     subject: `HBA Order Request Received - ${payload.orderNumber}`,
     html: buildCustomerEmailHtml(payload),
