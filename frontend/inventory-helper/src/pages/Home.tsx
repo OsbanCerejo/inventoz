@@ -19,6 +19,7 @@ import {
   Storefront as WalmartIcon,
   BrandingWatermark as BrandsIcon,
   QrCodeScanner as PriceScannerIcon,
+  AssignmentTurnedIn as HbaOrdersIcon,
 } from '@mui/icons-material';
 import { useAuth } from "../context/AuthContext";
 
@@ -110,6 +111,13 @@ function Home() {
       path: "/sales",
       color: "#f4e8ff"
     },
+    hbaOrders: {
+      title: "HBA Orders",
+      description: "Review public HBA order requests and email status",
+      icon: <HbaOrdersIcon sx={{ fontSize: 40, color: '#2e7d32' }} />,
+      path: "/hba-orders",
+      color: "#e8f5e9"
+    },
     whatnotAnalytics: {
       title: "Whatnot Analytics",
       description: "View Whatnot scan and sales performance",
@@ -185,6 +193,7 @@ function Home() {
   const dashboardOrder = [
     "products",
     "orders",
+    "hbaOrders",
     "invoiceTracker",
     "brands",
     "packingAnalytics",

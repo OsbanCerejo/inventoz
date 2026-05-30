@@ -64,7 +64,7 @@ class EmailService {
     return { emailFrom, emailFromName };
   }
 
-  static async sendEmail({ to, subject, html, text }) {
+  static async sendEmail({ to, subject, html, text, replyTo }) {
     try {
       const transporter = this.initializeTransporter();
       if (!transporter) {
@@ -84,7 +84,8 @@ class EmailService {
         to: recipients.join(', '),
         subject,
         html,
-        text
+        text,
+        ...(replyTo ? { replyTo } : {})
       });
       return true;
     } catch (error) {

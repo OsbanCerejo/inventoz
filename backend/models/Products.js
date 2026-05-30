@@ -122,6 +122,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         defaultValue: null,
       },
+      hbaCondition: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        defaultValue: null,
+      },
       lastPriceUpdate: {
         type: DataTypes.DATE,
         allowNull: true,

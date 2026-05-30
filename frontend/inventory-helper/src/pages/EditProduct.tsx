@@ -47,6 +47,8 @@ type BrandRecord = {
   productCount?: number;
 };
 
+const HBA_CONDITION_OPTIONS = ["Unboxed", "Sealed", "Damaged", "Old Batch"];
+
 const formikValidationSchema = Yup.object().shape({
   sku: Yup.string().required("Please enter a valid SKU"),
   brand: Yup.string().required("Please select a Brand"),
@@ -100,6 +102,7 @@ const formikValidationSchema = Yup.object().shape({
   hbaEnabled: Yup.boolean(),
   hbaQuantity: Yup.number().nullable(),
   hbaPrice: Yup.number().nullable(),
+  hbaCondition: Yup.string(),
 });
 
 interface ChangeRecord {
@@ -205,6 +208,7 @@ function EditProduct() {
       hbaEnabled: productObject.hbaEnabled || false,
       hbaQuantity: productObject.hbaQuantity || "",
       hbaPrice: productObject.hbaPrice || "",
+      hbaCondition: productObject.hbaCondition || "",
     }),
     [productObject, productDetails]
   );
@@ -1496,6 +1500,29 @@ function EditProduct() {
                                     : ""
                                 }
                               />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                select
+                                fullWidth
+                                id="hbaCondition"
+                                name="hbaCondition"
+                                label="HBA Condition"
+                                value={formik.values.hbaCondition}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                disabled={!canEditHbaListing}
+                                helperText={`SKU condition: ${formik.values.condition || "N/A"}`}
+                              >
+                                <MenuItem value="">Use SKU condition</MenuItem>
+                                {HBA_CONDITION_OPTIONS.map((condition) => (
+                                  <MenuItem key={condition} value={condition}>
+                                    {condition}
+                                  </MenuItem>
+                                ))}
+                              </TextField>
                             </Box>
                           </Grid>
                         </>

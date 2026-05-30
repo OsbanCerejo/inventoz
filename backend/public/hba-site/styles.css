@@ -130,7 +130,7 @@ body {
 
 .toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   margin-bottom: 16px;
   align-items: end;
@@ -138,28 +138,8 @@ body {
 
 .toolbar-compact-group {
   display: grid;
-  grid-template-columns: minmax(150px, 190px) minmax(150px, 190px);
+  grid-template-columns: repeat(3, minmax(150px, 190px));
   gap: 12px;
-  justify-self: end;
-}
-
-.filters-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr);
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.filters-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.filters-section-label {
-  font-size: 15px;
-  font-weight: 700;
-  color: #555;
 }
 
 .toolbar-field {
@@ -176,32 +156,6 @@ body {
 .toolbar-field label {
   font-size: 15px;
   color: #555;
-}
-
-.checkbox-filter-group {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  min-height: 42px;
-  align-items: center;
-  padding: 8px 10px;
-  border: 1px solid #cfcfcf;
-  border-radius: 4px;
-  background: #fff;
-}
-
-.checkbox-filter-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font: inherit;
-  color: #333;
-}
-
-.checkbox-filter-option input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
 }
 
 .toolbar-field input,
@@ -331,6 +285,7 @@ body {
 }
 
 .upc-cell,
+.type-cell,
 .price-cell,
 .available-cell,
 .line-total-cell {
@@ -361,12 +316,10 @@ body {
   color: #9a9a9a;
 }
 
-.tester-badge {
+.tester-badge,
+.condition-badge {
   display: inline-flex;
   align-items: center;
-  border: 1px solid #e9c97a;
-  background: #fff7da;
-  color: #8a5b00;
   border-radius: 999px;
   padding: 2px 8px;
   font-size: 13px;
@@ -374,7 +327,20 @@ body {
   line-height: 1.2;
 }
 
-.item-name-primary .tester-badge {
+.tester-badge {
+  border: 1px solid #e9c97a;
+  background: #fff7da;
+  color: #8a5b00;
+}
+
+.condition-badge {
+  border: 1px solid #b8c7dd;
+  background: #eef5ff;
+  color: #285ea8;
+}
+
+.item-name-primary .tester-badge,
+.item-name-primary .condition-badge {
   font-weight: 700 !important;
 }
 
@@ -426,6 +392,12 @@ body {
   border: 0;
   background: #1976d2;
   color: #fff;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .secondary-button {
@@ -500,6 +472,12 @@ body {
   color: #16794a;
 }
 
+.minimum-order-message {
+  margin: 12px 0 0;
+  color: #b42318;
+  font-weight: 700;
+}
+
 .empty-state {
   padding: 18px 10px 4px;
   color: #666;
@@ -516,24 +494,23 @@ body {
     align-items: stretch;
   }
 
-  .filters-panel,
   .toolbar,
   .form-grid {
     grid-template-columns: 1fr;
   }
 
   .toolbar-compact-group {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     justify-self: stretch;
-  }
-
-  .checkbox-filter-group {
-    min-height: 0;
   }
 }
 
 @media (max-width: 760px) {
   .page-shell {
     padding: 12px;
+  }
+
+  .toolbar-compact-group {
+    grid-template-columns: 1fr;
   }
 }

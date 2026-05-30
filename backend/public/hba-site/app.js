@@ -4,11 +4,7 @@ const state = {
   cart: loadCart(),
   view: "catalog",
   successRedirectTimeoutId: null,
-  selectedCategories: new Set(["all"]),
-  itemCategoryFilters: {
-    tester: false,
-    discontinued: false,
-  },
+  selectedCategory: "all",
   selectedBrand: "all",
   selectedSizeType: "all",
   sortKey: "",
@@ -17,12 +13,11 @@ const state = {
 };
 
 const apiBaseUrl = String(window.HBA_CONFIG?.apiBaseUrl || "").replace(/\/$/, "");
+const minimumOrderTotal = 500;
 
 const elements = {
   search: document.getElementById("catalog-search"),
-  categoryFilterCheckboxes: document.getElementById("category-filter-checkboxes"),
-  itemCategoryTesterCheckbox: document.getElementById("item-category-tester-checkbox"),
-  itemCategoryDiscontinuedCheckbox: document.getElementById("item-category-discontinued-checkbox"),
+  categoryFilter: document.getElementById("category-filter"),
   brandFilter: document.getElementById("brand-filter"),
   sizeTypeFilter: document.getElementById("size-type-filter"),
   catalogView: document.getElementById("catalog-view"),
@@ -40,9 +35,11 @@ const elements = {
   cartTotalLines: document.getElementById("cart-total-lines"),
   cartTotalUnits: document.getElementById("cart-total-units"),
   cartTotalPrice: document.getElementById("cart-total-price"),
+  cartMinimumMessage: document.getElementById("cart-minimum-message"),
   checkoutTotalLines: document.getElementById("checkout-total-lines"),
   checkoutTotalUnits: document.getElementById("checkout-total-units"),
   checkoutTotalPrice: document.getElementById("checkout-total-price"),
+  checkoutMinimumMessage: document.getElementById("checkout-minimum-message"),
   backToProductsButton: document.getElementById("back-to-products-button"),
   completeOrderButton: document.getElementById("complete-order-button"),
   checkoutBackButton: document.getElementById("checkout-back-button"),
@@ -172,12 +169,20 @@ function formatSizeDisplay(sizeOz, sizeMl) {
 function buildItemMeta(productOrLine) {
   const sizeLabel = formatSizeDisplay(productOrLine.sizeOz, productOrLine.sizeMl);
   const strengthLabel = String(productOrLine.strength || "").trim();
+  const shadeLabel = String(productOrLine.shade || "").trim();
+  const conditionLabel = String(productOrLine.condition || "").trim();
+  const hbaConditionLabel = String(productOrLine.hbaCondition || "").trim();
   const isFragrance = normalizeCategoryLabel(productOrLine.category) === "Perfumes";
+  const showConditionBadge =
+    hbaConditionLabel.length > 0 &&
+    hbaConditionLabel.toLowerCase() !== conditionLabel.toLowerCase();
 
   return {
     sizeLabel,
     strengthLabel,
+    shadeLabel,
     showTesterBadge: isFragrance && Boolean(productOrLine.tester),
+    conditionBadgeLabel: showConditionBadge ? hbaConditionLabel : "",
   };
 }
 
@@ -187,7 +192,7 @@ function buildGoogleSearchQuery(productOrLine) {
     return upc;
   }
 
-  return [productOrLine.itemName, formatSizeDisplay(productOrLine.sizeOz, productOrLine.sizeMl), productOrLine.strength]
+  return [productOrLine.itemName, productOrLine.shade, productOrLine.strength, formatSizeDisplay(productOrLine.sizeOz, productOrLine.sizeMl)]
     .map((value) => String(value || "").trim())
     .filter(Boolean)
     .join(" ");
@@ -201,7 +206,7 @@ function renderItemNameCell(cell, productOrLine) {
   const titleText = document.createElement("span");
   titleText.className = "item-name-text";
   titleText.textContent =
-    [productOrLine.itemName || "", metaInfo.strengthLabel, metaInfo.sizeLabel]
+    [productOrLine.itemName || "", metaInfo.shadeLabel, metaInfo.strengthLabel, metaInfo.sizeLabel]
       .filter(Boolean)
       .join(" ");
   primary.appendChild(titleText);
@@ -213,11 +218,26 @@ function renderItemNameCell(cell, productOrLine) {
     primary.appendChild(badge);
   }
 
+  if (metaInfo.conditionBadgeLabel) {
+    const badge = document.createElement("span");
+    badge.className = "condition-badge";
+    badge.textContent = metaInfo.conditionBadgeLabel;
+    primary.appendChild(badge);
+  }
+
   cell.appendChild(primary);
 }
 function buildSearchHaystack(product) {
   return normalizeText(
-    [product.upc, product.brand, product.itemName, formatSizeDisplay(product.sizeOz, product.sizeMl), product.strength].join(" ")
+    [
+      product.upc,
+      product.brand,
+      getHbaTypeLabel(product),
+      product.itemName,
+      product.shade,
+      product.strength,
+      formatSizeDisplay(product.sizeOz, product.sizeMl),
+    ].join(" ")
   );
 }
 
@@ -335,46 +355,23 @@ function renderSizeTypeFilter() {
   state.selectedSizeType = elements.sizeTypeFilter.value;
 }
 
-function renderCategoryFilters() {
-  elements.categoryFilterCheckboxes.innerHTML = "";
+function renderCategoryFilter() {
+  if (!elements.categoryFilter) return;
 
-  for (const category of getAvailableCategories()) {
-    const label = document.createElement("label");
-    label.className = "checkbox-filter-option";
+  const options = getAvailableCategories();
+  const currentValue = String(state.selectedCategory || "all").trim() || "all";
+  elements.categoryFilter.innerHTML = "";
 
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.value = category;
-    input.checked = state.selectedCategories.has(category);
-
-    input.addEventListener("change", () => {
-      if (category === "all") {
-        state.selectedCategories = new Set(["all"]);
-      } else {
-        const nextSelected = new Set(state.selectedCategories);
-        nextSelected.delete("all");
-
-        if (input.checked) {
-          nextSelected.add(category);
-        } else {
-          nextSelected.delete(category);
-        }
-
-        state.selectedCategories =
-          nextSelected.size === 0 ? new Set(["all"]) : nextSelected;
-      }
-
-      renderCategoryFilters();
-      applyFilters();
-    });
-
-    const text = document.createElement("span");
-    text.textContent = category === "all" ? "All" : category;
-
-    label.appendChild(input);
-    label.appendChild(text);
-    elements.categoryFilterCheckboxes.appendChild(label);
+  for (const category of options) {
+    const option = document.createElement("option");
+    option.value = category;
+    option.textContent = category === "all" ? "All" : category;
+    elements.categoryFilter.appendChild(option);
   }
+
+  const availableValues = new Set(options);
+  elements.categoryFilter.value = availableValues.has(currentValue) ? currentValue : "all";
+  state.selectedCategory = elements.categoryFilter.value;
 }
 
 function getCartSummary() {
@@ -387,6 +384,18 @@ function getCartSummary() {
     },
     { totalUnits: 0, totalPrice: 0, lineCount: 0 }
   );
+}
+
+function getMinimumOrderMessage(summary) {
+  if (summary.lineCount === 0) {
+    return "Add items to your cart to checkout.";
+  }
+  if (summary.totalPrice >= minimumOrderTotal) {
+    return "";
+  }
+
+  const remaining = minimumOrderTotal - summary.totalPrice;
+  return `Minimum order amount is ${currencyFormatter.format(minimumOrderTotal)}. Add ${currencyFormatter.format(remaining)} more to checkout.`;
 }
 
 function formatLineTotal(quantity, price) {
@@ -413,6 +422,9 @@ function updateCartForProduct(product, rawQuantity) {
       sizeOz: product.sizeOz,
       sizeMl: product.sizeMl,
       strength: product.strength,
+      shade: product.shade,
+      condition: product.condition,
+      hbaCondition: product.hbaCondition,
       sizeType: String(product.sizeType || "").trim(),
       hbaType: getHbaTypeLabel(product),
       tester: Boolean(product.tester),
@@ -446,23 +458,15 @@ function applySort(rows) {
 
 function applyFilters() {
   const searchValue = elements.search.value.trim();
-  const selectedCategories = state.selectedCategories;
-  const includeTester = state.itemCategoryFilters.tester;
-  const includeDiscontinued = state.itemCategoryFilters.discontinued;
+  const selectedCategory = String(state.selectedCategory || "all").trim() || "all";
   const selectedBrand = String(state.selectedBrand || "all").trim() || "all";
   const selectedSizeType = String(state.selectedSizeType || "all").trim() || "all";
 
   const rows = state.products.filter((product) => {
     const matchesSearch = matchesRobustSearch(product, searchValue);
     const matchesCategory =
-      selectedCategories.has("all") ||
-      selectedCategories.has(normalizeCategoryLabel(product.category));
-    const isTester = Boolean(product.tester);
-    const isDiscontinued = Boolean(product.discontinued);
-    const matchesItemCategory =
-      (!includeTester && !includeDiscontinued) ||
-      (includeTester && isTester) ||
-      (includeDiscontinued && isDiscontinued);
+      selectedCategory === "all" ||
+      selectedCategory === normalizeCategoryLabel(product.category);
     const productBrand = String(product.brand || "").trim();
     const matchesBrand =
       selectedBrand === "all" || productBrand === selectedBrand;
@@ -470,11 +474,11 @@ function applyFilters() {
     const matchesSizeType =
       selectedSizeType === "all" || productSizeType === selectedSizeType;
 
-    return matchesSearch && matchesCategory && matchesItemCategory && matchesBrand && matchesSizeType;
+    return matchesSearch && matchesCategory && matchesBrand && matchesSizeType;
   });
 
   state.filteredProducts = applySort(rows);
-  renderCategoryFilters();
+  renderCategoryFilter();
   renderBrandFilter();
   renderSizeTypeFilter();
   renderCatalog();
@@ -508,6 +512,7 @@ function renderCatalog() {
     const fragment = elements.catalogRowTemplate.content.cloneNode(true);
     const imageSearchButton = fragment.querySelector(".image-search-button");
     const upcCell = fragment.querySelector(".upc-cell");
+    const typeCell = fragment.querySelector(".type-cell");
     const brandCell = fragment.querySelector(".brand-cell");
     const nameCell = fragment.querySelector(".name-cell");
     const availableCell = fragment.querySelector(".available-cell");
@@ -522,6 +527,7 @@ function renderCatalog() {
       window.open(url, "_blank", "noopener,noreferrer");
     });
     upcCell.textContent = product.upc || "";
+    typeCell.textContent = getHbaTypeLabel(product);
     brandCell.textContent = product.brand;
     renderItemNameCell(nameCell, product);
     availableCell.textContent = String(product.hbaQuantity ?? 0);
@@ -605,7 +611,7 @@ function renderCheckoutView() {
 
 function renderCartSummary() {
   const summary = getCartSummary();
-  elements.cartSummaryLines.textContent = `${summary.lineCount} SKU${summary.lineCount === 1 ? "" : "s"}`;
+  elements.cartSummaryLines.textContent = `${summary.totalUnits} pc${summary.totalUnits === 1 ? "" : "s"}`;
   elements.cartSummaryPrice.textContent = currencyFormatter.format(summary.totalPrice);
   elements.cartTotalLines.textContent = String(summary.lineCount);
   elements.cartTotalUnits.textContent = String(summary.totalUnits);
@@ -613,6 +619,14 @@ function renderCartSummary() {
   elements.checkoutTotalLines.textContent = String(summary.lineCount);
   elements.checkoutTotalUnits.textContent = String(summary.totalUnits);
   elements.checkoutTotalPrice.textContent = currencyFormatter.format(summary.totalPrice);
+
+  const minimumMessage = getMinimumOrderMessage(summary);
+  elements.cartMinimumMessage.textContent = minimumMessage;
+  elements.cartMinimumMessage.classList.toggle("hidden", !minimumMessage);
+  elements.checkoutMinimumMessage.textContent = minimumMessage;
+  elements.checkoutMinimumMessage.classList.toggle("hidden", !minimumMessage);
+  elements.completeOrderButton.disabled = Boolean(minimumMessage);
+  elements.submitOrderButton.disabled = Boolean(minimumMessage);
 }
 
 function renderView() {
@@ -662,6 +676,15 @@ async function handleCheckoutSubmit(event) {
   event.preventDefault();
   elements.checkoutMessage.textContent = "";
   elements.checkoutMessage.className = "checkout-message";
+
+  const minimumMessage = getMinimumOrderMessage(getCartSummary());
+  if (minimumMessage) {
+    elements.checkoutMessage.textContent = minimumMessage;
+    elements.checkoutMessage.classList.add("error");
+    renderCartSummary();
+    return;
+  }
+
   elements.submitOrderButton.disabled = true;
   elements.submitOrderButton.textContent = "Submitting...";
 
@@ -697,6 +720,7 @@ async function handleCheckoutSubmit(event) {
   } finally {
     elements.submitOrderButton.disabled = false;
     elements.submitOrderButton.textContent = "Place Order";
+    renderCartSummary();
   }
 }
 
@@ -705,12 +729,8 @@ function wireEvents() {
   state.eventsWired = true;
 
   elements.search.addEventListener("input", applyFilters);
-  elements.itemCategoryTesterCheckbox.addEventListener("change", () => {
-    state.itemCategoryFilters.tester = elements.itemCategoryTesterCheckbox.checked;
-    applyFilters();
-  });
-  elements.itemCategoryDiscontinuedCheckbox.addEventListener("change", () => {
-    state.itemCategoryFilters.discontinued = elements.itemCategoryDiscontinuedCheckbox.checked;
+  elements.categoryFilter.addEventListener("change", () => {
+    state.selectedCategory = elements.categoryFilter.value || "all";
     applyFilters();
   });
   elements.brandFilter.addEventListener("change", () => {
@@ -733,6 +753,13 @@ function wireEvents() {
     renderView();
   });
   elements.completeOrderButton.addEventListener("click", () => {
+    const minimumMessage = getMinimumOrderMessage(getCartSummary());
+    if (minimumMessage) {
+      elements.cartMinimumMessage.textContent = minimumMessage;
+      elements.cartMinimumMessage.classList.remove("hidden");
+      return;
+    }
+
     clearSuccessRedirectTimeout();
     state.view = "checkout";
     renderView();

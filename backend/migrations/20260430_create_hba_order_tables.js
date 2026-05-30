@@ -65,6 +65,23 @@ module.exports = {
           type: Sequelize.TEXT,
           allowNull: true,
         },
+        status: {
+          type: Sequelize.STRING,
+          allowNull: false,
+          defaultValue: "new",
+        },
+        internalNotes: {
+          type: Sequelize.TEXT,
+          allowNull: true,
+        },
+        reviewedBy: {
+          type: Sequelize.INTEGER,
+          allowNull: true,
+        },
+        reviewedAt: {
+          type: Sequelize.DATE,
+          allowNull: true,
+        },
         totalSkus: {
           type: Sequelize.INTEGER,
           allowNull: false,
@@ -102,6 +119,19 @@ module.exports = {
           allowNull: true,
         },
         notificationError: {
+          type: Sequelize.TEXT,
+          allowNull: true,
+        },
+        customerNotificationStatus: {
+          type: Sequelize.STRING,
+          allowNull: false,
+          defaultValue: "skipped",
+        },
+        customerNotificationSentAt: {
+          type: Sequelize.DATE,
+          allowNull: true,
+        },
+        customerNotificationError: {
           type: Sequelize.TEXT,
           allowNull: true,
         },

@@ -148,6 +148,9 @@ app.use("/tickets", ticketsRouter);
 const invoiceTrackerRouter = require("./routes/InvoiceTracker");
 app.use("/invoice-tracker", invoiceTrackerRouter);
 
+const hbaOrdersRouter = require("./routes/HbaOrders");
+app.use("/hba-orders", hbaOrdersRouter);
+
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.static(path.join(__dirname, 'public', 'hba-site')));

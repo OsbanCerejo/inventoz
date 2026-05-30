@@ -14,6 +14,7 @@ import {
   TextField,
   Switch,
   FormControlLabel,
+  MenuItem,
 } from "@mui/material";
 import axios from "axios";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -31,6 +32,8 @@ import { useReactToPrint } from "react-to-print";
 import { useAuth } from "../context/AuthContext";
 import { getApiUrl } from "../config/api";
 import { invalidateProductsCache } from "../utils/productCache";
+
+const HBA_CONDITION_OPTIONS = ["Unboxed", "Sealed", "Damaged", "Old Batch"];
 
 function Product() {
   let { id } = useParams();
@@ -67,6 +70,7 @@ function Product() {
   const [hbaEnabled, setHbaEnabled] = useState(false);
   const [hbaQuantity, setHbaQuantity] = useState("");
   const [hbaPrice, setHbaPrice] = useState("");
+  const [hbaCondition, setHbaCondition] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -132,7 +136,12 @@ function Product() {
         ? ""
         : String(productObject.hbaPrice)
     );
-  }, [productObject.hbaEnabled, productObject.hbaPrice, productObject.hbaQuantity]);
+    setHbaCondition(
+      productObject.hbaCondition === null || productObject.hbaCondition === undefined
+        ? ""
+        : String(productObject.hbaCondition)
+    );
+  }, [productObject.hbaCondition, productObject.hbaEnabled, productObject.hbaPrice, productObject.hbaQuantity]);
 
   // Separate effect for pricing + inbound history.
   // Kept separate so it re-fires when auth finishes loading (user was null on first render).
@@ -302,6 +311,7 @@ function Product() {
         hbaEnabled,
         hbaQuantity: hbaEnabled ? hbaQuantity : "",
         hbaPrice: hbaEnabled ? hbaPrice : "",
+        hbaCondition,
       };
 
       const { data: updatedProduct } = await axios.put(getApiUrl("products"), payload);
@@ -314,7 +324,7 @@ function Product() {
     } finally {
       setSavingHba(false);
     }
-  }, [hbaEnabled, hbaPrice, hbaQuantity, productObject]);
+  }, [hbaCondition, hbaEnabled, hbaPrice, hbaQuantity, productObject]);
 
   return (
     <div className="product-container">
@@ -508,6 +518,22 @@ function Product() {
                             disabled={!canEditHbaListing}
                             inputProps={{ min: 0, step: "0.01" }}
                           />
+                          <TextField
+                            select
+                            label="HBA Condition"
+                            size="small"
+                            value={hbaCondition}
+                            onChange={(event) => setHbaCondition(event.target.value)}
+                            disabled={!canEditHbaListing}
+                            helperText={`SKU condition: ${productObject.condition || "N/A"}`}
+                          >
+                            <MenuItem value="">Use SKU condition</MenuItem>
+                            {HBA_CONDITION_OPTIONS.map((condition) => (
+                              <MenuItem key={condition} value={condition}>
+                                {condition}
+                              </MenuItem>
+                            ))}
+                          </TextField>
                         </Box>
                       ) : (
                         <Typography variant="body2" color="text.secondary" mt={1}>

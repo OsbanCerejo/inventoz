@@ -70,6 +70,7 @@ function NavBar() {
     { key: 'products', label: 'Products', path: '/products', onClick: handleHomeClick, isButton: true },
     { key: 'inbound', label: 'Inbound', path: '/inbound/showAll' },
     { key: 'orders', label: 'Orders', path: '/orders/showAll' },
+    { key: 'hbaOrders', label: 'HBA Orders', path: '/hba-orders' },
     { key: 'packing', label: 'Packing', path: '/orders/packingMode' },
     { key: 'pricelist', label: 'PriceList', path: '/price-list' },
     { key: 'whatnot', label: 'Whatnot', path: '/whatnot' },

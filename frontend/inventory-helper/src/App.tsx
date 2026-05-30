@@ -9,6 +9,7 @@ import NavBar from "./components/NavBar";
 import EditProduct from "./pages/EditProduct";
 import { Search } from "@mui/icons-material";
 import Sales from "./pages/Sales";
+import HbaOrders from "./pages/HbaOrders";
 import InboundProduct from "./pages/InboundProduct";
 import InboundData from "./pages/InboundData";
 import { ToastContainer } from "react-toastify";
@@ -347,6 +348,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="priceScanner" action="view" menuItem="priceScanner">
                   <PriceScanner />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/hba-orders"
+              element={
+                <ProtectedRoute resource="hbaOrders" action="view" menuItem="hbaOrders">
+                  <HbaOrders />
                 </ProtectedRoute>
               }
             />

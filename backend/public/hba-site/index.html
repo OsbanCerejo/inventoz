@@ -13,7 +13,7 @@
         <div class="brand-block">
           <img class="brand-logo" src="./hba-logo.svg" alt="HBA Deals" />
           <div class="brand-copy">
-            <p class="page-subtitle">Your one stop shop for all your wholesale needs</p>
+            <p class="page-subtitle">Wholesale fragrance and beauty, simplified</p>
           </div>
         </div>
                 <div class="header-actions">
@@ -28,7 +28,7 @@
                 <circle cx="17" cy="19" r="1.6" />
               </svg>
             </span>
-            <span id="cart-summary-lines">0 SKUs</span>
+            <span id="cart-summary-lines">0 pcs</span>
             <strong id="cart-summary-price">$0.00</strong>
           </button>
         </div>
@@ -36,36 +36,14 @@
 
       <main id="catalog-view">
         <section class="table-panel">
-          <div class="filters-panel">
-            <div class="filters-section">
-              <div class="filters-section-label">Categories</div>
-              <div id="category-filter-checkboxes" class="checkbox-filter-group"></div>
-            </div>
-            <div class="filters-section">
-              <div class="filters-section-label">Item Category</div>
-              <div class="checkbox-filter-group">
-                <label class="checkbox-filter-option">
-                  <input id="item-category-tester-checkbox" type="checkbox" />
-                  <span>Tester</span>
-                </label>
-                <label class="checkbox-filter-option">
-                  <input id="item-category-discontinued-checkbox" type="checkbox" />
-                  <span>Discontinued</span>
-                </label>
-              </div>
-            </div>
-          </div>
-
           <div class="toolbar">
-            <div class="toolbar-field grow">
-              <label for="catalog-search">Search</label>
-              <input
-                id="catalog-search"
-                type="search"
-                placeholder="Search by UPC, brand, or item name"
-              />
-            </div>
             <div class="toolbar-compact-group">
+              <div class="toolbar-field compact-field">
+                <label for="category-filter">Category</label>
+                <select id="category-filter">
+                  <option value="all">All</option>
+                </select>
+              </div>
               <div class="toolbar-field compact-field">
                 <label for="brand-filter">Brand</label>
                 <select id="brand-filter">
@@ -79,6 +57,14 @@
                 </select>
               </div>
             </div>
+            <div class="toolbar-field grow">
+              <label for="catalog-search">Search</label>
+              <input
+                id="catalog-search"
+                type="search"
+                placeholder="Search by UPC, brand, type, or item name"
+              />
+            </div>
           </div>
 
           <div class="table-wrap">
@@ -87,6 +73,7 @@
                 <tr>
                   <th></th>
                   <th>UPC</th>
+                  <th>Type</th>
                   <th>
                     <button class="sort-button" type="button" data-sort-key="brand">
                       Brand <span class="sort-indicator" data-indicator-for="brand">⇅</span>
@@ -169,6 +156,7 @@
               <strong id="cart-total-price">$0.00</strong>
             </div>
           </div>
+          <p id="cart-minimum-message" class="minimum-order-message hidden"></p>
         </section>
       </main>
 
@@ -204,6 +192,7 @@
             <p><strong>Quantity:</strong> <span id="checkout-total-units">0</span></p>
             <p><strong>Total:</strong> <span id="checkout-total-price">$0.00</span></p>
           </div>
+          <p id="checkout-minimum-message" class="minimum-order-message hidden"></p>
 
           <form id="checkout-form" class="checkout-form">
             <h3>Contact Information</h3>
@@ -279,6 +268,7 @@
             </div>
           </td>
           <td class="upc-cell"></td>
+          <td class="type-cell"></td>
           <td class="brand-cell"></td>
           <td class="name-cell"></td>
           <td class="available-cell"></td>

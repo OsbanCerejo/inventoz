@@ -65,12 +65,19 @@ const normalizeNullableDecimal = (value) => {
   return parsed.toFixed(2);
 };
 
+const normalizeHbaCondition = (value) => {
+  const normalized = String(value || "").trim();
+  const allowed = new Set(["Unboxed", "Sealed", "Damaged", "Old Batch"]);
+  return allowed.has(normalized) ? normalized : null;
+};
+
 const HBA_ORDER_RATE_LIMIT_WINDOW_MS =
   Math.max(1, Number(process.env.HBA_ORDER_RATE_LIMIT_WINDOW_MINUTES || 15)) * 60 * 1000;
 const HBA_ORDER_RATE_LIMIT_MAX_REQUESTS = Math.max(
   1,
   Number(process.env.HBA_ORDER_RATE_LIMIT_MAX_REQUESTS || 5)
 );
+const HBA_MINIMUM_ORDER_TOTAL = 500;
 const hbaOrderSubmissionLog = new Map();
 
 const getClientIp = (req) => {
@@ -106,6 +113,12 @@ const getHbaSalesPeople = () => {
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
+};
+
+const isHbaCustomerConfirmationEnabled = () => {
+  return String(process.env.HBA_CUSTOMER_CONFIRMATION_EMAIL_ENABLED || "")
+    .trim()
+    .toLowerCase() === "true";
 };
 
 const generateHbaOrderNumber = () => {
@@ -215,6 +228,82 @@ const buildHbaOrderEmailText = ({ customer, items, totals }) => {
   ].join("\n");
 };
 
+const buildHbaCustomerConfirmationHtml = ({ customer, items, totals, orderNumber }) => {
+  const supportEmail = "support@hbadeals.com";
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(item.sku)}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(item.upc || "")}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(item.brand || "")}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(item.itemName)}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;">${item.quantity}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;">$${Number(item.price || 0).toFixed(2)}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;">$${Number(item.subtotal || 0).toFixed(2)}</td>
+        </tr>
+      `
+    )
+    .join("");
+
+  return `
+    <div style="font-family:Arial,sans-serif;color:#222;line-height:1.5;">
+      <h2>We received your HBA order request</h2>
+      <p>Thank you for your order request. Our team will review it and follow up with invoice and payment details.</p>
+      <p><strong>Reference:</strong> ${escapeHtml(orderNumber)}</p>
+
+      <h3>Order Summary</h3>
+      <table style="border-collapse:collapse;width:100%;border:1px solid #ddd;">
+        <thead>
+          <tr style="background:#f7f7f7;">
+            <th style="padding:8px;border:1px solid #ddd;text-align:left;">SKU</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left;">UPC</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left;">Brand</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left;">Item</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:right;">Qty</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:right;">Price</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:right;">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      <p style="margin-top:16px;"><strong>Total SKUs:</strong> ${totals.totalSkus}</p>
+      <p><strong>Total Units:</strong> ${totals.totalUnits}</p>
+      <p><strong>Total Amount:</strong> $${Number(totals.totalPrice || 0).toFixed(2)}</p>
+
+      <h3>Contact</h3>
+      <p><strong>Name:</strong> ${escapeHtml(customer.name)}</p>
+      <p><strong>Company:</strong> ${escapeHtml(customer.companyName)}</p>
+      <p>If you have questions, reply to this email or contact <a href="mailto:${supportEmail}">${supportEmail}</a>.</p>
+    </div>
+  `;
+};
+
+const buildHbaCustomerConfirmationText = ({ customer, items, totals, orderNumber }) => {
+  return [
+    "We received your HBA order request",
+    "",
+    "Thank you for your order request. Our team will review it and follow up with invoice and payment details.",
+    `Reference: ${orderNumber}`,
+    "",
+    "Order Summary",
+    ...items.map(
+      (item) =>
+        `${item.sku} | ${item.upc || ""} | ${item.brand || ""} | ${item.itemName} | Qty ${item.quantity} | $${Number(item.price || 0).toFixed(2)} | $${Number(item.subtotal || 0).toFixed(2)}`
+    ),
+    "",
+    `Total SKUs: ${totals.totalSkus}`,
+    `Total Units: ${totals.totalUnits}`,
+    `Total Amount: $${Number(totals.totalPrice || 0).toFixed(2)}`,
+    "",
+    `Name: ${customer.name}`,
+    `Company: ${customer.companyName}`,
+    "",
+    "Questions? Reply to this email or contact support@hbadeals.com.",
+  ].join("\n");
+};
+
 router.get("/", auth, checkPermission('products', 'view'), async (req, res) => {
   const db = require("../models");
   const listOfProducts = await db.Products.findAll({
@@ -238,6 +327,9 @@ router.get("/hba/public-catalog", async (req, res) => {
         "sizeOz",
         "sizeMl",
         "strength",
+        "shade",
+        "condition",
+        "hbaCondition",
         "image",
         "upc",
         "quantity",
@@ -278,6 +370,9 @@ router.get("/hba/public-catalog", async (req, res) => {
           sizeOz: row.sizeOz,
           sizeMl: row.sizeMl,
           strength: row.strength,
+          shade: row.shade,
+          condition: row.condition,
+          hbaCondition: row.hbaCondition,
           sizeType,
           tester: Boolean(details?.tester),
           discontinued: Boolean(details?.discontinued),
@@ -442,8 +537,15 @@ router.post("/hba/submit-order", async (req, res) => {
       { totalSkus: 0, totalUnits: 0, totalPrice: 0 }
     );
 
+    if (totals.totalPrice < HBA_MINIMUM_ORDER_TOTAL) {
+      return res.status(400).json({
+        error: `Minimum order amount is $${HBA_MINIMUM_ORDER_TOTAL}.`,
+      });
+    }
+
     const orderNumber = generateHbaOrderNumber();
     const userAgent = String(req.headers["user-agent"] || "");
+    const customerConfirmationEnabled = isHbaCustomerConfirmationEnabled();
 
     const orderRecord = await sequelize.transaction(async (transaction) => {
       const createdOrder = await HbaOrder.create(
@@ -468,6 +570,7 @@ router.post("/hba/submit-order", async (req, res) => {
           userAgent,
           notificationStatus: "pending",
           notificationRecipients: recipients.join(", "),
+          customerNotificationStatus: customerConfirmationEnabled ? "pending" : "skipped",
         },
         { transaction }
       );
@@ -511,6 +614,42 @@ router.post("/hba/submit-order", async (req, res) => {
       notificationSentAt: new Date(),
       notificationError: null,
     });
+
+    if (customerConfirmationEnabled) {
+      const customerHtml = buildHbaCustomerConfirmationHtml({
+        customer,
+        items: normalizedItems,
+        totals,
+        orderNumber,
+      });
+      const customerText = buildHbaCustomerConfirmationText({
+        customer,
+        items: normalizedItems,
+        totals,
+        orderNumber,
+      });
+
+      const customerEmailSent = await EmailService.sendEmail({
+        to: customer.email,
+        subject: `HBA Order Request Received - ${orderNumber}`,
+        html: customerHtml,
+        text: customerText,
+        replyTo: "support@hbadeals.com",
+      });
+
+      if (customerEmailSent) {
+        await orderRecord.update({
+          customerNotificationStatus: "sent",
+          customerNotificationSentAt: new Date(),
+          customerNotificationError: null,
+        });
+      } else {
+        await orderRecord.update({
+          customerNotificationStatus: "failed",
+          customerNotificationError: "Failed to send customer confirmation email.",
+        });
+      }
+    }
 
     return res.json({ success: true, orderNumber });
   } catch (error) {
@@ -770,6 +909,7 @@ router.post("/", auth, checkPermission('products', 'create'), async (req, res) =
       hbaEnabled: Boolean(product.hbaEnabled),
       hbaQuantity: normalizeNullableInteger(product.hbaQuantity),
       hbaPrice: normalizeNullableDecimal(product.hbaPrice),
+      hbaCondition: normalizeHbaCondition(product.hbaCondition),
     };
     
     const [found, created] = await Products.findOrCreate({
@@ -840,11 +980,16 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
       product.hbaPrice !== undefined
         ? normalizeNullableDecimal(product.hbaPrice)
         : currentProduct.hbaPrice;
+    const requestedHbaCondition =
+      product.hbaCondition !== undefined
+        ? normalizeHbaCondition(product.hbaCondition)
+        : currentProduct.hbaCondition;
 
     const requestedHbaChange =
       requestedHbaEnabled !== currentProduct.hbaEnabled ||
       requestedHbaQuantity !== currentProduct.hbaQuantity ||
-      requestedHbaPrice !== currentProduct.hbaPrice;
+      requestedHbaPrice !== currentProduct.hbaPrice ||
+      requestedHbaCondition !== currentProduct.hbaCondition;
 
     if (requestedHbaChange) {
       const canEditHbaListing = await PermissionService.hasResourceAction(
@@ -893,6 +1038,7 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
         hbaEnabled: requestedHbaEnabled,
         hbaQuantity: requestedHbaQuantity,
         hbaPrice: requestedHbaPrice,
+        hbaCondition: requestedHbaCondition,
       },
       { where: { sku: product.sku } }
     );
