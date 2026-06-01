@@ -46,6 +46,15 @@ body {
   display: block;
 }
 
+.home-logo-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .brand-copy {
   min-width: 0;
 }

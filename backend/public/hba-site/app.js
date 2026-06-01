@@ -18,6 +18,7 @@ const minimumOrderTotal = 500;
 
 const elements = {
   search: document.getElementById("catalog-search"),
+  homeLogoButton: document.getElementById("home-logo-button"),
   categoryFilter: document.getElementById("category-filter"),
   brandFilter: document.getElementById("brand-filter"),
   sizeTypeFilter: document.getElementById("size-type-filter"),
@@ -184,19 +185,15 @@ function buildItemMeta(productOrLine) {
   const sizeLabel = formatSizeDisplay(productOrLine.sizeOz, productOrLine.sizeMl);
   const strengthLabel = String(productOrLine.strength || "").trim();
   const shadeLabel = String(productOrLine.shade || "").trim();
-  const conditionLabel = String(productOrLine.condition || "").trim();
   const hbaConditionLabel = String(productOrLine.hbaCondition || "").trim();
   const isFragrance = normalizeCategoryLabel(productOrLine.category) === "Perfumes";
-  const showConditionBadge =
-    hbaConditionLabel.length > 0 &&
-    hbaConditionLabel.toLowerCase() !== conditionLabel.toLowerCase();
 
   return {
     sizeLabel,
     strengthLabel,
     shadeLabel,
     showTesterBadge: isFragrance && Boolean(productOrLine.tester),
-    conditionBadgeLabel: showConditionBadge ? hbaConditionLabel : "",
+    conditionBadgeLabel: hbaConditionLabel,
   };
 }
 
@@ -771,6 +768,12 @@ function wireEvents() {
   state.eventsWired = true;
 
   elements.search.addEventListener("input", applyFilters);
+  elements.homeLogoButton.addEventListener("click", () => {
+    clearSuccessRedirectTimeout();
+    state.view = "catalog";
+    renderAll();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
   elements.categoryFilter.addEventListener("change", () => {
     state.selectedCategory = elements.categoryFilter.value || "all";
     applyFilters();
