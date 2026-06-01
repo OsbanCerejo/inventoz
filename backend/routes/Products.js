@@ -330,6 +330,7 @@ router.get("/hba/public-catalog", async (req, res) => {
         "shade",
         "condition",
         "hbaCondition",
+        "hbaNewArrival",
         "image",
         "upc",
         "quantity",
@@ -373,6 +374,7 @@ router.get("/hba/public-catalog", async (req, res) => {
           shade: row.shade,
           condition: row.condition,
           hbaCondition: row.hbaCondition,
+          hbaNewArrival: Boolean(row.hbaNewArrival),
           sizeType,
           tester: Boolean(details?.tester),
           discontinued: Boolean(details?.discontinued),
@@ -910,6 +912,7 @@ router.post("/", auth, checkPermission('products', 'create'), async (req, res) =
       hbaQuantity: normalizeNullableInteger(product.hbaQuantity),
       hbaPrice: normalizeNullableDecimal(product.hbaPrice),
       hbaCondition: normalizeHbaCondition(product.hbaCondition),
+      hbaNewArrival: Boolean(product.hbaNewArrival),
     };
     
     const [found, created] = await Products.findOrCreate({
@@ -984,12 +987,17 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
       product.hbaCondition !== undefined
         ? normalizeHbaCondition(product.hbaCondition)
         : currentProduct.hbaCondition;
+    const requestedHbaNewArrival =
+      product.hbaNewArrival !== undefined
+        ? Boolean(product.hbaNewArrival)
+        : currentProduct.hbaNewArrival;
 
     const requestedHbaChange =
       requestedHbaEnabled !== currentProduct.hbaEnabled ||
       requestedHbaQuantity !== currentProduct.hbaQuantity ||
       requestedHbaPrice !== currentProduct.hbaPrice ||
-      requestedHbaCondition !== currentProduct.hbaCondition;
+      requestedHbaCondition !== currentProduct.hbaCondition ||
+      requestedHbaNewArrival !== currentProduct.hbaNewArrival;
 
     if (requestedHbaChange) {
       const canEditHbaListing = await PermissionService.hasResourceAction(
@@ -1039,6 +1047,7 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
         hbaQuantity: requestedHbaQuantity,
         hbaPrice: requestedHbaPrice,
         hbaCondition: requestedHbaCondition,
+        hbaNewArrival: requestedHbaNewArrival,
       },
       { where: { sku: product.sku } }
     );

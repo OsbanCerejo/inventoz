@@ -7,6 +7,7 @@ const state = {
   selectedCategory: "all",
   selectedBrand: "all",
   selectedSizeType: "all",
+  showNewArrivalsOnly: false,
   sortKey: "",
   sortDirection: "asc",
   eventsWired: false,
@@ -32,6 +33,9 @@ const elements = {
   clearCartHeaderButton: document.getElementById("clear-cart-header-button"),
   cartSummaryLines: document.getElementById("cart-summary-lines"),
   cartSummaryPrice: document.getElementById("cart-summary-price"),
+  mobileCartBar: document.getElementById("mobile-cart-bar"),
+  mobileCartUnits: document.getElementById("mobile-cart-units"),
+  mobileCartPrice: document.getElementById("mobile-cart-price"),
   cartTotalLines: document.getElementById("cart-total-lines"),
   cartTotalUnits: document.getElementById("cart-total-units"),
   cartTotalPrice: document.getElementById("cart-total-price"),
@@ -47,6 +51,7 @@ const elements = {
   submitOrderButton: document.getElementById("submit-order-button"),
   checkoutMessage: document.getElementById("checkout-message"),
   salesPersonSelect: document.getElementById("customer-salesPerson"),
+  newArrivalsButton: document.getElementById("new-arrivals-button"),
   catalogRowTemplate: document.getElementById("catalog-row-template"),
   cartRowTemplate: document.getElementById("cart-row-template"),
   sortButtons: document.querySelectorAll(".sort-button"),
@@ -57,6 +62,15 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
 });
+
+function applyMobileLabels(row, labels) {
+  Object.entries(labels).forEach(([selector, label]) => {
+    const cell = row.querySelector(selector);
+    if (cell) {
+      cell.dataset.label = label;
+    }
+  });
+}
 
 const preferredCategoryOrder = ["All", "Perfumes", "Cosmetics", "Skincare", "Home", "Other"];
 
@@ -425,6 +439,7 @@ function updateCartForProduct(product, rawQuantity) {
       shade: product.shade,
       condition: product.condition,
       hbaCondition: product.hbaCondition,
+      hbaNewArrival: Boolean(product.hbaNewArrival),
       sizeType: String(product.sizeType || "").trim(),
       hbaType: getHbaTypeLabel(product),
       tester: Boolean(product.tester),
@@ -461,9 +476,11 @@ function applyFilters() {
   const selectedCategory = String(state.selectedCategory || "all").trim() || "all";
   const selectedBrand = String(state.selectedBrand || "all").trim() || "all";
   const selectedSizeType = String(state.selectedSizeType || "all").trim() || "all";
+  const showNewArrivalsOnly = state.showNewArrivalsOnly;
 
   const rows = state.products.filter((product) => {
     const matchesSearch = matchesRobustSearch(product, searchValue);
+    const matchesNewArrival = !showNewArrivalsOnly || Boolean(product.hbaNewArrival);
     const matchesCategory =
       selectedCategory === "all" ||
       selectedCategory === normalizeCategoryLabel(product.category);
@@ -474,7 +491,7 @@ function applyFilters() {
     const matchesSizeType =
       selectedSizeType === "all" || productSizeType === selectedSizeType;
 
-    return matchesSearch && matchesCategory && matchesBrand && matchesSizeType;
+    return matchesSearch && matchesNewArrival && matchesCategory && matchesBrand && matchesSizeType;
   });
 
   state.filteredProducts = applySort(rows);
@@ -483,6 +500,12 @@ function applyFilters() {
   renderSizeTypeFilter();
   renderCatalog();
   renderSortIndicators();
+  renderNewArrivalsButton();
+}
+
+function renderNewArrivalsButton() {
+  elements.newArrivalsButton.textContent = state.showNewArrivalsOnly ? "All Products" : "New Arrivals";
+  elements.newArrivalsButton.classList.toggle("active", state.showNewArrivalsOnly);
 }
 
 function renderSortIndicators() {
@@ -510,6 +533,15 @@ function renderCatalog() {
 
   for (const product of state.filteredProducts) {
     const fragment = elements.catalogRowTemplate.content.cloneNode(true);
+    applyMobileLabels(fragment, {
+      ".upc-cell": "UPC",
+      ".type-cell": "Type",
+      ".brand-cell": "Brand",
+      ".available-cell": "Available",
+      ".price-cell": "Price",
+      ".qty-cell": "Qty",
+      ".line-total-cell": "Subtotal",
+    });
     const imageSearchButton = fragment.querySelector(".image-search-button");
     const upcCell = fragment.querySelector(".upc-cell");
     const typeCell = fragment.querySelector(".type-cell");
@@ -561,6 +593,13 @@ function renderOrderTable(targetBody, editable) {
 
   for (const line of lines) {
     const fragment = elements.cartRowTemplate.content.cloneNode(true);
+    applyMobileLabels(fragment, {
+      ".upc-cell": "UPC",
+      ".brand-cell": "Brand",
+      ".price-cell": "Price",
+      ".qty-cell": "Qty",
+      ".line-total-cell": "Total",
+    });
     const upcCell = fragment.querySelector(".upc-cell");
     const brandCell = fragment.querySelector(".brand-cell");
     const nameCell = fragment.querySelector(".name-cell");
@@ -613,6 +652,9 @@ function renderCartSummary() {
   const summary = getCartSummary();
   elements.cartSummaryLines.textContent = `${summary.totalUnits} pc${summary.totalUnits === 1 ? "" : "s"}`;
   elements.cartSummaryPrice.textContent = currencyFormatter.format(summary.totalPrice);
+  elements.mobileCartUnits.textContent = `${summary.totalUnits} pc${summary.totalUnits === 1 ? "" : "s"}`;
+  elements.mobileCartPrice.textContent = currencyFormatter.format(summary.totalPrice);
+  elements.mobileCartBar.classList.toggle("hidden", summary.lineCount === 0 || state.view !== "catalog");
   elements.cartTotalLines.textContent = String(summary.lineCount);
   elements.cartTotalUnits.textContent = String(summary.totalUnits);
   elements.cartTotalPrice.textContent = currencyFormatter.format(summary.totalPrice);
@@ -744,7 +786,12 @@ function wireEvents() {
   elements.cartSummaryButton.addEventListener("click", () => {
     clearSuccessRedirectTimeout();
     state.view = "cart";
-    renderView();
+    renderAll();
+  });
+  elements.mobileCartBar.addEventListener("click", () => {
+    clearSuccessRedirectTimeout();
+    state.view = "cart";
+    renderAll();
   });
   elements.clearCartHeaderButton.addEventListener("click", clearCart);
   elements.backToProductsButton.addEventListener("click", () => {
@@ -770,6 +817,10 @@ function wireEvents() {
     renderView();
   });
   elements.checkoutForm.addEventListener("submit", handleCheckoutSubmit);
+  elements.newArrivalsButton.addEventListener("click", () => {
+    state.showNewArrivalsOnly = !state.showNewArrivalsOnly;
+    applyFilters();
+  });
 
   elements.sortButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -797,6 +848,7 @@ async function init() {
     renderView();
     state.products = await fetchCatalog();
     state.filteredProducts = [...state.products];
+    renderNewArrivalsButton();
     applyFilters();
     renderCartView();
     renderCheckoutView();

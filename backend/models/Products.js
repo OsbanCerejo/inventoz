@@ -127,6 +127,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         defaultValue: null,
       },
+      hbaNewArrival: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       lastPriceUpdate: {
         type: DataTypes.DATE,
         allowNull: true,

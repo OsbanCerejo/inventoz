@@ -71,6 +71,7 @@ function Product() {
   const [hbaQuantity, setHbaQuantity] = useState("");
   const [hbaPrice, setHbaPrice] = useState("");
   const [hbaCondition, setHbaCondition] = useState("");
+  const [hbaNewArrival, setHbaNewArrival] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -141,7 +142,8 @@ function Product() {
         ? ""
         : String(productObject.hbaCondition)
     );
-  }, [productObject.hbaCondition, productObject.hbaEnabled, productObject.hbaPrice, productObject.hbaQuantity]);
+    setHbaNewArrival(Boolean(productObject.hbaNewArrival));
+  }, [productObject.hbaCondition, productObject.hbaEnabled, productObject.hbaNewArrival, productObject.hbaPrice, productObject.hbaQuantity]);
 
   // Separate effect for pricing + inbound history.
   // Kept separate so it re-fires when auth finishes loading (user was null on first render).
@@ -312,6 +314,7 @@ function Product() {
         hbaQuantity: hbaEnabled ? hbaQuantity : "",
         hbaPrice: hbaEnabled ? hbaPrice : "",
         hbaCondition,
+        hbaNewArrival,
       };
 
       const { data: updatedProduct } = await axios.put(getApiUrl("products"), payload);
@@ -324,7 +327,7 @@ function Product() {
     } finally {
       setSavingHba(false);
     }
-  }, [hbaCondition, hbaEnabled, hbaPrice, hbaQuantity, productObject]);
+  }, [hbaCondition, hbaEnabled, hbaNewArrival, hbaPrice, hbaQuantity, productObject]);
 
   return (
     <div className="product-container">
@@ -534,6 +537,16 @@ function Product() {
                               </MenuItem>
                             ))}
                           </TextField>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={hbaNewArrival}
+                                onChange={(event) => setHbaNewArrival(event.target.checked)}
+                                disabled={!canEditHbaListing}
+                              />
+                            }
+                            label="New Arrival"
+                          />
                         </Box>
                       ) : (
                         <Typography variant="body2" color="text.secondary" mt={1}>

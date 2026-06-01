@@ -103,6 +103,7 @@ const formikValidationSchema = Yup.object().shape({
   hbaQuantity: Yup.number().nullable(),
   hbaPrice: Yup.number().nullable(),
   hbaCondition: Yup.string(),
+  hbaNewArrival: Yup.boolean(),
 });
 
 interface ChangeRecord {
@@ -209,6 +210,7 @@ function EditProduct() {
       hbaQuantity: productObject.hbaQuantity || "",
       hbaPrice: productObject.hbaPrice || "",
       hbaCondition: productObject.hbaCondition || "",
+      hbaNewArrival: productObject.hbaNewArrival || false,
     }),
     [productObject, productDetails]
   );
@@ -1523,6 +1525,22 @@ function EditProduct() {
                                   </MenuItem>
                                 ))}
                               </TextField>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <FormControlLabel
+                                control={
+                                  <Switch
+                                    id="hbaNewArrival"
+                                    name="hbaNewArrival"
+                                    checked={formik.values.hbaNewArrival}
+                                    onChange={formik.handleChange}
+                                    disabled={!canEditHbaListing}
+                                  />
+                                }
+                                label="New Arrival"
+                              />
                             </Box>
                           </Grid>
                         </>
