@@ -64,6 +64,127 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
 });
 
+const tracking = {
+  visitorId: getOrCreateStorageId("hbaVisitorId"),
+  sessionId: getOrCreateSessionId(),
+  searchDebounceId: null,
+};
+
+function getOrCreateStorageId(key) {
+  try {
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+    const next = `hba_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+    localStorage.setItem(key, next);
+    return next;
+  } catch (error) {
+    return `hba_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+  }
+}
+
+function getOrCreateSessionId() {
+  try {
+    const existing = sessionStorage.getItem("hbaSessionId");
+    if (existing) return existing;
+    const next = `hbas_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+    sessionStorage.setItem("hbaSessionId", next);
+    return next;
+  } catch (error) {
+    return `hbas_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+  }
+}
+
+function getBrowserName() {
+  const ua = navigator.userAgent || "";
+  if (/Edg\//i.test(ua)) return "Edge";
+  if (/OPR\//i.test(ua)) return "Opera";
+  if (/Chrome\//i.test(ua)) return "Chrome";
+  if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) return "Safari";
+  if (/Firefox\//i.test(ua)) return "Firefox";
+  return "Unknown";
+}
+
+function getOsName() {
+  const ua = navigator.userAgent || "";
+  if (/Windows NT/i.test(ua)) return "Windows";
+  if (/Mac OS X/i.test(ua)) return "macOS";
+  if (/Android/i.test(ua)) return "Android";
+  if (/(iPhone|iPad|iOS)/i.test(ua)) return "iOS";
+  if (/Linux/i.test(ua)) return "Linux";
+  return "Unknown";
+}
+
+function getDeviceType() {
+  const ua = navigator.userAgent || "";
+  if (/iPad|Tablet/i.test(ua)) return "tablet";
+  if (/Mobile|Android|iPhone/i.test(ua)) return "mobile";
+  return "desktop";
+}
+
+function getTrackingCart() {
+  const lines = Object.values(state.cart);
+  const summary = getCartSummary();
+  return {
+    totalSkus: summary.lineCount,
+    totalUnits: summary.totalUnits,
+    totalPrice: summary.totalPrice,
+    items: lines.map((line) => ({
+      sku: line.sku,
+      brand: line.brand,
+      itemName: line.itemName,
+      quantity: line.quantity,
+      hbaPrice: line.hbaPrice,
+    })),
+  };
+}
+
+function trackEvent(eventType, details = {}) {
+  const payload = {
+    visitorId: tracking.visitorId,
+    sessionId: tracking.sessionId,
+    eventType,
+    pageUrl: window.location.href,
+    landingPage: window.location.href,
+    referrer: document.referrer || "",
+    device: {
+      deviceType: getDeviceType(),
+      browser: getBrowserName(),
+      os: getOsName(),
+      screenWidth: window.screen?.width || null,
+      screenHeight: window.screen?.height || null,
+    },
+    cart: getTrackingCart(),
+    ...details,
+  };
+
+  try {
+    const body = JSON.stringify(payload);
+    if (navigator.sendBeacon) {
+      const blob = new Blob([body], { type: "application/json" });
+      navigator.sendBeacon(`${apiBaseUrl}/hba-analytics/track`, blob);
+      return;
+    }
+  } catch (error) {
+    // Fall back to fetch below.
+  }
+
+  fetch(`${apiBaseUrl}/hba-analytics/track`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    keepalive: true,
+  }).catch(() => {});
+}
+
+function trackSearchUsed() {
+  const searchTerm = elements.search.value.trim();
+  if (!searchTerm) return;
+  window.clearTimeout(tracking.searchDebounceId);
+  tracking.searchDebounceId = window.setTimeout(() => {
+    trackEvent("search_used", { searchTerm });
+  }, 700);
+}
+
 function applyMobileLabels(row, labels) {
   Object.entries(labels).forEach(([selector, label]) => {
     const cell = row.querySelector(selector);
@@ -455,6 +576,7 @@ function formatLineTotal(quantity, price) {
 }
 
 function updateCartForProduct(product, rawQuantity) {
+  const previousQuantity = Number(state.cart[product.sku]?.quantity || 0);
   const quantity = sanitizeQuantity(rawQuantity, product.hbaQuantity, product);
 
   if (quantity === 0) {
@@ -485,6 +607,27 @@ function updateCartForProduct(product, rawQuantity) {
 
   persistCart();
   renderAll();
+  if (previousQuantity === 0 && quantity === 0) {
+    return;
+  }
+  trackEvent(
+    quantity === 0
+      ? "cart_line_removed"
+      : previousQuantity > 0
+        ? "cart_line_updated"
+        : "cart_line_added",
+    {
+      sku: product.sku,
+      brand: product.brand,
+      itemName: product.itemName,
+      quantity,
+      metadata: {
+        previousQuantity,
+        hbaMoq: getHbaMoq(product),
+        hbaStepCount: getHbaStepCount(product),
+      },
+    }
+  );
 }
 
 function applySort(rows) {
@@ -590,6 +733,12 @@ function renderCatalog() {
     imageSearchButton.addEventListener("click", () => {
       const query = buildGoogleSearchQuery(product);
       if (!query) return;
+      trackEvent("product_image_search_clicked", {
+        sku: product.sku,
+        brand: product.brand,
+        itemName: product.itemName,
+        metadata: { query },
+      });
       const url = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`;
       window.open(url, "_blank", "noopener,noreferrer");
     });
@@ -728,10 +877,13 @@ function renderAll() {
   renderView();
 }
 
-function clearCart() {
+function clearCart(shouldTrack = true) {
   state.cart = {};
   persistCart();
   renderAll();
+  if (shouldTrack) {
+    trackEvent("cart_cleared");
+  }
 }
 
 function clearSuccessRedirectTimeout() {
@@ -785,8 +937,14 @@ async function handleCheckoutSubmit(event) {
     }));
 
     const result = await submitOrder({ customer, items });
+    trackEvent("order_submitted", {
+      metadata: {
+        orderNumber: result.orderNumber || "",
+        salesPerson: customer.salesPerson || "",
+      },
+    });
     clearSuccessRedirectTimeout();
-    clearCart();
+    clearCart(false);
     elements.checkoutForm.reset();
     state.view = "checkout";
     elements.checkoutMessage.textContent = `Thank you. Your order has been sent successfully. We will reach out to you at ${customer.email} with your invoice and payment details.${result.orderNumber ? ` Reference: ${result.orderNumber}.` : ""}`;
@@ -802,6 +960,11 @@ async function handleCheckoutSubmit(event) {
     console.error(error);
     elements.checkoutMessage.textContent = error.message || "Failed to submit order.";
     elements.checkoutMessage.classList.add("error");
+    trackEvent("submit_failed", {
+      metadata: {
+        message: error.message || "Failed to submit order.",
+      },
+    });
   } finally {
     elements.submitOrderButton.disabled = false;
     elements.submitOrderButton.textContent = "Place Order";
@@ -814,6 +977,7 @@ function wireEvents() {
   state.eventsWired = true;
 
   elements.search.addEventListener("input", applyFilters);
+  elements.search.addEventListener("input", trackSearchUsed);
   elements.homeLogoButton.addEventListener("click", () => {
     clearSuccessRedirectTimeout();
     state.view = "catalog";
@@ -823,24 +987,29 @@ function wireEvents() {
   elements.categoryFilter.addEventListener("change", () => {
     state.selectedCategory = elements.categoryFilter.value || "all";
     applyFilters();
+    trackEvent("filter_changed", { metadata: { filter: "category", value: state.selectedCategory } });
   });
   elements.brandFilter.addEventListener("change", () => {
     state.selectedBrand = elements.brandFilter.value || "all";
     applyFilters();
+    trackEvent("filter_changed", { metadata: { filter: "brand", value: state.selectedBrand } });
   });
   elements.sizeTypeFilter.addEventListener("change", () => {
     state.selectedSizeType = elements.sizeTypeFilter.value || "all";
     applyFilters();
+    trackEvent("filter_changed", { metadata: { filter: "type", value: state.selectedSizeType } });
   });
   elements.cartSummaryButton.addEventListener("click", () => {
     clearSuccessRedirectTimeout();
     state.view = "cart";
     renderAll();
+    trackEvent("cart_viewed");
   });
   elements.mobileCartBar.addEventListener("click", () => {
     clearSuccessRedirectTimeout();
     state.view = "cart";
     renderAll();
+    trackEvent("cart_viewed");
   });
   elements.clearCartHeaderButton.addEventListener("click", clearCart);
   elements.backToProductsButton.addEventListener("click", () => {
@@ -859,6 +1028,7 @@ function wireEvents() {
     clearSuccessRedirectTimeout();
     state.view = "checkout";
     renderView();
+    trackEvent("checkout_started");
   });
   elements.checkoutBackButton.addEventListener("click", () => {
     clearSuccessRedirectTimeout();
@@ -869,6 +1039,7 @@ function wireEvents() {
   elements.newArrivalsButton.addEventListener("click", () => {
     state.showNewArrivalsOnly = !state.showNewArrivalsOnly;
     applyFilters();
+    trackEvent("new_arrivals_toggled", { metadata: { active: state.showNewArrivalsOnly } });
   });
 
   elements.sortButtons.forEach((button) => {
@@ -884,6 +1055,9 @@ function wireEvents() {
       }
 
       applyFilters();
+      trackEvent("sort_changed", {
+        metadata: { sortKey: state.sortKey, sortDirection: state.sortDirection },
+      });
     });
   });
 }
@@ -902,6 +1076,7 @@ async function init() {
     renderCartView();
     renderCheckoutView();
     renderCartSummary();
+    trackEvent("catalog_loaded", { metadata: { productCount: state.products.length } });
   } catch (error) {
     console.error(error);
     if (elements.salesPersonSelect.options.length <= 1) {

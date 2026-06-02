@@ -10,6 +10,7 @@ import EditProduct from "./pages/EditProduct";
 import { Search } from "@mui/icons-material";
 import Sales from "./pages/Sales";
 import HbaOrders from "./pages/HbaOrders";
+import HbaAnalytics from "./pages/HbaAnalytics";
 import InboundProduct from "./pages/InboundProduct";
 import InboundData from "./pages/InboundData";
 import { ToastContainer } from "react-toastify";
@@ -356,6 +357,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="hbaOrders" action="view" menuItem="hbaOrders">
                   <HbaOrders />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/hba-analytics"
+              element={
+                <ProtectedRoute resource="hbaAnalytics" action="view" menuItem="hbaAnalytics">
+                  <HbaAnalytics />
                 </ProtectedRoute>
               }
             />

@@ -8,13 +8,14 @@
     "pricing": ["view", "create", "edit", "delete"],
     "priceScanner": ["view"],
     "hbaOrders": ["view", "edit"],
+    "hbaAnalytics": ["view"],
     "packing": ["view"],
     "whatnot": ["view", "create", "edit", "delete"],
     "users": ["view", "create", "edit", "delete"],
     "sales": ["view", "create", "edit", "delete"],
     "barcodeScan": ["view", "create", "edit", "delete"],
     "invoiceTracker": ["view", "create", "edit", "delete"],
-    "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "users", "addProduct", "barcodeScan", "priceScanner", "hbaOrders", "sales", "invoiceTracker" ]
+    "menu": ["orders", "pricelist", "products", "inbound", "packing", "whatnot", "users", "addProduct", "barcodeScan", "priceScanner", "hbaOrders", "hbaAnalytics", "sales", "invoiceTracker" ]
   },
   "listing": {
     "addProduct": ["view", "create", "edit"],
