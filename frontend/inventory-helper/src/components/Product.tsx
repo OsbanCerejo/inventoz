@@ -70,6 +70,8 @@ function Product() {
   const [hbaEnabled, setHbaEnabled] = useState(false);
   const [hbaQuantity, setHbaQuantity] = useState("");
   const [hbaPrice, setHbaPrice] = useState("");
+  const [hbaMoq, setHbaMoq] = useState("1");
+  const [hbaStepCount, setHbaStepCount] = useState("1");
   const [hbaCondition, setHbaCondition] = useState("");
   const [hbaNewArrival, setHbaNewArrival] = useState(false);
 
@@ -137,13 +139,23 @@ function Product() {
         ? ""
         : String(productObject.hbaPrice)
     );
+    setHbaMoq(
+      productObject.hbaMoq === null || productObject.hbaMoq === undefined
+        ? "1"
+        : String(productObject.hbaMoq)
+    );
+    setHbaStepCount(
+      productObject.hbaStepCount === null || productObject.hbaStepCount === undefined
+        ? "1"
+        : String(productObject.hbaStepCount)
+    );
     setHbaCondition(
       productObject.hbaCondition === null || productObject.hbaCondition === undefined
         ? ""
         : String(productObject.hbaCondition)
     );
     setHbaNewArrival(Boolean(productObject.hbaNewArrival));
-  }, [productObject.hbaCondition, productObject.hbaEnabled, productObject.hbaNewArrival, productObject.hbaPrice, productObject.hbaQuantity]);
+  }, [productObject.hbaCondition, productObject.hbaEnabled, productObject.hbaMoq, productObject.hbaNewArrival, productObject.hbaPrice, productObject.hbaQuantity, productObject.hbaStepCount]);
 
   // Separate effect for pricing + inbound history.
   // Kept separate so it re-fires when auth finishes loading (user was null on first render).
@@ -294,6 +306,8 @@ function Product() {
     if (hbaEnabled) {
       const parsedQuantity = Number(hbaQuantity);
       const parsedPrice = Number(hbaPrice);
+      const parsedMoq = Number(hbaMoq);
+      const parsedStepCount = Number(hbaStepCount);
 
       if (!Number.isFinite(parsedQuantity) || parsedQuantity < 0) {
         toast.error("Enter a valid HBA quantity.", { position: "top-right" });
@@ -302,6 +316,16 @@ function Product() {
 
       if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
         toast.error("Enter a valid HBA price.", { position: "top-right" });
+        return;
+      }
+
+      if (!Number.isFinite(parsedMoq) || parsedMoq < 1) {
+        toast.error("Enter a valid HBA MOQ.", { position: "top-right" });
+        return;
+      }
+
+      if (!Number.isFinite(parsedStepCount) || parsedStepCount < 1) {
+        toast.error("Enter a valid HBA step count.", { position: "top-right" });
         return;
       }
     }
@@ -313,6 +337,8 @@ function Product() {
         hbaEnabled,
         hbaQuantity: hbaEnabled ? hbaQuantity : "",
         hbaPrice: hbaEnabled ? hbaPrice : "",
+        hbaMoq: hbaEnabled ? hbaMoq : 1,
+        hbaStepCount: hbaEnabled ? hbaStepCount : 1,
         hbaCondition,
         hbaNewArrival,
       };
@@ -327,7 +353,7 @@ function Product() {
     } finally {
       setSavingHba(false);
     }
-  }, [hbaCondition, hbaEnabled, hbaNewArrival, hbaPrice, hbaQuantity, productObject]);
+  }, [hbaCondition, hbaEnabled, hbaMoq, hbaNewArrival, hbaPrice, hbaQuantity, hbaStepCount, productObject]);
 
   return (
     <div className="product-container">
@@ -520,6 +546,24 @@ function Product() {
                             onChange={(event) => setHbaPrice(event.target.value)}
                             disabled={!canEditHbaListing}
                             inputProps={{ min: 0, step: "0.01" }}
+                          />
+                          <TextField
+                            label="HBA MOQ"
+                            type="number"
+                            size="small"
+                            value={hbaMoq}
+                            onChange={(event) => setHbaMoq(event.target.value)}
+                            disabled={!canEditHbaListing}
+                            inputProps={{ min: 1, step: 1 }}
+                          />
+                          <TextField
+                            label="HBA Step Count"
+                            type="number"
+                            size="small"
+                            value={hbaStepCount}
+                            onChange={(event) => setHbaStepCount(event.target.value)}
+                            disabled={!canEditHbaListing}
+                            inputProps={{ min: 1, step: 1 }}
                           />
                           <TextField
                             select

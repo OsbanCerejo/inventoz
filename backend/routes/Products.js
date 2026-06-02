@@ -52,6 +52,19 @@ const normalizeNullableInteger = (value) => {
   return Math.max(0, Math.floor(parsed));
 };
 
+const normalizePositiveInteger = (value, fallback = 1) => {
+  if (value === "" || value === null || value === undefined) {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(1, Math.floor(parsed));
+};
+
 const normalizeNullableDecimal = (value) => {
   if (value === "" || value === null || value === undefined) {
     return null;
@@ -336,6 +349,8 @@ router.get("/hba/public-catalog", async (req, res) => {
         "quantity",
         "hbaQuantity",
         "hbaPrice",
+        "hbaMoq",
+        "hbaStepCount",
       ],
       include: [
         {
@@ -363,6 +378,9 @@ router.get("/hba/public-catalog", async (req, res) => {
             ""
         ).trim();
 
+        const hbaMoq = normalizePositiveInteger(row.hbaMoq);
+        const hbaStepCount = normalizePositiveInteger(row.hbaStepCount);
+
         return {
           sku: row.sku,
           brand: row.brand,
@@ -383,7 +401,9 @@ router.get("/hba/public-catalog", async (req, res) => {
           inventoryQuantity: row.quantity,
           hbaQuantity: row.hbaQuantity,
           hbaPrice: row.hbaPrice,
-          inStock: Number(row.hbaQuantity || 0) > 0,
+          hbaMoq,
+          hbaStepCount,
+          inStock: Number(row.hbaQuantity || 0) >= hbaMoq,
         };
       })
     );
@@ -474,7 +494,7 @@ router.post("/hba/submit-order", async (req, res) => {
 
     const submittedSkus = [...requestedSkuMap.keys()];
     const products = await Products.findAll({
-      attributes: ["sku", "upc", "brand", "itemName", "hbaEnabled", "hbaQuantity", "hbaPrice"],
+      attributes: ["sku", "upc", "brand", "itemName", "hbaEnabled", "hbaQuantity", "hbaPrice", "hbaMoq", "hbaStepCount"],
       where: {
         sku: {
           [Op.in]: submittedSkus,
@@ -498,6 +518,8 @@ router.post("/hba/submit-order", async (req, res) => {
 
       const allowedQuantity = Math.max(0, Math.floor(Number(product.hbaQuantity || 0)));
       const requestedQuantity = requestedSkuMap.get(product.sku) || 0;
+      const hbaMoq = normalizePositiveInteger(product.hbaMoq);
+      const hbaStepCount = normalizePositiveInteger(product.hbaStepCount);
 
       if (requestedQuantity < 1) {
         continue;
@@ -505,6 +527,18 @@ router.post("/hba/submit-order", async (req, res) => {
 
       if (allowedQuantity < 1) {
         return res.status(400).json({ error: `SKU ${product.sku} is currently sold out.` });
+      }
+
+      if (requestedQuantity < hbaMoq) {
+        return res.status(400).json({
+          error: `Minimum order quantity for SKU ${product.sku} is ${hbaMoq}.`,
+        });
+      }
+
+      if ((requestedQuantity - hbaMoq) % hbaStepCount !== 0) {
+        return res.status(400).json({
+          error: `SKU ${product.sku} must be ordered in increments of ${hbaStepCount} from the MOQ.`,
+        });
       }
 
       if (requestedQuantity > allowedQuantity) {
@@ -911,6 +945,8 @@ router.post("/", auth, checkPermission('products', 'create'), async (req, res) =
       hbaEnabled: Boolean(product.hbaEnabled),
       hbaQuantity: normalizeNullableInteger(product.hbaQuantity),
       hbaPrice: normalizeNullableDecimal(product.hbaPrice),
+      hbaMoq: normalizePositiveInteger(product.hbaMoq),
+      hbaStepCount: normalizePositiveInteger(product.hbaStepCount),
       hbaCondition: normalizeHbaCondition(product.hbaCondition),
       hbaNewArrival: Boolean(product.hbaNewArrival),
     };
@@ -983,6 +1019,14 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
       product.hbaPrice !== undefined
         ? normalizeNullableDecimal(product.hbaPrice)
         : currentProduct.hbaPrice;
+    const requestedHbaMoq =
+      product.hbaMoq !== undefined
+        ? normalizePositiveInteger(product.hbaMoq)
+        : normalizePositiveInteger(currentProduct.hbaMoq);
+    const requestedHbaStepCount =
+      product.hbaStepCount !== undefined
+        ? normalizePositiveInteger(product.hbaStepCount)
+        : normalizePositiveInteger(currentProduct.hbaStepCount);
     const requestedHbaCondition =
       product.hbaCondition !== undefined
         ? normalizeHbaCondition(product.hbaCondition)
@@ -996,6 +1040,8 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
       requestedHbaEnabled !== currentProduct.hbaEnabled ||
       requestedHbaQuantity !== currentProduct.hbaQuantity ||
       requestedHbaPrice !== currentProduct.hbaPrice ||
+      requestedHbaMoq !== normalizePositiveInteger(currentProduct.hbaMoq) ||
+      requestedHbaStepCount !== normalizePositiveInteger(currentProduct.hbaStepCount) ||
       requestedHbaCondition !== currentProduct.hbaCondition ||
       requestedHbaNewArrival !== currentProduct.hbaNewArrival;
 
@@ -1046,6 +1092,8 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
         hbaEnabled: requestedHbaEnabled,
         hbaQuantity: requestedHbaQuantity,
         hbaPrice: requestedHbaPrice,
+        hbaMoq: requestedHbaMoq,
+        hbaStepCount: requestedHbaStepCount,
         hbaCondition: requestedHbaCondition,
         hbaNewArrival: requestedHbaNewArrival,
       },

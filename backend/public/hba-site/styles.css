@@ -401,6 +401,12 @@ body {
   color: #285ea8;
 }
 
+.increment-label {
+  color: #667085;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .item-name-primary .tester-badge,
 .item-name-primary .condition-badge {
   font-weight: 700 !important;

@@ -143,14 +143,42 @@ function persistCart() {
   localStorage.setItem("hbaCart", JSON.stringify(state.cart));
 }
 
-function sanitizeQuantity(rawValue, maxQuantity) {
+function getHbaMoq(productOrLine) {
+  const parsed = Number(productOrLine?.hbaMoq || 1);
+  return Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed)) : 1;
+}
+
+function getHbaStepCount(productOrLine) {
+  const parsed = Number(productOrLine?.hbaStepCount || 1);
+  return Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed)) : 1;
+}
+
+function isValidHbaQuantity(quantity, productOrLine) {
+  const parsedQuantity = Number(quantity || 0);
+  if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) return true;
+  const moq = getHbaMoq(productOrLine);
+  const stepCount = getHbaStepCount(productOrLine);
+  return parsedQuantity >= moq && (parsedQuantity - moq) % stepCount === 0;
+}
+
+function sanitizeQuantity(rawValue, maxQuantity, productOrLine = {}) {
   if (rawValue === "" || rawValue === null || rawValue === undefined) {
     return 0;
   }
 
   const parsed = Number(rawValue);
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
-  return Math.min(Math.floor(parsed), Math.max(0, Number(maxQuantity || 0)));
+  const max = Math.max(0, Math.floor(Number(maxQuantity || 0)));
+  const moq = getHbaMoq(productOrLine);
+  const stepCount = getHbaStepCount(productOrLine);
+  const floored = Math.min(Math.floor(parsed), max);
+
+  if (floored < moq) {
+    return 0;
+  }
+
+  const stepsAboveMoq = Math.floor((floored - moq) / stepCount);
+  return moq + stepsAboveMoq * stepCount;
 }
 
 function normalizeText(value) {
@@ -234,6 +262,14 @@ function renderItemNameCell(cell, productOrLine) {
     badge.className = "condition-badge";
     badge.textContent = metaInfo.conditionBadgeLabel;
     primary.appendChild(badge);
+  }
+
+  const stepCount = getHbaStepCount(productOrLine);
+  if (stepCount > 1) {
+    const incrementLabel = document.createElement("span");
+    incrementLabel.className = "increment-label";
+    incrementLabel.textContent = `(Increments of ${stepCount} pieces)`;
+    primary.appendChild(incrementLabel);
   }
 
   cell.appendChild(primary);
@@ -419,7 +455,7 @@ function formatLineTotal(quantity, price) {
 }
 
 function updateCartForProduct(product, rawQuantity) {
-  const quantity = sanitizeQuantity(rawQuantity, product.hbaQuantity);
+  const quantity = sanitizeQuantity(rawQuantity, product.hbaQuantity, product);
 
   if (quantity === 0) {
     delete state.cart[product.sku];
@@ -437,6 +473,8 @@ function updateCartForProduct(product, rawQuantity) {
       condition: product.condition,
       hbaCondition: product.hbaCondition,
       hbaNewArrival: Boolean(product.hbaNewArrival),
+      hbaMoq: getHbaMoq(product),
+      hbaStepCount: getHbaStepCount(product),
       sizeType: String(product.sizeType || "").trim(),
       hbaType: getHbaTypeLabel(product),
       tester: Boolean(product.tester),
@@ -562,6 +600,8 @@ function renderCatalog() {
     availableCell.textContent = String(product.hbaQuantity ?? 0);
     priceCell.textContent = currencyFormatter.format(Number(product.hbaPrice || 0));
     qtyInput.max = String(product.hbaQuantity || 0);
+    qtyInput.min = String(getHbaMoq(product));
+    qtyInput.step = String(getHbaStepCount(product));
     qtyInput.disabled = !product.inStock;
 
     const existingLine = state.cart[product.sku];
@@ -570,7 +610,7 @@ function renderCatalog() {
 
     const commitValue = () => updateCartForProduct(product, qtyInput.value);
     qtyInput.addEventListener("input", () => {
-      const previewQuantity = sanitizeQuantity(qtyInput.value, product.hbaQuantity);
+      const previewQuantity = sanitizeQuantity(qtyInput.value, product.hbaQuantity, product);
       subtotalCell.textContent = formatLineTotal(previewQuantity, product.hbaPrice);
     });
     qtyInput.addEventListener("blur", commitValue);
@@ -613,6 +653,8 @@ function renderOrderTable(targetBody, editable) {
 
     const currentProduct = state.products.find((product) => product.sku === line.sku);
     qtyInput.max = String(currentProduct?.hbaQuantity || 0);
+    qtyInput.min = String(getHbaMoq(currentProduct || line));
+    qtyInput.step = String(getHbaStepCount(currentProduct || line));
     qtyInput.disabled = !editable;
 
     if (editable) {
@@ -647,6 +689,10 @@ function renderCheckoutView() {
 
 function renderCartSummary() {
   const summary = getCartSummary();
+  const invalidLine = Object.values(state.cart).find((line) => !isValidHbaQuantity(line.quantity, line));
+  const invalidLineMessage = invalidLine
+    ? `Quantity for SKU ${invalidLine.sku} must start at ${getHbaMoq(invalidLine)} and increase by ${getHbaStepCount(invalidLine)}.`
+    : "";
   elements.cartSummaryLines.textContent = `${summary.totalUnits} pc${summary.totalUnits === 1 ? "" : "s"}`;
   elements.cartSummaryPrice.textContent = currencyFormatter.format(summary.totalPrice);
   elements.mobileCartUnits.textContent = `${summary.totalUnits} pc${summary.totalUnits === 1 ? "" : "s"}`;
@@ -659,7 +705,7 @@ function renderCartSummary() {
   elements.checkoutTotalUnits.textContent = String(summary.totalUnits);
   elements.checkoutTotalPrice.textContent = currencyFormatter.format(summary.totalPrice);
 
-  const minimumMessage = getMinimumOrderMessage(summary);
+  const minimumMessage = invalidLineMessage || getMinimumOrderMessage(summary);
   elements.cartMinimumMessage.textContent = minimumMessage;
   elements.cartMinimumMessage.classList.toggle("hidden", !minimumMessage);
   elements.checkoutMinimumMessage.textContent = minimumMessage;

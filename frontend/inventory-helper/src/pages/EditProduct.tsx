@@ -102,6 +102,8 @@ const formikValidationSchema = Yup.object().shape({
   hbaEnabled: Yup.boolean(),
   hbaQuantity: Yup.number().nullable(),
   hbaPrice: Yup.number().nullable(),
+  hbaMoq: Yup.number().integer().min(1).nullable(),
+  hbaStepCount: Yup.number().integer().min(1).nullable(),
   hbaCondition: Yup.string(),
   hbaNewArrival: Yup.boolean(),
 });
@@ -209,6 +211,8 @@ function EditProduct() {
       hbaEnabled: productObject.hbaEnabled || false,
       hbaQuantity: productObject.hbaQuantity || "",
       hbaPrice: productObject.hbaPrice || "",
+      hbaMoq: productObject.hbaMoq || 1,
+      hbaStepCount: productObject.hbaStepCount || 1,
       hbaCondition: productObject.hbaCondition || "",
       hbaNewArrival: productObject.hbaNewArrival || false,
     }),
@@ -1499,6 +1503,56 @@ function EditProduct() {
                                 helperText={
                                   formik.touched.hbaPrice && typeof formik.errors.hbaPrice === "string"
                                     ? formik.errors.hbaPrice
+                                    : ""
+                                }
+                              />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
+                                id="hbaMoq"
+                                name="hbaMoq"
+                                label="HBA MOQ"
+                                type="number"
+                                value={formik.values.hbaMoq}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                disabled={!canEditHbaListing}
+                                inputProps={{ min: 1, step: 1 }}
+                                error={
+                                  formik.touched.hbaMoq &&
+                                  Boolean(formik.errors.hbaMoq)
+                                }
+                                helperText={
+                                  formik.touched.hbaMoq && typeof formik.errors.hbaMoq === "string"
+                                    ? formik.errors.hbaMoq
+                                    : ""
+                                }
+                              />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
+                                id="hbaStepCount"
+                                name="hbaStepCount"
+                                label="HBA Step Count"
+                                type="number"
+                                value={formik.values.hbaStepCount}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                disabled={!canEditHbaListing}
+                                inputProps={{ min: 1, step: 1 }}
+                                error={
+                                  formik.touched.hbaStepCount &&
+                                  Boolean(formik.errors.hbaStepCount)
+                                }
+                                helperText={
+                                  formik.touched.hbaStepCount && typeof formik.errors.hbaStepCount === "string"
+                                    ? formik.errors.hbaStepCount
                                     : ""
                                 }
                               />
