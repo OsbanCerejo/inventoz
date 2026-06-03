@@ -178,6 +178,9 @@ body {
 .featured-filter-row {
   display: flex;
   justify-content: flex-end;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .new-arrivals-button {
@@ -202,6 +205,80 @@ body {
 
 .new-arrivals-button:hover {
   transform: translateY(-1px);
+}
+
+.new-arrival-subscribe {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+
+.subscribe-toggle-button,
+.subscribe-form button {
+  border: 1px solid #1f7a45;
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: #fff;
+  color: #1f7a45;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.subscribe-toggle-button:hover,
+.subscribe-form button:hover {
+  background: #eefaf2;
+}
+
+.subscribe-toggle-button.subscribed {
+  background: #1f9d55;
+  color: #fff;
+  opacity: 0.92;
+  transition: opacity 0.35s ease, background 0.35s ease, color 0.35s ease;
+}
+
+.subscribe-form {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 80;
+  display: flex;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #d7e2d9;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+}
+
+.subscribe-form input {
+  width: 210px;
+  padding: 10px 12px;
+  border: 1px solid #cfcfcf;
+  border-radius: 999px;
+  font: inherit;
+}
+
+.subscribe-message {
+  position: absolute;
+  top: calc(100% + 62px);
+  right: 0;
+  z-index: 81;
+  width: 280px;
+  min-height: 16px;
+  margin: 0;
+  padding: 0 2px;
+  color: #16794a;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: right;
+}
+
+.subscribe-message.error {
+  color: #b42318;
 }
 
 @keyframes pulse-new-arrivals {
@@ -645,6 +722,28 @@ body {
 
   .featured-filter-row {
     justify-content: flex-start;
+    align-items: flex-start;
+  }
+
+  .new-arrival-subscribe {
+    align-items: flex-start;
+  }
+
+  .subscribe-form {
+    right: auto;
+    left: 0;
+  }
+
+  .subscribe-form input {
+    width: 190px;
+    min-width: 0;
+  }
+
+  .subscribe-message {
+    right: auto;
+    left: 0;
+    width: 260px;
+    text-align: left;
   }
 
   .row-qty-input,

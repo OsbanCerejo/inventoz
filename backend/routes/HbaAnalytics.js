@@ -1,6 +1,6 @@
 const express = require("express");
 const { Op } = require("sequelize");
-const { HbaVisitorSession, HbaTrackingEvent, HbaCartSnapshot } = require("../models");
+const { HbaVisitorSession, HbaTrackingEvent, HbaCartSnapshot, HbaNewArrivalSubscriber } = require("../models");
 const GeoIpService = require("../Services/GeoIpService");
 const { auth } = require("../middleware/auth");
 const { checkPermission } = require("../middleware/permissions");
@@ -23,6 +23,7 @@ const TRACKABLE_EVENTS = new Set([
   "checkout_started",
   "order_submitted",
   "submit_failed",
+  "new_arrival_subscribed",
 ]);
 
 const toStringValue = (value, maxLength = 255) => {
@@ -238,6 +239,61 @@ router.post("/track", async (req, res) => {
   } catch (error) {
     console.error("Error recording HBA tracking event:", error);
     return res.status(error.status || 500).json({ error: error.status ? error.message : "Failed to record tracking event." });
+  }
+});
+
+router.post("/new-arrival-subscribe", async (req, res) => {
+  try {
+    const email = toStringValue(req.body?.email, 255).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Enter a valid email address." });
+    }
+
+    const now = new Date();
+    const ipAddress = getClientIp(req);
+    const userAgent = String(req.headers["user-agent"] || "").slice(0, 2000);
+    const [subscriber, created] = await HbaNewArrivalSubscriber.findOrCreate({
+      where: { email },
+      defaults: {
+        email,
+        status: "active",
+        source: "hba-site",
+        ipAddress,
+        userAgent,
+        subscribedAt: now,
+      },
+    });
+
+    if (!created) {
+      await subscriber.update({
+        status: "active",
+        source: "hba-site",
+        ipAddress,
+        userAgent,
+        subscribedAt: subscriber.subscribedAt || now,
+        unsubscribedAt: null,
+      });
+    }
+
+    try {
+      const { sessionId, visitorId } = await upsertSession({ body: req.body || {}, req, now, eventType: "new_arrival_subscribed" });
+      await HbaTrackingEvent.create({
+        sessionId,
+        visitorId,
+        eventType: "new_arrival_subscribed",
+        metadata: { emailDomain: email.split("@")[1] || "" },
+      });
+    } catch (trackingError) {
+      console.error("Error recording HBA subscriber tracking event:", trackingError);
+    }
+
+    return res.json({
+      success: true,
+      message: created ? "You are subscribed." : "You are already subscribed.",
+    });
+  } catch (error) {
+    console.error("Error subscribing to HBA new arrival alerts:", error);
+    return res.status(500).json({ error: "Failed to subscribe. Please try again." });
   }
 });
 

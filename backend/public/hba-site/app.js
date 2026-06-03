@@ -53,6 +53,11 @@ const elements = {
   checkoutMessage: document.getElementById("checkout-message"),
   salesPersonSelect: document.getElementById("customer-salesPerson"),
   newArrivalsButton: document.getElementById("new-arrivals-button"),
+  subscribeToggleButton: document.getElementById("subscribe-toggle-button"),
+  subscribeForm: document.getElementById("subscribe-form"),
+  subscribeEmail: document.getElementById("subscribe-email"),
+  subscribeSubmitButton: document.getElementById("subscribe-submit-button"),
+  subscribeMessage: document.getElementById("subscribe-message"),
   catalogRowTemplate: document.getElementById("catalog-row-template"),
   cartRowTemplate: document.getElementById("cart-row-template"),
   sortButtons: document.querySelectorAll(".sort-button"),
@@ -267,6 +272,36 @@ function persistCart() {
 function getHbaMoq(productOrLine) {
   const parsed = Number(productOrLine?.hbaMoq || 1);
   return Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed)) : 1;
+}
+
+async function subscribeToNewArrivals(email) {
+  const response = await fetch(`${apiBaseUrl}/hba-analytics/new-arrival-subscribe`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email,
+      visitorId: tracking.visitorId,
+      sessionId: tracking.sessionId,
+      pageUrl: window.location.href,
+      landingPage: window.location.href,
+      referrer: document.referrer || "",
+      device: {
+        deviceType: getDeviceType(),
+        browser: getBrowserName(),
+        os: getOsName(),
+        screenWidth: window.screen?.width || null,
+        screenHeight: window.screen?.height || null,
+      },
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || "Failed to subscribe.");
+  }
+  return data;
 }
 
 function getHbaStepCount(productOrLine) {
@@ -909,6 +944,33 @@ function getCheckoutFormData() {
   return Object.fromEntries(formData.entries());
 }
 
+async function handleSubscribeSubmit(event) {
+  event.preventDefault();
+  const email = String(elements.subscribeEmail.value || "").trim();
+  elements.subscribeMessage.textContent = "";
+  elements.subscribeMessage.className = "subscribe-message";
+  elements.subscribeSubmitButton.disabled = true;
+  elements.subscribeSubmitButton.textContent = "Joining...";
+
+  try {
+    const result = await subscribeToNewArrivals(email);
+    elements.subscribeEmail.value = "";
+    elements.subscribeForm.classList.add("hidden");
+    elements.subscribeToggleButton.textContent = "Thank you!";
+    elements.subscribeToggleButton.classList.add("subscribed");
+    window.setTimeout(() => {
+      elements.subscribeToggleButton.classList.remove("subscribed");
+      elements.subscribeToggleButton.textContent = "Get New Arrival Alerts";
+    }, 3000);
+  } catch (error) {
+    elements.subscribeMessage.textContent = error.message || "Failed to subscribe.";
+    elements.subscribeMessage.classList.add("error");
+  } finally {
+    elements.subscribeSubmitButton.disabled = false;
+    elements.subscribeSubmitButton.textContent = "Notify Me";
+  }
+}
+
 async function handleCheckoutSubmit(event) {
   event.preventDefault();
   elements.checkoutMessage.textContent = "";
@@ -1041,6 +1103,15 @@ function wireEvents() {
     applyFilters();
     trackEvent("new_arrivals_toggled", { metadata: { active: state.showNewArrivalsOnly } });
   });
+  elements.subscribeToggleButton.addEventListener("click", () => {
+    elements.subscribeForm.classList.toggle("hidden");
+    elements.subscribeMessage.textContent = "";
+    elements.subscribeMessage.className = "subscribe-message";
+    if (!elements.subscribeForm.classList.contains("hidden")) {
+      elements.subscribeEmail.focus();
+    }
+  });
+  elements.subscribeForm.addEventListener("submit", handleSubscribeSubmit);
 
   elements.sortButtons.forEach((button) => {
     button.addEventListener("click", () => {

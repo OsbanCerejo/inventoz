@@ -64,6 +64,22 @@
                 </select>
               </div>
               <div class="featured-filter-row">
+                <div class="new-arrival-subscribe">
+                  <button id="subscribe-toggle-button" class="subscribe-toggle-button" type="button">
+                    Get New Arrival Alerts
+                  </button>
+                  <form id="subscribe-form" class="subscribe-form hidden">
+                    <input
+                      id="subscribe-email"
+                      type="email"
+                      placeholder="Email for new arrivals"
+                      aria-label="Email for new arrival alerts"
+                      required
+                    />
+                    <button id="subscribe-submit-button" type="submit">Notify Me</button>
+                  </form>
+                  <p id="subscribe-message" class="subscribe-message"></p>
+                </div>
                 <button id="new-arrivals-button" class="new-arrivals-button" type="button">
                   New Arrivals
                 </button>
