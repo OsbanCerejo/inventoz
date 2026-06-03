@@ -647,92 +647,9 @@ body {
     justify-content: flex-start;
   }
 
-  .catalog-table,
-  .catalog-table thead,
-  .catalog-table tbody,
-  .catalog-table tr,
-  .catalog-table th,
-  .catalog-table td {
-    display: block;
-  }
-
-  .catalog-table thead {
-    display: none;
-  }
-
-  .catalog-table {
-    border-spacing: 0;
-  }
-
-  .catalog-table tbody tr {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 8px;
-    padding: 12px;
-    margin-bottom: 12px;
-    background: #fff;
-    border: 1px solid #e3e8ef;
-    border-radius: 10px;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
-  }
-
-  .catalog-table tbody td,
-  .catalog-table tbody td:first-child,
-  .catalog-table tbody td:last-child {
-    border: 0;
-    padding: 0;
-    background: transparent;
-    border-radius: 0;
-  }
-
-  .catalog-table tbody td::before {
-    content: attr(data-label);
-    display: block;
-    color: #667085;
-    font-size: 12px;
-    font-weight: 700;
-    margin-bottom: 2px;
-  }
-
-  .image-cell::before,
-  .name-cell::before {
-    display: none !important;
-  }
-
-  .image-cell {
-    width: auto;
-    justify-self: end;
-    order: 1;
-  }
-
-  .upc-cell {
-    order: 2;
-  }
-
-  .type-cell {
-    order: 3;
-  }
-
-  .brand-cell {
-    order: 4;
-  }
-
-  .name-cell {
-    order: 5;
-    min-width: 0;
-  }
-
-  .available-cell,
-  .price-cell,
-  .qty-cell,
-  .line-total-cell {
-    display: inline-block;
-    width: 48%;
-    vertical-align: top;
-  }
-
   .row-qty-input,
   .cart-row-qty-input {
+    min-width: 76px;
     min-height: 44px;
     font-size: 18px;
   }
