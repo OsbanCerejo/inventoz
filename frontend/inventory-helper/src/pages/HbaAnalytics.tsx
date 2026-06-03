@@ -202,24 +202,37 @@ function HbaAnalytics() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const params = useMemo(() => ({ from: fromDate, to: toDate, activeMinutes: 1440 }), [fromDate, toDate]);
+  const params = useMemo(() => ({ from: fromDate, to: toDate, activeMinutes: 1440, liveSeconds: 90 }), [fromDate, toDate]);
 
   useEffect(() => {
+    let cancelled = false;
     const loadAnalytics = async () => {
       try {
         setLoading(true);
         setError(null);
         const response = await axios.get(getApiUrl("hba-analytics/overview"), { params });
-        setData(response.data || {});
+        if (!cancelled) {
+          setData(response.data || {});
+        }
       } catch (analyticsError: any) {
         console.error("Failed to load HBA analytics:", analyticsError);
-        setError(analyticsError?.response?.data?.error || "Failed to load HBA analytics");
+        if (!cancelled) {
+          setError(analyticsError?.response?.data?.error || "Failed to load HBA analytics");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     loadAnalytics();
+    const intervalId = window.setInterval(loadAnalytics, 30000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, [params]);
 
   const overview = data?.overview || {};
@@ -276,6 +289,9 @@ function HbaAnalytics() {
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6} md={3}>
                 <MetricCard label="Visitors" value={formatNumber(overview.sessions)} helper={`${formatNumber(overview.totalEvents)} tracked actions`} />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <MetricCard label="Live Visitors Now" value={formatNumber(overview.liveSessions)} helper="Seen in the last 90 seconds" />
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
                 <MetricCard label="Active Carts" value={formatNumber(overview.activeCarts)} helper={`${formatMoney(overview.activeCartValue)} in cart value`} />

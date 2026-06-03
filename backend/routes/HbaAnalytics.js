@@ -24,6 +24,7 @@ const TRACKABLE_EVENTS = new Set([
   "order_submitted",
   "submit_failed",
   "new_arrival_subscribed",
+  "heartbeat",
 ]);
 
 const toStringValue = (value, maxLength = 255) => {
@@ -192,6 +193,10 @@ router.post("/track", async (req, res) => {
     }
 
     const { sessionId, visitorId } = await upsertSession({ body: req.body || {}, req, now, eventType });
+    if (eventType === "heartbeat") {
+      return res.json({ success: true });
+    }
+
     const cartSummary = getCartSummaryFromBody(req.body || {});
     const metadata = req.body?.metadata && typeof req.body.metadata === "object" ? req.body.metadata : {};
 
@@ -338,7 +343,9 @@ router.get("/overview", auth, checkPermission("hbaAnalytics", "view"), async (re
   try {
     const { from, to } = parseDateRange(req.query);
     const activeMinutes = Math.max(5, Number(req.query.activeMinutes || 1440));
+    const liveSeconds = Math.max(30, Number(req.query.liveSeconds || 90));
     const activeSince = new Date(Date.now() - activeMinutes * 60 * 1000);
+    const liveSince = new Date(Date.now() - liveSeconds * 1000);
 
     const [sessions, events, snapshots] = await Promise.all([
       HbaVisitorSession.findAll({
@@ -397,6 +404,7 @@ router.get("/overview", auth, checkPermission("hbaAnalytics", "view"), async (re
         sessions: sessions.length,
         totalEvents: events.length,
         cartSessions: cartSnapshots.length,
+        liveSessions: sessions.filter((session) => new Date(session.lastSeenAt) >= liveSince).length,
         activeCarts: activeCartRows.length,
         abandonedCarts: abandonedCartRows.length,
         checkoutStarted: distinctSessionsForEvent("checkout_started"),

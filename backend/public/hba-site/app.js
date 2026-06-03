@@ -73,6 +73,7 @@ const tracking = {
   visitorId: getOrCreateStorageId("hbaVisitorId"),
   sessionId: getOrCreateSessionId(),
   searchDebounceId: null,
+  heartbeatIntervalId: null,
 };
 
 function getOrCreateStorageId(key) {
@@ -188,6 +189,14 @@ function trackSearchUsed() {
   tracking.searchDebounceId = window.setTimeout(() => {
     trackEvent("search_used", { searchTerm });
   }, 700);
+}
+
+function startHeartbeat() {
+  if (tracking.heartbeatIntervalId) return;
+  trackEvent("heartbeat", { cart: getTrackingCart() });
+  tracking.heartbeatIntervalId = window.setInterval(() => {
+    trackEvent("heartbeat", { cart: getTrackingCart() });
+  }, 30000);
 }
 
 function applyMobileLabels(row, labels) {
@@ -1148,6 +1157,7 @@ async function init() {
     renderCheckoutView();
     renderCartSummary();
     trackEvent("catalog_loaded", { metadata: { productCount: state.products.length } });
+    startHeartbeat();
   } catch (error) {
     console.error(error);
     if (elements.salesPersonSelect.options.length <= 1) {
@@ -1159,6 +1169,7 @@ async function init() {
     elements.catalogEmpty.classList.remove("hidden");
     elements.catalogEmpty.textContent =
       "Unable to load catalog. Make sure the backend is running and at least one SKU has HBA enabled.";
+    startHeartbeat();
   }
 }
 
