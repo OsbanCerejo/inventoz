@@ -31,7 +31,8 @@ import {
   FormControlLabel,
   Switch,
   Divider,
-  Grid
+  Grid,
+  TextField
 } from '@mui/material';
 
 type ActiveSession = {
@@ -80,6 +81,15 @@ const Users: React.FC = () => {
   const [permissionRows, setPermissionRows] = useState<UserPermissionRow[]>([]);
   const [permissionsLoading, setPermissionsLoading] = useState(false);
   const [permissionsSaving, setPermissionsSaving] = useState(false);
+
+  const [csNotifDialogOpen, setCsNotifDialogOpen] = useState(false);
+  const [csNotifTargetUser, setCsNotifTargetUser] = useState<User | null>(null);
+  const [csNotifEmail, setCsNotifEmail] = useState('');
+  const [csNotifEnabled, setCsNotifEnabled] = useState(true);
+  const [csNotifInAppEnabled, setCsNotifInAppEnabled] = useState(true);
+  const [csNotifLoading, setCsNotifLoading] = useState(false);
+  const [csNotifSaving, setCsNotifSaving] = useState(false);
+
   const { user: currentUser, token } = useAuth();
 
   const fetchUsers = async () => {
@@ -320,6 +330,46 @@ const Users: React.FC = () => {
     }
   };
 
+  const handleEditNotificationSettings = async (user: User) => {
+    setCsNotifTargetUser(user);
+    setCsNotifEmail('');
+    setCsNotifEnabled(true);
+    setCsNotifInAppEnabled(true);
+    setCsNotifLoading(true);
+    setCsNotifDialogOpen(true);
+    try {
+      const { data } = await axios.get(getApiUrl(`api/users/${user.id}/cs-notification-settings`), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCsNotifEmail(data.customerServiceNotificationEmail || '');
+      setCsNotifEnabled(data.customerServiceEmailNotificationsEnabled ?? true);
+      setCsNotifInAppEnabled(data.customerServiceInAppNotificationsEnabled ?? true);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to load CS notification settings');
+      setCsNotifDialogOpen(false);
+    } finally {
+      setCsNotifLoading(false);
+    }
+  };
+
+  const handleSaveCsNotifSettings = async () => {
+    if (!csNotifTargetUser) return;
+    setCsNotifSaving(true);
+    try {
+      await axios.patch(
+        getApiUrl(`api/users/${csNotifTargetUser.id}/cs-notification-settings`),
+        { customerServiceNotificationEmail: csNotifEmail.trim() || null, customerServiceEmailNotificationsEnabled: csNotifEnabled, customerServiceInAppNotificationsEnabled: csNotifInAppEnabled },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success('CS notification settings saved');
+      setCsNotifDialogOpen(false);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to save settings');
+    } finally {
+      setCsNotifSaving(false);
+    }
+  };
+
   const closePermissionsDialog = () => {
     if (permissionsSaving) return;
     setPermissionsDialogOpen(false);
@@ -376,6 +426,7 @@ const Users: React.FC = () => {
             onEdit={handleEditUser}
             onDelete={handleDeleteUser}
             onEditPermissions={handleEditPermissions}
+            onEditNotificationSettings={handleEditNotificationSettings}
             currentUserId={currentUser?.id}
           />
 
@@ -580,6 +631,76 @@ const Users: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      <Dialog open={csNotifDialogOpen} onClose={() => !csNotifSaving && setCsNotifDialogOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>
+          CS Notification Settings{csNotifTargetUser ? ` — ${csNotifTargetUser.name || csNotifTargetUser.username}` : ''}
+        </DialogTitle>
+        <DialogContent dividers>
+          {csNotifLoading ? (
+            <Box display="flex" justifyContent="center" py={3}><CircularProgress size={24} /></Box>
+          ) : (
+            <Box>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                Controls Customer Service notification preferences for this user.
+                Turning off in-app notifications stops the bell icon from showing CS alerts.
+                Turning off email stops CS emails entirely.
+              </Alert>
+              <TextField
+                label="CS Notification Email"
+                type="email"
+                fullWidth
+                value={csNotifEmail}
+                onChange={(e) => setCsNotifEmail(e.target.value)}
+                placeholder={`Default: ${csNotifTargetUser?.email || 'login email'}`}
+                helperText="Leave blank to use the user's login email address."
+                sx={{ mb: 3 }}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={csNotifInAppEnabled}
+                    onChange={(e) => setCsNotifInAppEnabled(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2" fontWeight={600}>In-App Notifications Enabled</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      When off, no bell notifications are created for this user for any CS event.
+                    </Typography>
+                  </Box>
+                }
+                sx={{ mb: 1 }}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={csNotifEnabled}
+                    onChange={(e) => setCsNotifEnabled(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2" fontWeight={600}>Email Notifications Enabled</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      When off, no CS emails are sent. In-app notifications are unaffected.
+                    </Typography>
+                  </Box>
+                }
+              />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCsNotifDialogOpen(false)} disabled={csNotifSaving}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveCsNotifSettings} disabled={csNotifSaving || csNotifLoading}>
+            {csNotifSaving ? 'Saving…' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
     </Box>
   );
 };

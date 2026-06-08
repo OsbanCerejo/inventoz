@@ -8,6 +8,7 @@ const db = require("./models");
 const stockUpdateCron = require("./cron/stockUpdate");
 const orderProcessingCron = require("./cron/orderProcessing");
 const invoiceTrackerPaymentReminderCron = require("./cron/invoiceTrackerPaymentReminders");
+const customerServiceOverdueCron = require("./cron/customerServiceOverdue");
 const path = require("path");
 
 app.use(express.json());
@@ -154,6 +155,9 @@ app.use("/hba-orders", hbaOrdersRouter);
 const hbaAnalyticsRouter = require("./routes/HbaAnalytics");
 app.use("/hba-analytics", hbaAnalyticsRouter);
 
+const customerServiceRouter = require("./routes/CustomerService");
+app.use("/customer-service", customerServiceRouter);
+
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.static(path.join(__dirname, 'public', 'hba-site')));
@@ -248,6 +252,7 @@ sequelize
     // stockUpdateCron;
     // orderProcessingCron;
     // invoiceTrackerPaymentReminderCron;
+    customerServiceOverdueCron;
     
     startServer();
   })

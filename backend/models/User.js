@@ -40,7 +40,22 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0
-    }
+    },
+    customerServiceNotificationEmail: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: null,
+    },
+    customerServiceEmailNotificationsEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
+    customerServiceInAppNotificationsEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
   }, {
     hooks: {
       beforeCreate: async (user) => {

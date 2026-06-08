@@ -1,10 +1,11 @@
 import React from 'react';
 import { User } from '../../types/User';
-import { 
-  Edit as EditIcon, 
-  Delete as DeleteIcon, 
+import {
+  Edit as EditIcon,
+  Delete as DeleteIcon,
   People as PeopleIcon,
-  Security as SecurityIcon
+  Security as SecurityIcon,
+  NotificationsOutlined as NotifIcon
 } from '@mui/icons-material';
 import {
   Table,
@@ -29,16 +30,18 @@ interface UserListProps {
   onEdit: (user: User) => void;
   onDelete: (userId: number) => void;
   onEditPermissions: (user: User) => void;
+  onEditNotificationSettings: (user: User) => void;
   currentUserId?: number;
 }
 
 // UserList component for displaying users in a table format
-const UserList: React.FC<UserListProps> = ({ 
-  users, 
-  onEdit, 
-  onDelete, 
+const UserList: React.FC<UserListProps> = ({
+  users,
+  onEdit,
+  onDelete,
   onEditPermissions,
-  currentUserId 
+  onEditNotificationSettings,
+  currentUserId
 }) => {
   const getRoleDisplayName = (role: User['role']) => {
     switch (role) {
@@ -172,6 +175,15 @@ const UserList: React.FC<UserListProps> = ({
                             </IconButton>
                           </Tooltip>
                         )}
+                        <Tooltip title="CS Notification Settings">
+                          <IconButton
+                            size="small"
+                            color="info"
+                            onClick={() => onEditNotificationSettings(user)}
+                          >
+                            <NotifIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                         
                         {user.id !== currentUserId && (
                           <>

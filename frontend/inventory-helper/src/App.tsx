@@ -34,6 +34,7 @@ import BarcodeScan from "./pages/BarcodeScan";
 import PackingAnalytics from "./pages/PackingAnalytics";
 import LabelGenerator from "./pages/LabelGenerator";
 import Tickets from "./pages/Tickets";
+import CustomerService from "./pages/CustomerService";
 import InvoiceTracker from "./pages/InvoiceTracker";
 import Login from "./pages/Login";
 import LowStock from "./pages/LowStock";
@@ -413,6 +414,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="tickets" action="view" menuItem="tickets">
                   <Tickets />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/customer-service"
+              element={
+                <ProtectedRoute resource="customerService" action="view" menuItem="customerService">
+                  <CustomerService />
                 </ProtectedRoute>
               }
             />

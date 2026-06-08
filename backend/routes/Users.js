@@ -465,4 +465,55 @@ router.patch('/:id/toggle-status', auth, checkPermission('users', 'edit'), async
   }
 });
 
+// Admin-only: get CS notification settings for a user
+router.get('/:id/cs-notification-settings', auth, checkPermission('users', 'view'), async (req, res) => {
+  try {
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId) || userId <= 0) return res.status(400).json({ error: 'Invalid user id' });
+    const user = await User.findByPk(userId, {
+      attributes: ['id', 'customerServiceNotificationEmail', 'customerServiceEmailNotificationsEnabled', 'customerServiceInAppNotificationsEnabled'],
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
+  } catch (err) {
+    console.error('CS notification settings get error:', err);
+    res.status(500).json({ error: 'Failed to retrieve settings' });
+  }
+});
+
+// Admin-only: update CS notification settings for a user
+router.patch('/:id/cs-notification-settings', auth, async (req, res) => {
+  try {
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId) || userId <= 0) return res.status(400).json({ error: 'Invalid user id' });
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const updates = {};
+    if (req.body?.customerServiceNotificationEmail !== undefined) {
+      const email = typeof req.body.customerServiceNotificationEmail === 'string' ? req.body.customerServiceNotificationEmail.trim() || null : null;
+      updates.customerServiceNotificationEmail = email;
+    }
+    if (req.body?.customerServiceEmailNotificationsEnabled !== undefined) {
+      updates.customerServiceEmailNotificationsEnabled = !!req.body.customerServiceEmailNotificationsEnabled;
+    }
+    if (req.body?.customerServiceInAppNotificationsEnabled !== undefined) {
+      updates.customerServiceInAppNotificationsEnabled = !!req.body.customerServiceInAppNotificationsEnabled;
+    }
+
+    await user.update(updates);
+    res.json({
+      id: user.id,
+      customerServiceNotificationEmail: user.customerServiceNotificationEmail,
+      customerServiceEmailNotificationsEnabled: user.customerServiceEmailNotificationsEnabled,
+      customerServiceInAppNotificationsEnabled: user.customerServiceInAppNotificationsEnabled,
+    });
+  } catch (err) {
+    console.error('CS notification settings update error:', err);
+    res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
 module.exports = router; 
