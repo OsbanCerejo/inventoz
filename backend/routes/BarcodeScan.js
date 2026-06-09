@@ -120,14 +120,19 @@ const buildFulfillmentCheck = async (tracking) => {
     };
   }
 
+  // Only check imports created within the last 30 days — packages older than
+  // that will never be in-flight, and excluding stale imports prevents false
+  // positives from abandoned/superseded CSV uploads.
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
   let [whatnotRows, tiktokRows] = await Promise.all([
     WhatnotShipmentItem.findAll({
-      where: trackingWhere,
+      where: { ...trackingWhere, createdAt: { [Op.gte]: thirtyDaysAgo } },
       attributes: ["shipmentId", "tracking", "closedAt"],
       raw: true,
     }),
     TikTokShipmentItem.findAll({
-      where: trackingWhere,
+      where: { ...trackingWhere, createdAt: { [Op.gte]: thirtyDaysAgo } },
       attributes: ["shipmentId", "tracking", "closedAt"],
       raw: true,
     }),
@@ -144,13 +149,17 @@ const buildFulfillmentCheck = async (tracking) => {
       const [[whatnotSuffix], [tiktokSuffix]] = await Promise.all([
         sequelize.query(
           `SELECT shipmentId, tracking, closedAt FROM ${TABLES.whatnotItems}
-           WHERE tracking IS NOT NULL AND tracking != '' AND :scanned LIKE CONCAT('%', tracking)`,
-          { replacements: { scanned: compact }, raw: true }
+           WHERE tracking IS NOT NULL AND tracking != '' AND createdAt >= :cutoff
+           AND LENGTH(tracking) BETWEEN 10 AND 18
+           AND :scanned LIKE CONCAT('%', tracking)`,
+          { replacements: { scanned: compact, cutoff: thirtyDaysAgo }, raw: true }
         ),
         sequelize.query(
           `SELECT shipmentId, tracking, closedAt FROM ${TABLES.tiktokItems}
-           WHERE tracking IS NOT NULL AND tracking != '' AND :scanned LIKE CONCAT('%', tracking)`,
-          { replacements: { scanned: compact }, raw: true }
+           WHERE tracking IS NOT NULL AND tracking != '' AND createdAt >= :cutoff
+           AND LENGTH(tracking) BETWEEN 10 AND 18
+           AND :scanned LIKE CONCAT('%', tracking)`,
+          { replacements: { scanned: compact, cutoff: thirtyDaysAgo }, raw: true }
         ),
       ]);
       if (whatnotSuffix && whatnotSuffix.length > 0) whatnotRows = whatnotSuffix;
@@ -277,10 +286,16 @@ router.get("/search/:barcode", auth, checkPermission('barcodeScan', 'view'), asy
       return res.status(400).json({ error: 'Barcode is required' });
     }
 
-    // Find all scans for this barcode, ordered by most recent first
+    // Find all scans for this barcode, ordered by most recent first.
+    // Also match on suffix so searching by just the tracking number (e.g. '9400150105498036107735')
+    // finds barcodes that include a carrier routing prefix (e.g. '420314059400150105498036107735').
+    const searchTerm = barcode.trim();
     const scans = await BarcodeScan.findAll({
       where: {
-        barcode: barcode.trim()
+        [Op.or]: [
+          { barcode: searchTerm },
+          { barcode: { [Op.like]: `%${searchTerm}` } },
+        ],
       },
       include: [{
         model: User,
