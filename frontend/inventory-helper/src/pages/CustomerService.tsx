@@ -33,14 +33,19 @@ const LABEL: Record<string, string> = {
   other: "Other",
 };
 
-const STATUS_COLOR: Record<Status, string> = {
-  open: "#2563eb", assigned: "#7c3aed", in_progress: "#d97706",
-  waiting_on_customer: "#0891b2", waiting_on_internal_team: "#6b7280",
-  resolved: "#16a34a",
+const STATUS_STYLE: Record<Status, { bg: string; text: string; dot: string }> = {
+  open:                     { bg: "#dbeafe", text: "#1d4ed8", dot: "#3b82f6" },
+  assigned:                 { bg: "#ede9fe", text: "#6d28d9", dot: "#8b5cf6" },
+  in_progress:              { bg: "#fef3c7", text: "#b45309", dot: "#f59e0b" },
+  waiting_on_customer:      { bg: "#cffafe", text: "#0e7490", dot: "#06b6d4" },
+  waiting_on_internal_team: { bg: "#f1f5f9", text: "#475569", dot: "#94a3b8" },
+  resolved:                 { bg: "#dcfce7", text: "#15803d", dot: "#22c55e" },
 };
 
-const PRIORITY_COLOR: Record<Priority, string> = {
-  normal: "#6b7280", high: "#d97706", urgent: "#dc2626",
+const PRIORITY_STYLE: Record<Priority, { bg: string; text: string; dot: string }> = {
+  normal: { bg: "#f1f5f9", text: "#475569", dot: "#94a3b8" },
+  high:   { bg: "#fef3c7", text: "#b45309", dot: "#f59e0b" },
+  urgent: { bg: "#fee2e2", text: "#b91c1c", dot: "#ef4444" },
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -86,9 +91,10 @@ function fmtDate(d: string) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function Badge({ text, color, bg }: { text: string; color?: string; bg?: string }) {
+function Badge({ text, color, bg, dot }: { text: string; color?: string; bg?: string; dot?: string }) {
   return (
-    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 12, fontSize: 11, fontWeight: 600, color: color || "#fff", backgroundColor: bg || "#6b7280", whiteSpace: "nowrap" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", borderRadius: 12, fontSize: 11, fontWeight: 600, color: color || "#fff", backgroundColor: bg || "#6b7280", whiteSpace: "nowrap" }}>
+      {dot && <span style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: dot, flexShrink: 0 }} />}
       {text}
     </span>
   );
@@ -127,8 +133,8 @@ function TicketRow({ ticket, onClick }: { ticket: Ticket; onClick: () => void })
       <td style={{ padding: "10px 8px", fontSize: 13 }}>{ticket.username}</td>
       <td style={{ padding: "10px 8px", fontSize: 12, color: "#64748b" }}>{ticket.orderNumber}</td>
       <td style={{ padding: "10px 8px" }}><Badge text={LABEL[ticket.issueCategory]} bg="#e2e8f0" color="#334155" /></td>
-      <td style={{ padding: "10px 8px" }}><Badge text={LABEL[ticket.priority]} bg={PRIORITY_COLOR[ticket.priority]} /></td>
-      <td style={{ padding: "10px 8px" }}><Badge text={LABEL[ticket.status]} bg={STATUS_COLOR[ticket.status]} /></td>
+      <td style={{ padding: "10px 8px" }}><Badge text={LABEL[ticket.priority]} bg={PRIORITY_STYLE[ticket.priority].bg} color={PRIORITY_STYLE[ticket.priority].text} dot={PRIORITY_STYLE[ticket.priority].dot} /></td>
+      <td style={{ padding: "10px 8px" }}><Badge text={LABEL[ticket.status]} bg={STATUS_STYLE[ticket.status].bg} color={STATUS_STYLE[ticket.status].text} dot={STATUS_STYLE[ticket.status].dot} /></td>
       <td style={{ padding: "10px 8px", fontSize: 12, color: "#64748b" }}>{ticket.assignee?.name || ticket.assignee?.username || "—"}</td>
       <td style={{ padding: "10px 8px" }}><DueChip dueAt={ticket.dueAt} status={ticket.status} /></td>
       <td style={{ padding: "10px 8px", fontSize: 12, color: "#94a3b8" }}>{fmtDate(ticket.createdAt)}</td>
@@ -196,6 +202,7 @@ function TicketDetail({
   const [archiving, setArchiving] = useState(false);
   const [archiveReason, setArchiveReason] = useState("");
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [pendingResolve, setPendingResolve] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({ platform: ticket.platform, username: ticket.username, orderNumber: ticket.orderNumber, issueCategory: ticket.issueCategory, priority: ticket.priority, assignedTo: String(ticket.assignedTo || "") });
 
@@ -276,8 +283,8 @@ function TicketDetail({
       {/* Header badges */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         <Badge text={LABEL[full.platform]} bg={full.platform === "whatnot" ? "#7c3aed" : "#0f172a"} />
-        <Badge text={LABEL[full.status]} bg={STATUS_COLOR[full.status]} />
-        <Badge text={LABEL[full.priority]} bg={PRIORITY_COLOR[full.priority]} />
+        <Badge text={LABEL[full.status]} bg={STATUS_STYLE[full.status].bg} color={STATUS_STYLE[full.status].text} dot={STATUS_STYLE[full.status].dot} />
+        <Badge text={LABEL[full.priority]} bg={PRIORITY_STYLE[full.priority].bg} color={PRIORITY_STYLE[full.priority].text} dot={PRIORITY_STYLE[full.priority].dot} />
         <Badge text={LABEL[full.issueCategory]} bg="#e2e8f0" color="#334155" />
         {full.isArchived && <Badge text="Archived" bg="#dc2626" />}
         {timeInfo && <span style={{ fontSize: 12, fontWeight: 600, color: timeInfo.overdue ? "#dc2626" : "#64748b", alignSelf: "center" }}>{timeInfo.label}</span>}
@@ -337,8 +344,24 @@ function TicketDetail({
           <div style={{ fontSize: 12, fontWeight: 600, color: "#64748b", marginBottom: 6 }}>Change Status</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {STATUSES.filter((s) => s !== full.status && (s !== "resolved" || canResolve)).map((s) => (
-              <button key={s} onClick={() => changeStatus(s)} disabled={changingStatus} style={{ ...btnSecondary, fontSize: 12, padding: "4px 10px" }}>{LABEL[s]}</button>
+              <button key={s} onClick={() => s === "resolved" ? setPendingResolve(true) : changeStatus(s)} disabled={changingStatus} style={{ ...btnSecondary, fontSize: 12, padding: "4px 12px", backgroundColor: STATUS_STYLE[s].bg, color: STATUS_STYLE[s].text, borderColor: STATUS_STYLE[s].dot, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: STATUS_STYLE[s].dot, flexShrink: 0 }} />
+                {LABEL[s]}
+              </button>
             ))}
+            {pendingResolve && (
+              <div style={{ width: "100%", marginTop: 10, background: "#dcfce7", border: "1px solid #22c55e", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <span style={{ fontSize: 13, color: "#15803d", fontWeight: 500 }}>
+                  ✓ Mark this ticket as <strong>Resolved</strong>? This cannot be undone.
+                </span>
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  <button onClick={() => { setPendingResolve(false); changeStatus("resolved"); }} disabled={changingStatus} style={{ ...btnSecondary, fontSize: 12, padding: "4px 12px", backgroundColor: "#16a34a", color: "#fff", borderColor: "#16a34a" }}>
+                    {changingStatus ? "Resolving…" : "Yes, Resolve"}
+                  </button>
+                  <button onClick={() => setPendingResolve(false)} style={{ ...btnSecondary, fontSize: 12, padding: "4px 12px" }}>Cancel</button>
+                </div>
+              </div>
+            )}
           </div>
           {!canResolve && (
             <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>

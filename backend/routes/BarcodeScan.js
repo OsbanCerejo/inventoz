@@ -16,6 +16,8 @@ const toTableName = (model) => {
 const TABLES = {
   scans: `\`${toTableName(BarcodeScan)}\``,
   users: `\`${toTableName(User)}\``,
+  whatnotItems: `\`${toTableName(WhatnotShipmentItem)}\``,
+  tiktokItems: `\`${toTableName(TikTokShipmentItem)}\``,
 };
 
 const isDateOnly = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
@@ -118,7 +120,7 @@ const buildFulfillmentCheck = async (tracking) => {
     };
   }
 
-  const [whatnotRows, tiktokRows] = await Promise.all([
+  let [whatnotRows, tiktokRows] = await Promise.all([
     WhatnotShipmentItem.findAll({
       where: trackingWhere,
       attributes: ["shipmentId", "tracking", "closedAt"],
@@ -130,6 +132,31 @@ const buildFulfillmentCheck = async (tracking) => {
       raw: true,
     }),
   ]);
+
+  // Reverse suffix fallback: handles carriers (e.g. FedEx) where the label barcode
+  // encodes routing prefix digits before the actual tracking number stored in the DB.
+  // e.g. scanned '9631091350207286700400381902107408' matches stored '381902107408'
+  // The forward LIKE above ('%candidate') only works when stored >= scanned length.
+  // This reverse check handles stored < scanned.
+  if (whatnotRows.length === 0 && tiktokRows.length === 0) {
+    const compact = normalizedTracking.replace(/\s+/g, "");
+    if (compact.length > 12) {
+      const [[whatnotSuffix], [tiktokSuffix]] = await Promise.all([
+        sequelize.query(
+          `SELECT shipmentId, tracking, closedAt FROM ${TABLES.whatnotItems}
+           WHERE tracking IS NOT NULL AND tracking != '' AND :scanned LIKE CONCAT('%', tracking)`,
+          { replacements: { scanned: compact }, raw: true }
+        ),
+        sequelize.query(
+          `SELECT shipmentId, tracking, closedAt FROM ${TABLES.tiktokItems}
+           WHERE tracking IS NOT NULL AND tracking != '' AND :scanned LIKE CONCAT('%', tracking)`,
+          { replacements: { scanned: compact }, raw: true }
+        ),
+      ]);
+      if (whatnotSuffix && whatnotSuffix.length > 0) whatnotRows = whatnotSuffix;
+      if (tiktokSuffix && tiktokSuffix.length > 0) tiktokRows = tiktokSuffix;
+    }
+  }
 
   const sources = [
     summarizeFulfillmentSource("whatnot", whatnotRows),
