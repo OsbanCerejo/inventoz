@@ -32,8 +32,281 @@ import {
   Switch,
   Divider,
   Grid,
-  TextField
+  TextField,
+  Tooltip,
 } from '@mui/material';
+
+// ---------------------------------------------------------------------------
+// Permission display configuration
+// ---------------------------------------------------------------------------
+
+type SubSectionConfig = {
+  label: string;
+  resources: string[];
+  actions: Record<string, { label: string; description: string }>;
+  menuLabel?: string;
+};
+
+type ModuleConfig = {
+  /** Section header shown in the permissions dialog */
+  label: string;
+  /** All resource keys that belong to this module (for grouping) */
+  resources: string[];
+  /** Human-readable label per action key */
+  actions: Record<string, { label: string; description: string }>;
+  /** Human-readable label for the menu access toggle */
+  menuLabel?: string;
+  /** Optional sub-sections rendered within this module (e.g. Analytics within Whatnot) */
+  subSections?: SubSectionConfig[];
+};
+
+const MODULE_CONFIG: Record<string, ModuleConfig> = {
+  products: {
+    label: 'Products',
+    resources: ['products', 'addProduct'],
+    menuLabel: 'Show Products in menu',
+    actions: {
+      view:   { label: 'View',   description: 'Browse and search the product catalog' },
+      create: { label: 'Add',    description: 'Create new product records' },
+      edit:   { label: 'Edit',   description: 'Update product details and stock' },
+      delete: { label: 'Delete', description: 'Remove products from the system' },
+    },
+  },
+  inbound: {
+    label: 'Inbound',
+    resources: ['inbound'],
+    menuLabel: 'Show Inbound in menu',
+    actions: {
+      view:   { label: 'View',   description: 'View inbound shipment records' },
+      create: { label: 'Create', description: 'Log new inbound shipments' },
+      edit:   { label: 'Edit',   description: 'Update inbound records' },
+      delete: { label: 'Delete', description: 'Remove inbound records' },
+    },
+  },
+  orders: {
+    label: 'Orders',
+    resources: ['orders'],
+    menuLabel: 'Show Orders in menu',
+    actions: {
+      view:    { label: 'View',    description: 'View all orders' },
+      create:  { label: 'Create',  description: 'Create new orders' },
+      edit:    { label: 'Edit',    description: 'Update order details' },
+      delete:  { label: 'Delete',  description: 'Delete orders' },
+      approve: { label: 'Approve', description: 'Approve orders for fulfillment' },
+    },
+  },
+  packing: {
+    label: 'Packing',
+    resources: ['packing'],
+    menuLabel: 'Show Packing in menu',
+    actions: {
+      view: { label: 'View', description: 'Access packing mode' },
+    },
+  },
+  packingAnalytics: {
+    label: 'Packing Analytics',
+    resources: ['packingAnalytics'],
+    menuLabel: 'Show Packing Analytics in menu',
+    actions: {
+      view: { label: 'View', description: 'View packing performance analytics' },
+    },
+  },
+  sales: {
+    label: 'Sales',
+    resources: ['sales'],
+    menuLabel: 'Show Sales in menu',
+    actions: {
+      view:   { label: 'View',   description: 'View sales records' },
+      create: { label: 'Create', description: 'Log new sales' },
+      edit:   { label: 'Edit',   description: 'Update sales records' },
+      delete: { label: 'Delete', description: 'Delete sales records' },
+    },
+  },
+  pricelist: {
+    label: 'Price List',
+    resources: ['pricelist'],
+    menuLabel: 'Show Price List in menu',
+    actions: {
+      view:   { label: 'View',   description: 'View the price list' },
+      create: { label: 'Create', description: 'Add price entries' },
+      edit:   { label: 'Edit',   description: 'Update prices' },
+      delete: { label: 'Delete', description: 'Remove price entries' },
+    },
+  },
+  priceScanner: {
+    label: 'Price Scanner',
+    resources: ['priceScanner'],
+    menuLabel: 'Show Price Scanner in menu',
+    actions: {
+      view: { label: 'View', description: 'Use the price scanner tool' },
+    },
+  },
+  whatnot: {
+    label: 'Whatnot',
+    resources: ['whatnot', 'whatnotFulfillment'],
+    menuLabel: 'Show Whatnot in menu',
+    actions: {
+      view:   { label: 'View',   description: 'View Whatnot shows and fulfillment orders' },
+      create: { label: 'Create', description: 'Create Whatnot shows and fulfillment records' },
+      edit:   { label: 'Edit',   description: 'Update Whatnot shows and fulfillment records' },
+      delete: { label: 'Delete', description: 'Delete Whatnot records' },
+    },
+    subSections: [
+      {
+        label: 'Analytics',
+        resources: ['whatnotAnalytics'],
+        menuLabel: 'Show Whatnot Analytics in menu',
+        actions: {
+          view: { label: 'View', description: 'View Whatnot show and fulfillment analytics dashboards' },
+        },
+      },
+    ],
+  },
+  tiktok: {
+    label: 'TikTok',
+    resources: ['tiktokFulfillment'],
+    menuLabel: 'Show TikTok Fulfillment in menu',
+    actions: {
+      view:   { label: 'View',   description: 'View TikTok fulfillment orders' },
+      create: { label: 'Create', description: 'Create TikTok fulfillment records' },
+      edit:   { label: 'Edit',   description: 'Update TikTok fulfillment records' },
+      delete: { label: 'Delete', description: 'Delete TikTok fulfillment records' },
+    },
+  },
+  walmart: {
+    label: 'Walmart',
+    resources: ['walmartIntegration', 'walmartOrders'],
+    menuLabel: 'Show Walmart in menu',
+    actions: {
+      view:   { label: 'View',   description: 'View Walmart integration, catalog, and orders' },
+      create: { label: 'Create', description: 'Create Walmart records' },
+      edit:   { label: 'Edit',   description: 'Update Walmart records' },
+      delete: { label: 'Delete', description: 'Delete Walmart records' },
+    },
+  },
+  hba: {
+    label: 'HBA',
+    resources: ['hbaOrders', 'hbaListing', 'hbaAnalytics'],
+    menuLabel: 'Show HBA in menu',
+    actions: {
+      view:   { label: 'View',   description: 'View HBA orders, listings, and analytics' },
+      create: { label: 'Create', description: 'Create HBA orders' },
+      edit:   { label: 'Edit',   description: 'Update HBA orders and listings' },
+      delete: { label: 'Delete', description: 'Delete HBA orders' },
+    },
+  },
+  labelGenerator: {
+    label: 'Label Generator',
+    resources: ['labelGenerator'],
+    menuLabel: 'Show Label Generator in menu',
+    actions: {
+      view: { label: 'View', description: 'Use the label generator tool' },
+    },
+  },
+  barcodeScan: {
+    label: 'Barcode Scanner',
+    resources: ['barcodeScan'],
+    menuLabel: 'Show Barcode Scanner in menu',
+    actions: {
+      view:   { label: 'View',   description: 'Use the barcode scanner' },
+      create: { label: 'Scan',   description: 'Log barcode scans' },
+    },
+  },
+  lowStock: {
+    label: 'Low Stock Alerts',
+    resources: ['lowStock'],
+    menuLabel: 'Show Low Stock in menu',
+    actions: {
+      view: { label: 'View', description: 'View low stock alerts' },
+    },
+  },
+  sortingAnalytics: {
+    label: 'Sorting Analytics',
+    resources: ['sortingAnalytics'],
+    menuLabel: 'Show Sorting Analytics in menu',
+    actions: {
+      view: { label: 'View', description: 'View sorting performance analytics' },
+    },
+  },
+  brands: {
+    label: 'Brand Management',
+    resources: ['brands'],
+    menuLabel: 'Show Brand Management in menu',
+    actions: {
+      view:   { label: 'View',   description: 'View brand records' },
+      create: { label: 'Create', description: 'Add new brands' },
+      edit:   { label: 'Edit',   description: 'Update brand details' },
+      delete: { label: 'Delete', description: 'Remove brands' },
+    },
+  },
+  invoiceTracker: {
+    label: 'Invoice Tracker',
+    resources: ['invoiceTracker'],
+    menuLabel: 'Show Invoice Tracker in menu',
+    actions: {
+      view:   { label: 'View',   description: 'View invoices and payment records' },
+      create: { label: 'Create', description: 'Create new invoices' },
+      edit:   { label: 'Edit',   description: 'Update invoice details' },
+      delete: { label: 'Delete', description: 'Delete invoices' },
+    },
+  },
+  tickets: {
+    label: 'Reshipment Tickets',
+    resources: ['tickets'],
+    menuLabel: 'Show Reshipment Tickets in menu',
+    actions: {
+      view:   { label: 'View',   description: 'View reshipment tickets' },
+      create: { label: 'Create', description: 'Open new reshipment tickets' },
+      edit:   { label: 'Edit',   description: 'Update ticket details' },
+      delete: { label: 'Delete', description: 'Delete tickets' },
+    },
+  },
+  customerService: {
+    label: 'Customer Service',
+    resources: ['customerService'],
+    menuLabel: 'Show Customer Service in menu',
+    actions: {
+      view:    { label: 'View',    description: 'View and work on CS tickets' },
+      create:  { label: 'Create',  description: 'Open new CS tickets' },
+      edit:    { label: 'Edit',    description: 'Update ticket details' },
+      assign:  { label: 'Assign',  description: 'Assign tickets to team members, reopen resolved tickets, and receive manager notifications' },
+      resolve: { label: 'Resolve', description: 'Mark tickets as resolved' },
+      archive: { label: 'Archive', description: 'Archive or cancel tickets' },
+    },
+  },
+  users: {
+    label: 'User Management',
+    resources: ['users'],
+    menuLabel: 'Show User Management in menu',
+    actions: {
+      view:   { label: 'View',   description: 'View the user list' },
+      create: { label: 'Create', description: 'Add new users' },
+      edit:   { label: 'Edit',   description: 'Update user details and permissions' },
+      delete: { label: 'Delete', description: 'Deactivate or remove users' },
+    },
+  },
+};
+
+// Resources that belong to dead/removed features — hide from the UI
+const HIDDEN_RESOURCES = new Set(['employeeInfo', 'pricing', 'ebay']);
+
+// Build a reverse lookup: resource → module key
+const RESOURCE_TO_MODULE = new Map<string, string>();
+for (const [moduleKey, config] of Object.entries(MODULE_CONFIG)) {
+  for (const resource of config.resources) {
+    RESOURCE_TO_MODULE.set(resource, moduleKey);
+  }
+}
+
+// Menu keys that are sub-items of a merged module (don't show as separate top-level entries).
+// whatnotAnalytics is NOT here — it has its own menu toggle inside the Whatnot sub-section.
+const MERGED_MENU_KEYS = new Set<string>([
+  'whatnotFulfillment',  // shown under 'whatnot' module (merged with main)
+  'walmartOrders',       // shown under 'walmart' module
+  'hbaAnalytics',        // shown under 'hba' module
+]);
+
+// ---------------------------------------------------------------------------
 
 type ActiveSession = {
   id: number;
@@ -296,12 +569,6 @@ const Users: React.FC = () => {
     }
   };
 
-  const handlePermissionToggle = (permissionId: number, allowed: boolean) => {
-    setPermissionRows((prev) =>
-      prev.map((row) => (row.id === permissionId ? { ...row, allowed } : row))
-    );
-  };
-
   const handleSavePermissions = async () => {
     if (!permissionsTargetUser) return;
     try {
@@ -382,12 +649,171 @@ const Users: React.FC = () => {
     return parts.length > 0 ? parts.join(', ') : 'Unknown';
   };
 
-  const groupedPermissions = permissionRows.reduce((acc, row) => {
-    const group = row.scopeType === 'menu' ? 'Menu Visibility' : (row.resource || 'Other');
-    if (!acc[group]) acc[group] = [];
-    acc[group].push(row);
-    return acc;
-  }, {} as Record<string, UserPermissionRow[]>);
+  // Build a structured view of permissions grouped by module.
+  // Each module section contains: an optional menu toggle + action toggles.
+  // For modules that merge multiple resources (e.g. Whatnot), one toggle updates all sub-resource rows.
+  type ActionEntry = {
+    /** The representative row (used for display + primary toggle) */
+    row: UserPermissionRow;
+    /** All row IDs for this action across all resources in the module (toggling one toggles all) */
+    allRowIds: number[];
+    actionLabel: string;
+    description: string;
+  };
+  type SubSection = {
+    label: string;
+    menuRow: UserPermissionRow | null;
+    allMenuRowIds: number[];
+    menuLabel: string;
+    actionRows: ActionEntry[];
+  };
+  type ModuleSection = {
+    moduleKey: string;
+    label: string;
+    menuRow: UserPermissionRow | null;
+    /** All menu row IDs in this module (toggling menu toggles all sub-menus too) */
+    allMenuRowIds: number[];
+    menuLabel: string;
+    actionRows: ActionEntry[];
+    subSections: SubSection[];
+  };
+
+  const buildModuleSections = (): ModuleSection[] => {
+    const rowByKey = new Map(permissionRows.map((r) => [r.key, r]));
+    const sections: ModuleSection[] = [];
+    const handledKeys = new Set<string>();
+
+    for (const [moduleKey, config] of Object.entries(MODULE_CONFIG)) {
+      // Collect all menu rows for this module (primary + merged sub-menus)
+      const allMenuRowIds: number[] = [];
+      const primaryMenuRow = rowByKey.get(`menu.${config.resources[0]}`) || null;
+      if (primaryMenuRow) {
+        handledKeys.add(primaryMenuRow.key);
+        allMenuRowIds.push(primaryMenuRow.id);
+      }
+      // Also collect any merged sub-menu rows
+      for (const resource of config.resources.slice(1)) {
+        const subMenuRow = rowByKey.get(`menu.${resource}`);
+        if (subMenuRow) {
+          handledKeys.add(subMenuRow.key);
+          allMenuRowIds.push(subMenuRow.id);
+        }
+      }
+
+      // Collect action entries — one per unique action, merging across all resources
+      const actionMap = new Map<string, ActionEntry>();
+      for (const resource of config.resources) {
+        for (const [action, actionConfig] of Object.entries(config.actions)) {
+          const key = `${resource}.${action}`;
+          const row = rowByKey.get(key);
+          if (!row) continue;
+          handledKeys.add(row.key);
+          if (!actionMap.has(action)) {
+            actionMap.set(action, {
+              row,
+              allRowIds: [row.id],
+              actionLabel: actionConfig.label,
+              description: actionConfig.description,
+            });
+          } else {
+            const existing = actionMap.get(action)!;
+            existing.allRowIds.push(row.id);
+            // If any sub-resource has this ON, show the toggle as ON
+            if (row.allowed && !existing.row.allowed) {
+              existing.row = row;
+            }
+          }
+        }
+      }
+
+      // Build sub-sections (e.g. Whatnot Analytics within Whatnot)
+      const subSections: SubSection[] = [];
+      for (const subConfig of config.subSections || []) {
+        const subMenuRow = rowByKey.get(`menu.${subConfig.resources[0]}`) || null;
+        const subMenuRowIds: number[] = subMenuRow ? [subMenuRow.id] : [];
+        if (subMenuRow) handledKeys.add(subMenuRow.key);
+
+        const subActionMap = new Map<string, ActionEntry>();
+        for (const resource of subConfig.resources) {
+          for (const [action, actionConfig] of Object.entries(subConfig.actions)) {
+            const key = `${resource}.${action}`;
+            const row = rowByKey.get(key);
+            if (!row) continue;
+            handledKeys.add(row.key);
+            if (!subActionMap.has(action)) {
+              subActionMap.set(action, { row, allRowIds: [row.id], actionLabel: actionConfig.label, description: actionConfig.description });
+            } else {
+              const existing = subActionMap.get(action)!;
+              existing.allRowIds.push(row.id);
+              if (row.allowed && !existing.row.allowed) existing.row = row;
+            }
+          }
+        }
+
+        if (subMenuRow || subActionMap.size > 0) {
+          subSections.push({
+            label: subConfig.label,
+            menuRow: subMenuRow,
+            allMenuRowIds: subMenuRowIds,
+            menuLabel: subConfig.menuLabel || `Show ${subConfig.label} in menu`,
+            actionRows: [...subActionMap.values()],
+          });
+        }
+      }
+
+      if (!primaryMenuRow && actionMap.size === 0 && subSections.length === 0) continue;
+
+      sections.push({
+        moduleKey,
+        label: config.label,
+        menuRow: primaryMenuRow,
+        allMenuRowIds,
+        menuLabel: config.menuLabel || `Show ${config.label} in menu`,
+        actionRows: [...actionMap.values()],
+        subSections,
+      });
+    }
+
+    // Catch-all: any permissions not handled by a module config
+    const unhandled = permissionRows.filter(
+      (r) => !handledKeys.has(r.key) && !HIDDEN_RESOURCES.has(r.resource || '') && !MERGED_MENU_KEYS.has(r.menuKey || '')
+    );
+    if (unhandled.length > 0) {
+      const otherGroups = new Map<string, UserPermissionRow[]>();
+      for (const row of unhandled) {
+        const groupKey = row.scopeType === 'menu' ? `menu:${row.menuKey}` : (row.resource || 'Other');
+        if (!otherGroups.has(groupKey)) otherGroups.set(groupKey, []);
+        otherGroups.get(groupKey)!.push(row);
+      }
+      for (const [groupKey, rows] of otherGroups) {
+        sections.push({
+          moduleKey: `__other_${groupKey}`,
+          label: groupKey,
+          menuRow: null,
+          allMenuRowIds: [],
+          menuLabel: '',
+          actionRows: rows.map((r) => ({
+            row: r,
+            allRowIds: [r.id],
+            actionLabel: r.action || r.menuKey || r.key,
+            description: r.key,
+          })),
+          subSections: [],
+        });
+      }
+    }
+
+    return sections;
+  };
+
+  const moduleSections = buildModuleSections();
+
+  // Toggle all rows for an action (handles merged multi-resource modules)
+  const handleActionToggle = (allRowIds: number[], allowed: boolean) => {
+    setPermissionRows((prev) =>
+      prev.map((row) => allRowIds.includes(row.id) ? { ...row, allowed } : row)
+    );
+  };
 
   return (
     <Box sx={{ mt: 4, px: 3 }}>
@@ -575,48 +1001,133 @@ const Users: React.FC = () => {
               <Alert severity="info" sx={{ mb: 2 }}>
                 Toggle each permission on/off. Changes are saved for this user only.
               </Alert>
-              {Object.entries(groupedPermissions).map(([groupName, rows]) => (
-                <Box key={groupName} sx={{ mb: 2 }}>
+              {moduleSections.map((section, idx) => (
+                <Box key={section.moduleKey} sx={{ mb: 2 }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                    {groupName}
+                    {section.label}
                   </Typography>
                   <Grid container spacing={1}>
-                    {rows.map((row) => (
-                      <Grid item xs={12} sm={6} key={row.id}>
-                        <Box
-                          sx={{
-                            border: '1px solid #e5e7eb',
-                            borderRadius: 1,
-                            px: 1.5,
-                            py: 1,
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                              {row.scopeType === 'menu' ? `Menu: ${row.menuKey}` : `${row.resource} - ${row.action}`}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {row.key}
-                            </Typography>
+                    {/* Menu access toggle */}
+                    {section.menuRow && (
+                      <Grid item xs={12} sm={6} key={`menu-${section.menuRow.id}`}>
+                        <Tooltip title="Controls whether this section appears in the navigation menu" placement="top" arrow>
+                          <Box
+                            sx={{
+                              border: '1px solid #e5e7eb',
+                              borderRadius: 1,
+                              px: 1.5,
+                              py: 1,
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              bgcolor: '#f9fafb',
+                            }}
+                          >
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                Menu Access
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {section.menuLabel}
+                              </Typography>
+                            </Box>
+                            <FormControlLabel
+                              control={
+                                <Switch
+                                  checked={!!section.menuRow.allowed}
+                                  onChange={(e) => handleActionToggle(section.allMenuRowIds, e.target.checked)}
+                                />
+                              }
+                              label={section.menuRow.allowed ? 'ON' : 'OFF'}
+                              labelPlacement="start"
+                            />
                           </Box>
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={!!row.allowed}
-                                onChange={(e) => handlePermissionToggle(row.id, e.target.checked)}
-                              />
-                            }
-                            label={row.allowed ? 'ON' : 'OFF'}
-                            labelPlacement="start"
-                          />
-                        </Box>
+                        </Tooltip>
+                      </Grid>
+                    )}
+                    {/* Action permission toggles */}
+                    {section.actionRows.map(({ row, allRowIds, actionLabel, description }) => (
+                      <Grid item xs={12} sm={6} key={`action-${row.id}`}>
+                        <Tooltip title={description} placement="top" arrow>
+                          <Box
+                            sx={{
+                              border: '1px solid #e5e7eb',
+                              borderRadius: 1,
+                              px: 1.5,
+                              py: 1,
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                {actionLabel}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {row.key}
+                              </Typography>
+                            </Box>
+                            <FormControlLabel
+                              control={
+                                <Switch
+                                  checked={!!row.allowed}
+                                  onChange={(e) => handleActionToggle(allRowIds, e.target.checked)}
+                                />
+                              }
+                              label={row.allowed ? 'ON' : 'OFF'}
+                              labelPlacement="start"
+                            />
+                          </Box>
+                        </Tooltip>
                       </Grid>
                     ))}
                   </Grid>
-                  <Divider sx={{ mt: 2 }} />
+                  {/* Sub-sections (e.g. Analytics within Whatnot) */}
+                  {section.subSections.map((sub) => (
+                    <Box key={sub.label} sx={{ mt: 2 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', mb: 1, textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.08em' }}>
+                        {sub.label}
+                      </Typography>
+                      <Grid container spacing={1}>
+                        {sub.menuRow && (
+                          <Grid item xs={12} sm={6} key={`sub-menu-${sub.menuRow.id}`}>
+                            <Tooltip title="Controls whether the analytics section appears in the navigation menu" placement="top" arrow>
+                              <Box sx={{ border: '1px solid #e5e7eb', borderRadius: 1, px: 1.5, py: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#f9fafb' }}>
+                                <Box>
+                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>Menu Access</Typography>
+                                  <Typography variant="caption" color="text.secondary">{sub.menuLabel}</Typography>
+                                </Box>
+                                <FormControlLabel
+                                  control={<Switch checked={!!sub.menuRow.allowed} onChange={(e) => handleActionToggle(sub.allMenuRowIds, e.target.checked)} />}
+                                  label={sub.menuRow.allowed ? 'ON' : 'OFF'}
+                                  labelPlacement="start"
+                                />
+                              </Box>
+                            </Tooltip>
+                          </Grid>
+                        )}
+                        {sub.actionRows.map(({ row, allRowIds, actionLabel, description }) => (
+                          <Grid item xs={12} sm={6} key={`sub-action-${row.id}`}>
+                            <Tooltip title={description} placement="top" arrow>
+                              <Box sx={{ border: '1px solid #e5e7eb', borderRadius: 1, px: 1.5, py: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Box>
+                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>{actionLabel}</Typography>
+                                  <Typography variant="caption" color="text.secondary">{row.key}</Typography>
+                                </Box>
+                                <FormControlLabel
+                                  control={<Switch checked={!!row.allowed} onChange={(e) => handleActionToggle(allRowIds, e.target.checked)} />}
+                                  label={row.allowed ? 'ON' : 'OFF'}
+                                  labelPlacement="start"
+                                />
+                              </Box>
+                            </Tooltip>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    </Box>
+                  ))}
+                  {idx < moduleSections.length - 1 && <Divider sx={{ mt: 2 }} />}
                 </Box>
               ))}
             </Box>

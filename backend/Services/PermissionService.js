@@ -135,47 +135,26 @@ class PermissionService {
 
   static async saveUserPermissionMatrix(userId, items = []) {
     const now = new Date();
-    const permissionIds = items
-      .map((item) => Number(item.permissionId))
-      .filter((id) => Number.isInteger(id) && id > 0);
 
-    if (permissionIds.length === 0) {
-      await UserPermission.destroy({ where: { userId } });
-      this.clearUserCache(userId);
-      return;
-    }
+    // Delete all existing rows for this user — we'll re-insert only the allowed ones.
+    // Storing allowed=false rows is wasteful; a missing row is treated as false by resolveForUser.
+    await UserPermission.destroy({ where: { userId } });
 
-    const existing = await UserPermission.findAll({
-      where: {
+    const toInsert = items
+      .filter((item) => {
+        const id = Number(item.permissionId);
+        return Number.isInteger(id) && id > 0 && !!item.allowed;
+      })
+      .map((item) => ({
         userId,
-        permissionId: { [Op.in]: permissionIds },
-      },
-    });
-    const existingMap = new Map(existing.map((row) => [row.permissionId, row]));
-    const upserts = [];
+        permissionId: Number(item.permissionId),
+        allowed: true,
+        createdAt: now,
+        updatedAt: now,
+      }));
 
-    for (const item of items) {
-      const permissionId = Number(item.permissionId);
-      if (!Number.isInteger(permissionId) || permissionId <= 0) continue;
-      const allowed = !!item.allowed;
-      const row = existingMap.get(permissionId);
-      if (row) {
-        row.allowed = allowed;
-        row.updatedAt = now;
-        await row.save();
-      } else {
-        upserts.push({
-          userId,
-          permissionId,
-          allowed,
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
-    }
-
-    if (upserts.length > 0) {
-      await UserPermission.bulkCreate(upserts);
+    if (toInsert.length > 0) {
+      await UserPermission.bulkCreate(toInsert);
     }
 
     this.clearUserCache(userId);
