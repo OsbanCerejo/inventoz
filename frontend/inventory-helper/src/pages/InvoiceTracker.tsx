@@ -11,6 +11,16 @@ import {
   Inventory2 as InventoryIcon,
   Email as EmailIcon,
   Upload as UploadIcon,
+  Search as SearchIcon,
+  FilterList as FilterListIcon,
+  ReceiptLong as ReceiptIcon,
+  LocalShipping as ShippingIcon,
+  AttachMoney as MoneyIcon,
+  Pending as PendingIcon,
+  Warning as WarningIcon,
+  CheckCircleOutline as CheckCircleIcon,
+  ArticleOutlined as ArticleIcon,
+  PaymentsOutlined as PaymentsIcon,
 } from "@mui/icons-material";
 import {
   Autocomplete,
@@ -26,9 +36,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControl,
   Grid,
   IconButton,
+  InputAdornment,
   InputLabel,
   FormControlLabel,
   MenuItem,
@@ -43,6 +55,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import { getApiUrl } from "../config/api";
@@ -1170,6 +1183,28 @@ function InvoiceTracker() {
     (form.paymentStatus === "credit" || form.paymentStatus === "partial") &&
     !!form.paymentDueBy;
 
+  const clearFilters = () => {
+    setSearch("");
+    setDateFrom("");
+    setDateTo("");
+    setShipmentStatusFilter("all");
+    setItemCheckStatusFilter("all");
+    setInboundStatusFilter("all");
+    setPaymentStatusFilter("all");
+    setShowArchived(false);
+  };
+
+  const activeFilterCount = [
+    search.trim(),
+    dateFrom,
+    dateTo,
+    shipmentStatusFilter !== "all" ? shipmentStatusFilter : "",
+    itemCheckStatusFilter !== "all" ? itemCheckStatusFilter : "",
+    inboundStatusFilter !== "all" ? inboundStatusFilter : "",
+    paymentStatusFilter !== "all" ? paymentStatusFilter : "",
+    showArchived ? "archived" : "",
+  ].filter(Boolean).length;
+
   const canSelectInboundRow = (row: InboundRow) => row.resolutionStatus === "resolved";
 
   const resolveInboundRow = async (row: InboundRow) => {
@@ -1252,192 +1287,159 @@ function InvoiceTracker() {
 
   return (
     <Box sx={{ p: 3 }}>
+      {/* ── Page header ── */}
       <Stack
-        direction={{ xs: "column", md: "row" }}
+        direction={{ xs: "column", sm: "row" }}
         spacing={2}
         justifyContent="space-between"
-        alignItems={{ xs: "flex-start", md: "center" }}
-        sx={{ mb: 2 }}
+        alignItems={{ xs: "flex-start", sm: "center" }}
+        sx={{ mb: 3 }}
       >
         <Box>
-          <Typography variant="h4" fontWeight={700}>
+          <Typography variant="h4" fontWeight={800} letterSpacing="-0.5px">
             Invoice Tracker
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Track vendor invoices, item verification, and inbound progress in one place.
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1}>
-          <Button startIcon={<RefreshIcon />} variant="outlined" onClick={loadInvoices}>
-            Refresh
-          </Button>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Tooltip title="Refresh invoices">
+            <IconButton onClick={loadInvoices} size="medium" sx={{ border: "1px solid", borderColor: "divider" }}>
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           {canCreate && (
-            <Button startIcon={<AddIcon />} variant="contained" onClick={openCreateDialog}>
+            <Button
+              startIcon={<AddIcon />}
+              variant="contained"
+              onClick={openCreateDialog}
+              size="medium"
+              sx={{ fontWeight: 700, px: 2.5 }}
+            >
               New Invoice
             </Button>
           )}
         </Stack>
       </Stack>
 
-      <Card sx={{ mb: 2 }}>
-        <CardContent>
-          <Stack spacing={2}>
-            <Stack
-              direction={{ xs: "column", lg: "row" }}
-              spacing={2}
-              alignItems={{ xs: "stretch", lg: "center" }}
-            >
-              <TextField
-                fullWidth
-                label="Search Invoices"
-                placeholder="Vendor, invoice #, SKU, or item name"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+      {/* ── Filter bar ── */}
+      <Paper variant="outlined" sx={{ mb: 2, overflow: "hidden" }}>
+        {/* Search row */}
+        <Box sx={{ px: 2, pt: 2, pb: 1.5 }}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ xs: "stretch", sm: "center" }}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search by vendor, invoice #, SKU, or item name…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" sx={{ color: "text.disabled" }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+            />
+            {activeFilterCount > 0 && (
               <Button
+                size="small"
                 variant="outlined"
-                sx={{ minWidth: 120, height: "56px" }}
-                onClick={() => {
-                  setSearch("");
-                  setDateFrom("");
-                  setDateTo("");
-                  setShipmentStatusFilter("all");
-                  setItemCheckStatusFilter("all");
-                  setInboundStatusFilter("all");
-                  setPaymentStatusFilter("all");
-                  setShowArchived(false);
-                }}
+                color="error"
+                onClick={clearFilters}
+                sx={{ whiteSpace: "nowrap", flexShrink: 0 }}
               >
-                Clear
+                Clear&nbsp;
+                <Chip
+                  size="small"
+                  label={activeFilterCount}
+                  color="error"
+                  sx={{ height: 18, fontSize: "0.7rem", ml: 0.25, cursor: "pointer" }}
+                />
               </Button>
-            </Stack>
-
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={4}>
-                <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
-                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
-                    Order Date Range
-                  </Typography>
-                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-                    <TextField
-                      fullWidth
-                      type="date"
-                      label="From"
-                      value={dateFrom}
-                      onChange={(e) => setDateFrom(e.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                    />
-                    <TextField
-                      fullWidth
-                      type="date"
-                      label="To"
-                      value={dateTo}
-                      onChange={(e) => setDateTo(e.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </Stack>
-                </Paper>
-              </Grid>
-
-              <Grid item xs={12} md={8}>
-                <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
-                  <Stack
-                    direction={{ xs: "column", md: "row" }}
-                    justifyContent="space-between"
-                    alignItems={{ xs: "flex-start", md: "center" }}
-                    spacing={1}
-                    sx={{ mb: 1.5 }}
-                  >
-                    <Typography variant="subtitle2" fontWeight={700}>
-                      Status Filters
-                    </Typography>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={showArchived}
-                          onChange={(e) => setShowArchived(e.target.checked)}
-                        />
-                      }
-                      label="Archived"
-                      sx={{ mr: 0 }}
-                    />
-                  </Stack>
-                  <Grid container spacing={1.5}>
-                    <Grid item xs={12} sm={6} lg={3}>
-                      <FormControl fullWidth>
-                        <InputLabel>Payment</InputLabel>
-                        <Select
-                          value={paymentStatusFilter}
-                          label="Payment"
-                          onChange={(e) => setPaymentStatusFilter(String(e.target.value))}
-                        >
-                          <MenuItem value="all">All</MenuItem>
-                          {PAYMENT_STATUS_OPTIONS.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>
-                              {option.label}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={12} sm={6} lg={3}>
-                      <FormControl fullWidth>
-                        <InputLabel>Shipment</InputLabel>
-                        <Select
-                          value={shipmentStatusFilter}
-                          label="Shipment"
-                          onChange={(e) => setShipmentStatusFilter(String(e.target.value))}
-                        >
-                          <MenuItem value="all">All</MenuItem>
-                          {SHIPMENT_STATUS_OPTIONS.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>
-                              {option.label}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={12} sm={6} lg={3}>
-                      <FormControl fullWidth>
-                        <InputLabel>Items Check</InputLabel>
-                        <Select
-                          value={itemCheckStatusFilter}
-                          label="Items Check"
-                          onChange={(e) => setItemCheckStatusFilter(String(e.target.value))}
-                        >
-                          <MenuItem value="all">All</MenuItem>
-                          {ITEM_CHECK_STATUS_OPTIONS.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>
-                              {option.label}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={12} sm={6} lg={3}>
-                      <FormControl fullWidth>
-                        <InputLabel>Inbound</InputLabel>
-                        <Select
-                          value={inboundStatusFilter}
-                          label="Inbound"
-                          onChange={(e) => setInboundStatusFilter(String(e.target.value))}
-                        >
-                          <MenuItem value="all">All</MenuItem>
-                          {INBOUND_STATUS_OPTIONS.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>
-                              {option.label}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                  </Grid>
-                </Paper>
-              </Grid>
-            </Grid>
+            )}
           </Stack>
-        </CardContent>
-      </Card>
+        </Box>
+
+        <Divider />
+
+        {/* Filter controls row */}
+        <Box sx={{ px: 2, py: 1.5, bgcolor: "grey.50" }}>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+            <FilterListIcon fontSize="small" sx={{ color: "text.secondary" }} />
+            <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Filters
+            </Typography>
+          </Stack>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr 1fr",
+                sm: "1fr 1fr 1fr 1fr",
+                lg: "1fr 1fr 1fr 1fr 1fr 1fr auto",
+              },
+              gap: 1.5,
+              alignItems: "center",
+            }}
+          >
+            <TextField
+              size="small"
+              type="date"
+              label="From"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              size="small"
+              type="date"
+              label="To"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            <FormControl size="small" fullWidth>
+              <InputLabel>Payment</InputLabel>
+              <Select value={paymentStatusFilter} label="Payment" onChange={(e) => setPaymentStatusFilter(String(e.target.value))}>
+                <MenuItem value="all">All</MenuItem>
+                {PAYMENT_STATUS_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Shipment</InputLabel>
+              <Select value={shipmentStatusFilter} label="Shipment" onChange={(e) => setShipmentStatusFilter(String(e.target.value))}>
+                <MenuItem value="all">All</MenuItem>
+                {SHIPMENT_STATUS_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Items Check</InputLabel>
+              <Select value={itemCheckStatusFilter} label="Items Check" onChange={(e) => setItemCheckStatusFilter(String(e.target.value))}>
+                <MenuItem value="all">All</MenuItem>
+                {ITEM_CHECK_STATUS_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Inbound</InputLabel>
+              <Select value={inboundStatusFilter} label="Inbound" onChange={(e) => setInboundStatusFilter(String(e.target.value))}>
+                <MenuItem value="all">All</MenuItem>
+                {INBOUND_STATUS_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <Chip
+              label="Archived"
+              size="small"
+              variant={showArchived ? "filled" : "outlined"}
+              color={showArchived ? "primary" : "default"}
+              onClick={() => setShowArchived((v) => !v)}
+              sx={{ cursor: "pointer", fontWeight: showArchived ? 700 : 400, whiteSpace: "nowrap" }}
+            />
+          </Box>
+        </Box>
+      </Paper>
 
       <Box
         sx={{
@@ -1451,28 +1453,80 @@ function InvoiceTracker() {
           mb: 2,
         }}
       >
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Typography variant="body2" color="text.secondary">Total Invoices</Typography>
-          <Typography variant="h5" fontWeight={700}>{metrics.totalInvoices}</Typography>
-        </Paper>
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Typography variant="body2" color="text.secondary">Invoice Amount</Typography>
-          <Typography variant="h5" fontWeight={700}>${metrics.totalAmount.toFixed(2)}</Typography>
-        </Paper>
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Typography variant="body2" color="text.secondary">Received</Typography>
-          <Typography variant="h5" fontWeight={700}>{metrics.receivedInvoices}</Typography>
-        </Paper>
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Typography variant="body2" color="text.secondary">Pending Inbound</Typography>
-          <Typography variant="h5" fontWeight={700}>{metrics.pendingInbound}</Typography>
-        </Paper>
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Typography variant="body2" color="text.secondary">Payment Pending</Typography>
-          <Typography variant="h5" fontWeight={700} color={metrics.creditInvoices > 0 ? "error.main" : "text.primary"}>
-            {metrics.creditInvoices}
-          </Typography>
-        </Paper>
+        {[
+          {
+            label: "Total Invoices",
+            value: metrics.totalInvoices,
+            icon: <ReceiptIcon fontSize="small" />,
+            accent: "#3b82f6",
+            bg: "#eff6ff",
+            valueColor: "text.primary",
+          },
+          {
+            label: "Invoice Amount",
+            value: `$${metrics.totalAmount.toFixed(2)}`,
+            icon: <MoneyIcon fontSize="small" />,
+            accent: "#8b5cf6",
+            bg: "#f5f3ff",
+            valueColor: "text.primary",
+          },
+          {
+            label: "Received",
+            value: metrics.receivedInvoices,
+            icon: <ShippingIcon fontSize="small" />,
+            accent: "#10b981",
+            bg: "#ecfdf5",
+            valueColor: "text.primary",
+          },
+          {
+            label: "Pending Inbound",
+            value: metrics.pendingInbound,
+            icon: <PendingIcon fontSize="small" />,
+            accent: "#f59e0b",
+            bg: "#fffbeb",
+            valueColor: metrics.pendingInbound > 0 ? "#92400e" : "text.primary",
+          },
+          {
+            label: "Payment Pending",
+            value: metrics.creditInvoices,
+            icon: <WarningIcon fontSize="small" />,
+            accent: metrics.creditInvoices > 0 ? "#ef4444" : "#6b7280",
+            bg: metrics.creditInvoices > 0 ? "#fef2f2" : "#f9fafb",
+            valueColor: metrics.creditInvoices > 0 ? "error.main" : "text.primary",
+          },
+        ].map((card) => (
+          <Paper
+            key={card.label}
+            variant="outlined"
+            sx={{
+              p: 2,
+              borderLeft: `4px solid ${card.accent}`,
+              bgcolor: card.bg,
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+            }}
+          >
+            <Box
+              sx={{
+                color: card.accent,
+                display: "flex",
+                alignItems: "center",
+                flexShrink: 0,
+              }}
+            >
+              {card.icon}
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.2 }}>
+                {card.label}
+              </Typography>
+              <Typography variant="h6" fontWeight={700} color={card.valueColor} sx={{ lineHeight: 1.3 }}>
+                {card.value}
+              </Typography>
+            </Box>
+          </Paper>
+        ))}
       </Box>
 
       <Card>
@@ -1488,16 +1542,16 @@ function InvoiceTracker() {
               <TableContainer>
                 <Table>
                   <TableHead>
-                    <TableRow>
-                      <TableCell>Vendor</TableCell>
-                      <TableCell>Invoice #</TableCell>
-                      <TableCell>Order Date</TableCell>
-                      <TableCell>Payment</TableCell>
-                      <TableCell>Shipment</TableCell>
-                      <TableCell>Items Check</TableCell>
-                      <TableCell>Inbound</TableCell>
-                      <TableCell>Total</TableCell>
-                      <TableCell align="right">Action</TableCell>
+                    <TableRow sx={{ bgcolor: "grey.50" }}>
+                      <TableCell sx={{ fontWeight: 700 }}>Vendor</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Invoice #</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Order Date</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Payment</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Shipment</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Items Check</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Inbound</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Total</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>Action</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1632,12 +1686,72 @@ function InvoiceTracker() {
           </IconButton>
         </DialogTitle>
         <DialogContent dividers>
-          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+          {/* Status ribbon — shown when viewing/editing an existing invoice */}
+          {form.id && (
+            <Box
+              sx={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 1,
+                px: 2,
+                py: 1.25,
+                mb: 2,
+                borderRadius: 1,
+                bgcolor: "grey.50",
+                border: "1px solid",
+                borderColor: "grey.200",
+                alignItems: "center",
+              }}
+            >
+              <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5, fontWeight: 600 }}>
+                {form.invoiceNumber || "Invoice"}
+              </Typography>
+              <Chip
+                size="small"
+                color={getPaymentChipColor(form.paymentStatus) as any}
+                label={PAYMENT_STATUS_OPTIONS.find((o) => o.value === form.paymentStatus)?.label || form.paymentStatus}
+                icon={<PaymentsIcon />}
+              />
+              <Chip
+                size="small"
+                color={getShipmentChipColor(form.shipmentStatus) as any}
+                label={SHIPMENT_STATUS_OPTIONS.find((o) => o.value === form.shipmentStatus)?.label || form.shipmentStatus}
+                icon={<ShippingIcon />}
+              />
+              <Chip
+                size="small"
+                color={getItemCheckChipColor(form.itemCheckStatus) as any}
+                label={ITEM_CHECK_STATUS_OPTIONS.find((o) => o.value === form.itemCheckStatus)?.label || form.itemCheckStatus}
+                icon={<CheckCircleIcon />}
+              />
+              <Chip
+                size="small"
+                color={getInboundChipColor(form.inboundStatus) as any}
+                label={INBOUND_STATUS_OPTIONS.find((o) => o.value === form.inboundStatus)?.label || form.inboundStatus}
+                icon={<InventoryIcon />}
+              />
+              {getPaymentReminderLabel(form.paymentStatus, form.paymentDueBy) && (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  color={getPaymentReminderChipColor(form.paymentStatus, form.paymentDueBy) as any}
+                  label={getPaymentReminderLabel(form.paymentStatus, form.paymentDueBy)}
+                />
+              )}
+            </Box>
+          )}
+          <Grid container spacing={2} sx={{ mt: 0 }}>
             <Grid item xs={12}>
-              <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#fcfcfd" }}>
-                <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2 }}>
-                  Invoice Details
-                </Typography>
+              <Paper
+                variant="outlined"
+                sx={{ p: 2, borderLeft: "3px solid #3b82f6", bgcolor: "#fafafa" }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                  <ArticleIcon fontSize="small" sx={{ color: "#3b82f6" }} />
+                  <Typography variant="subtitle1" fontWeight={700}>
+                    Invoice Details
+                  </Typography>
+                </Stack>
                 <Grid container spacing={2}>
                   <Grid item xs={12} md={6}>
                     <Stack direction="row" spacing={1} alignItems="flex-start">
@@ -1708,20 +1822,13 @@ function InvoiceTracker() {
             </Grid>
 
             <Grid item xs={12}>
-              <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#fafafc" }}>
-                <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2 }}>
-                  Status Tracking
-                </Typography>
-                {getPaymentReminderLabel(form.paymentStatus, form.paymentDueBy) && (
-                  <Box sx={{ mb: 2 }}>
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      color={getPaymentReminderChipColor(form.paymentStatus, form.paymentDueBy) as any}
-                      label={getPaymentReminderLabel(form.paymentStatus, form.paymentDueBy)}
-                    />
-                  </Box>
-                )}
+              <Paper variant="outlined" sx={{ p: 2, borderLeft: "3px solid #8b5cf6", bgcolor: "#fafafa" }}>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                  <CheckCircleIcon fontSize="small" sx={{ color: "#8b5cf6" }} />
+                  <Typography variant="subtitle1" fontWeight={700}>
+                    Status Tracking
+                  </Typography>
+                </Stack>
                 <Grid container spacing={2}>
             <Grid item xs={12} md={3}>
               <FormControl fullWidth disabled={isReadOnly}>
@@ -1810,13 +1917,16 @@ function InvoiceTracker() {
                     form.paymentProofImageAvailable ||
                     form.paymentProofs.length > 0) && (
                     <Grid item xs={12}>
-                      <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#fcfcfd" }}>
+                      <Paper variant="outlined" sx={{ p: 2, borderLeft: "3px solid #10b981", bgcolor: "#fafafa" }}>
                         <Stack spacing={1.5}>
                           <Box>
-                            <Typography variant="subtitle2" fontWeight={700}>
-                              Payment Proof
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <PaymentsIcon fontSize="small" sx={{ color: "#10b981" }} />
+                              <Typography variant="subtitle2" fontWeight={700}>
+                                Payment Proof
+                              </Typography>
+                            </Stack>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
                               Keep the old proof if one already exists, and add as many extra proof attachments as needed.
                             </Typography>
                           </Box>
@@ -2047,7 +2157,7 @@ function InvoiceTracker() {
             </Grid>
 
             <Grid item xs={12}>
-              <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#f8fafc" }}>
+              <Paper variant="outlined" sx={{ p: 2, borderLeft: "3px solid #10b981", bgcolor: "#fafafa" }}>
                 <Stack
                   direction={{ xs: "column", md: "row" }}
                   spacing={2}
@@ -2055,9 +2165,12 @@ function InvoiceTracker() {
                   alignItems={{ xs: "flex-start", md: "center" }}
                 >
                   <Box>
-                    <Typography variant="subtitle1" fontWeight={700}>
-                      Invoice Inbound
-                    </Typography>
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                      <InventoryIcon fontSize="small" sx={{ color: "#10b981" }} />
+                      <Typography variant="subtitle1" fontWeight={700}>
+                        Invoice Inbound
+                      </Typography>
+                    </Stack>
                     <Typography variant="body2" color="text.secondary">
                       {form.inboundStatus === "done"
                         ? `Fully inbounded${form.inboundCompletedAt ? ` on ${new Date(form.inboundCompletedAt).toLocaleString()}` : ""}${form.inboundCompleterDisplay ? ` by ${form.inboundCompleterDisplay}` : ""}.`
@@ -2100,13 +2213,16 @@ function InvoiceTracker() {
             </Grid>
 
             <Grid item xs={12}>
-              <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#fcfcfd" }}>
+              <Paper variant="outlined" sx={{ p: 2, borderLeft: "3px solid #f59e0b", bgcolor: "#fafafa" }}>
                 <Stack spacing={1.5}>
                   <Box>
-                    <Typography variant="subtitle2" fontWeight={700}>
-                      Invoice Document
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <ArticleIcon fontSize="small" sx={{ color: "#f59e0b" }} />
+                      <Typography variant="subtitle2" fontWeight={700}>
+                        Invoice Document
+                      </Typography>
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
                       Optionally attach the vendor invoice as a PDF or image.
                     </Typography>
                   </Box>
@@ -2181,10 +2297,13 @@ function InvoiceTracker() {
             </Grid>
 
             <Grid item xs={12}>
-              <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#fcfcfd" }}>
-                <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2 }}>
-                  Additional Costs
-                </Typography>
+              <Paper variant="outlined" sx={{ p: 2, borderLeft: "3px solid #6b7280", bgcolor: "#fafafa" }}>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                  <MoneyIcon fontSize="small" sx={{ color: "#6b7280" }} />
+                  <Typography variant="subtitle1" fontWeight={700}>
+                    Additional Costs
+                  </Typography>
+                </Stack>
                 <Grid container spacing={2}>
                   <Grid item xs={12} md={6}>
                     <TextField
@@ -2220,9 +2339,15 @@ function InvoiceTracker() {
                 alignItems={{ xs: "flex-start", sm: "center" }}
                 sx={{ mb: 1 }}
               >
-                <Typography variant="subtitle1" fontWeight={700}>
-                  Invoice Items
-                </Typography>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <ReceiptIcon fontSize="small" sx={{ color: "#3b82f6" }} />
+                  <Typography variant="subtitle1" fontWeight={700}>
+                    Invoice Items
+                  </Typography>
+                  {form.items.length > 0 && (
+                    <Chip size="small" label={form.items.length} sx={{ height: 20, fontSize: "0.7rem" }} />
+                  )}
+                </Stack>
                 {form.inboundStatus !== "pending" && (
                   <Typography variant="body2" color="text.secondary">
                     Inbound has already started for this invoice. Only payment status fields can be edited now. If something else needs to be received, create a new invoice.
@@ -2334,22 +2459,26 @@ function InvoiceTracker() {
               <Paper
                 variant="outlined"
                 sx={{
-                  px: 2,
-                  py: 1.5,
+                  px: 2.5,
+                  py: 2,
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  backgroundColor: "#f8fafc",
+                  borderLeft: "4px solid #3b82f6",
+                  bgcolor: "#eff6ff",
                 }}
               >
-                <Typography variant="subtitle1" fontWeight={700}>
-                  Total Invoice Amount
-                </Typography>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <MoneyIcon sx={{ color: "#3b82f6" }} />
+                  <Typography variant="subtitle1" fontWeight={700} color="#1d4ed8">
+                    Total Invoice Amount
+                  </Typography>
+                </Stack>
                 <Box sx={{ textAlign: "right" }}>
                   <Typography variant="caption" color="text.secondary" display="block">
                     Items ${invoiceTotal.toFixed(2)} + Misc ${Number(form.miscellaneousAmount || 0).toFixed(2)} + Shipping ${Number(form.shippingAmount || 0).toFixed(2)}
                   </Typography>
-                  <Typography variant="h6" fontWeight={700}>
+                  <Typography variant="h5" fontWeight={800} color="#1d4ed8">
                     ${invoiceGrandTotal.toFixed(2)}
                   </Typography>
                 </Box>
@@ -2425,7 +2554,7 @@ function InvoiceTracker() {
         </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
-            <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#fcfcfd" }}>
+            <Paper variant="outlined" sx={{ p: 2, bgcolor: "grey.50" }}>
               <Grid container spacing={2}>
                 <Grid item xs={12} md={3}>
                   <Typography variant="caption" color="text.secondary" display="block">

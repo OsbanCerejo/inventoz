@@ -76,14 +76,10 @@ const upload = multer({
 const normalizeText = (value) => String(value || '').trim();
 const normalizeLowerText = (value) => normalizeText(value).toLowerCase();
 const normalizeTracking = (value) => {
-  const raw = normalizeText(value);
-  const digitsOnly = raw.replace(/\D/g, '');
-  if (!digitsOnly) return '';
-  if (digitsOnly.length >= 22) {
-    return digitsOnly.slice(-22);
-  }
-  return digitsOnly;
+  const raw = normalizeText(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return raw;
 };
+const isScientificNotation = (value) => /^\d+\.?\d*[Ee][+\-]?\d+$/.test(normalizeText(value));
 const normalizeSticker = (value) =>
   normalizeText(value)
     .replace(/^#+/, '')
@@ -942,7 +938,8 @@ const getActiveImport = async (showId) => {
 };
 
 const resolveShipmentByTracking = async (showId, tracking, importId, transaction = null) => {
-  const trackingRows = await TikTokShipmentItem.findAll({
+  // Exact match — fast path, covers all alphanumeric carriers (GFUS, SPX, SWX, UUS, 1L, USPS)
+  let trackingRows = await TikTokShipmentItem.findAll({
     where: {
       tiktokShowId: showId,
       importId,
@@ -953,6 +950,26 @@ const resolveShipmentByTracking = async (showId, tracking, importId, transaction
     lock: transaction ? transaction.LOCK.UPDATE : undefined,
     raw: true,
   });
+
+  // Suffix match fallback — handles carriers (e.g. FedEx) where the label barcode outputs
+  // additional routing prefix digits before the actual tracking number stored in the CSV.
+  // e.g. scanned '9631091350207286700400381902107408' matches stored '381902107408'
+  if (!trackingRows.length && tracking) {
+    const [suffixRows] = await sequelize.query(
+      `SELECT shipmentId FROM \`tiktokShipmentItems\`
+       WHERE tiktokShowId = :showId
+         AND importId = :importId
+         AND tracking IS NOT NULL
+         AND tracking != ''
+         AND :tracking LIKE CONCAT('%', tracking)`,
+      {
+        replacements: { showId, importId, tracking },
+        transaction,
+        raw: true,
+      }
+    );
+    trackingRows = suffixRows || [];
+  }
 
   if (!trackingRows.length) {
     return { type: 'shipment_not_found' };
@@ -1414,6 +1431,7 @@ router.post(
       const grouped = new Map();
       const numericSellerSkusByBatch = new Map();
       let parsedRows = 0;
+      let skippedSciNotationRows = 0;
 
       for (const [rowIndex, row] of records.entries()) {
         const productName = normalizeText(getCsvValue(row, 'product name', 'product_name'));
@@ -1438,7 +1456,12 @@ router.post(
             'cancellation return type'
           )
         );
-        const tracking = normalizeTracking(getCsvValue(row, 'tracking id', 'tracking_id'));
+        const rawTrackingValue = getCsvValue(row, 'tracking id', 'tracking_id');
+        if (isScientificNotation(rawTrackingValue)) {
+          skippedSciNotationRows += 1;
+          continue;
+        }
+        const tracking = normalizeTracking(rawTrackingValue);
         const quantity = parseQuantity(getCsvValue(row, 'quantity'));
         const placedAt = parseDateTime(getCsvValue(row, 'created time', 'created_time'));
         const paidAt = parseDateTime(getCsvValue(row, 'paid time', 'paid_time'));
@@ -1753,6 +1776,10 @@ router.post(
           pendingReviewShipments,
           cancelledOrders: itemRows.filter((row) => row.itemCategory === ITEM_CATEGORY_CANCELLED_ORDER).length,
           failedStatusOrders: itemRows.filter((row) => row.itemCategory === ITEM_CATEGORY_FAILED_ORDER).length,
+          skippedSciNotationRows,
+          ...(skippedSciNotationRows > 0 && {
+            sciNotationWarning: `${skippedSciNotationRows} order(s) were skipped because their tracking numbers were corrupted by Excel (scientific notation). To import these orders, download the CSV directly from TikTok and upload without opening it in Excel first.`,
+          }),
         },
       });
     } catch (error) {

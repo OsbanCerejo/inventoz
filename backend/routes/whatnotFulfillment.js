@@ -230,7 +230,7 @@ const parseShowElapsedSeconds = (rawValue) => {
 };
 
 const parseDateTime = (rawValue) => {
-  const normalized = normalizeText(rawValue);
+  const normalized = normalizeText(rawValue).replace(/\s+/g, ' ');
   if (!normalized) return null;
   const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) return null;

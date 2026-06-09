@@ -116,6 +116,9 @@ app.use("/whatnot/fulfillment", whatnotFulfillmentRouter);
 const whatnotAnalyticsRouter = require("./routes/whatnotAnalytics");
 app.use("/whatnot/analytics", whatnotAnalyticsRouter);
 
+const tiktokAnalyticsRouter = require("./routes/tiktokAnalytics");
+app.use("/tiktok/analytics", tiktokAnalyticsRouter);
+
 const tiktokRouter = require("./routes/tiktok");
 app.use("/tiktok", tiktokRouter);
 

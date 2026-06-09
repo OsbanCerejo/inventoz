@@ -309,10 +309,10 @@ router.get("/fulfillment-trend", auth, checkPermission("whatnotAnalytics", "view
 
   const bucketExpr =
     granularity === "month"
-      ? "DATE_FORMAT(sc.closedAt, '%Y-%m-01')"
+      ? "DATE_FORMAT(wsi.placedAt, '%Y-%m-01')"
       : granularity === "week"
-      ? "DATE_FORMAT(DATE_SUB(sc.closedAt, INTERVAL WEEKDAY(sc.closedAt) DAY), '%Y-%m-%d')"
-      : "DATE_FORMAT(sc.closedAt, '%Y-%m-%d')";
+      ? "DATE_FORMAT(DATE_SUB(wsi.placedAt, INTERVAL WEEKDAY(wsi.placedAt) DAY), '%Y-%m-%d')"
+      : "DATE_FORMAT(wsi.placedAt, '%Y-%m-%d')";
 
   try {
     const [rows] = await sequelize.query(
@@ -323,13 +323,13 @@ router.get("/fulfillment-trend", auth, checkPermission("whatnotAnalytics", "view
         COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue,
         COUNT(DISTINCT CONCAT(wss.whatnotShowId, ':', wss.importId, ':', wss.shipmentId)) AS completedShipments
       FROM ${TABLES.shipmentScans} wss
-      JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
-        ON sc.whatnotShowId = wss.whatnotShowId
-       AND sc.importId = wss.importId
-       AND sc.shipmentId = wss.shipmentId
+      JOIN ${TABLES.shipmentItems} wsi
+        ON wsi.whatnotShowId = wss.whatnotShowId
+       AND wsi.importId = wss.importId
+       AND wsi.shipmentId = wss.shipmentId
       WHERE ${fulfilledSaleCondition("wss")}
-        AND sc.closedAt >= :from
-        AND sc.closedAt < :to
+        AND wsi.placedAt >= :from
+        AND wsi.placedAt < :to
         AND (:showId IS NULL OR wss.whatnotShowId = :showId)
       GROUP BY bucket
       ORDER BY bucket ASC
@@ -941,6 +941,65 @@ router.get("/fulfillment-inventory-exposure", auth, checkPermission("whatnotAnal
   } catch (error) {
     console.error("Error fetching fulfillment inventory exposure analytics:", error);
     return res.status(500).json({ error: "Failed to fetch fulfillment inventory exposure analytics" });
+  }
+});
+
+router.get("/fulfillment-brand-profitability", auth, checkPermission("whatnotAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) return res.status(400).json({ error: "Invalid date range" });
+
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const limit = Math.min(Math.max(Number(req.query.limit) || 15, 1), 50);
+
+  try {
+    const [rows] = await sequelize.query(
+      `
+      SELECT
+        COALESCE(NULLIF(TRIM(p.brand), ''), 'Unknown') AS brand,
+        COUNT(*) AS unitsSold,
+        COALESCE(SUM(COALESCE(wss.soldPrice, 0)), 0) AS revenue,
+        SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN 1 ELSE 0 END) AS knownCostUnits,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(wss.soldPrice, 0) ELSE 0 END), 0) AS knownCostRevenue,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN vc.avgVendorCost ELSE 0 END), 0) AS estimatedCost,
+        SUM(CASE WHEN vc.avgVendorCost IS NULL THEN 1 ELSE 0 END) AS unknownCostUnits
+      FROM ${TABLES.shipmentScans} wss
+      LEFT JOIN ${TABLES.products} p ON ${skuJoinCondition("p.sku", "wss.productSku")}
+      LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku", "wss.productSku")}
+      JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
+        ON sc.whatnotShowId = wss.whatnotShowId
+       AND sc.importId = wss.importId
+       AND sc.shipmentId = wss.shipmentId
+      WHERE ${fulfilledSaleCondition("wss")}
+        AND sc.closedAt >= :from
+        AND sc.closedAt < :to
+        AND (:showId IS NULL OR wss.whatnotShowId = :showId)
+      GROUP BY COALESCE(NULLIF(TRIM(p.brand), ''), 'Unknown')
+      ORDER BY revenue DESC
+      LIMIT :limit
+      `,
+      { replacements: { from: range.from, to: range.to, showId, limit } }
+    );
+
+    return res.json(
+      rows.map((row) => {
+        const knownCostRevenue = Number(row.knownCostRevenue || 0);
+        const estimatedCost = Number(row.estimatedCost || 0);
+        const grossMargin = knownCostRevenue - estimatedCost;
+        return {
+          brand: row.brand,
+          unitsSold: Number(row.unitsSold || 0),
+          revenue: Number(Number(row.revenue || 0).toFixed(2)),
+          knownCostRevenue: Number(knownCostRevenue.toFixed(2)),
+          estimatedCost: Number(estimatedCost.toFixed(2)),
+          grossMargin: Number(grossMargin.toFixed(2)),
+          grossMarginPct: knownCostRevenue > 0 ? Number(((grossMargin / knownCostRevenue) * 100).toFixed(2)) : 0,
+          unknownCostUnits: Number(row.unknownCostUnits || 0),
+        };
+      })
+    );
+  } catch (error) {
+    console.error("Error fetching fulfillment brand profitability analytics:", error);
+    return res.status(500).json({ error: "Failed to fetch fulfillment brand profitability analytics" });
   }
 });
 

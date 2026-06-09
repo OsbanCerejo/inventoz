@@ -21,8 +21,9 @@ import EbayApi from "./pages/EbayApi";
 import Whatnot from "./pages/Whatnot";
 import WhatnotFulfillment from "./pages/WhatnotFulfillment";
 import TikTokFulfillment from "./pages/TikTokFulfillment";
-import WhatnotAnalytics from "./pages/WhatnotAnalytics";
+// import WhatnotAnalytics from "./pages/WhatnotAnalytics"; // hidden — superseded by WhatnotFulfillmentAnalytics
 import WhatnotFulfillmentAnalytics from "./pages/WhatnotFulfillmentAnalytics";
+import TikTokFulfillmentAnalytics from "./pages/TikTokFulfillmentAnalytics";
 import SortingAnalytics from "./pages/SortingAnalytics";
 import WalmartIntegration from "./pages/WalmartIntegration";
 import WalmartOrders from "./pages/WalmartOrders";
@@ -281,19 +282,20 @@ function AppContent() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/whatnot-analytics"
-              element={
-                <ProtectedRoute resource="whatnotAnalytics" action="view" menuItem="whatnotAnalytics">
-                  <WhatnotAnalytics />
-                </ProtectedRoute>
-              }
-            />
+            {/* /whatnot-analytics hidden — superseded by /whatnot-fulfillment-analytics */}
             <Route
               path="/whatnot-fulfillment-analytics"
               element={
                 <ProtectedRoute resource="whatnotAnalytics" action="view" menuItem="whatnotAnalytics">
                   <WhatnotFulfillmentAnalytics />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/tiktok-fulfillment-analytics"
+              element={
+                <ProtectedRoute resource="tiktokAnalytics" action="view" menuItem="tiktokAnalytics">
+                  <TikTokFulfillmentAnalytics />
                 </ProtectedRoute>
               }
             />
