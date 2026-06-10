@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { Products, ProductDetails, ProductHistory, StockUpdateHistory, Logs, HbaOrder, HbaOrderItem, sequelize } = require("../models");
+const { Products, ProductDetails, ProductHistory, StockUpdateHistory, Logs, HbaOrder, HbaOrderItem, SkuSalesSummary, sequelize } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 const StockUpdateService = require("../Services/StockUpdateService");
@@ -729,7 +729,45 @@ router.get("/list", auth, checkPermission('products', 'view'), async (req, res) 
       strength: req.query.strength,
       shade: req.query.shade,
       location: req.query.location,
+      categories: req.query.categories, // comma-separated list; absent = no filter (show all)
+      types: req.query.types,           // comma-separated: Sealed|Unsealed|Unboxed|Tester
     };
+
+    // Parse category filter:
+    //   absent        → no filter (show all)
+    //   "__none__"    → impossible filter (show nothing — user deselected all)
+    //   "A,B,C"       → show only those categories
+    const categoryFilter = filters.categories === "__none__"
+      ? ["__none__"]
+      : filters.categories
+        ? filters.categories.split(",").map((c) => c.trim()).filter(Boolean)
+        : null;
+
+    // Parse type/condition filter:
+    //   absent        → no filter (show all)
+    //   "__none__"    → show nothing
+    //   "Sealed,Tester,..."  → condition values + optional Tester flag
+    let typeWhereClause = null;
+    if (filters.types === "__none__") {
+      typeWhereClause = Sequelize.literal("1 = 0"); // matches nothing
+    } else if (filters.types) {
+      const typeValues = filters.types.split(",").map((t) => t.trim()).filter(Boolean);
+      const conditionValues = typeValues.filter((t) => t !== "Tester");
+      const includeTester = typeValues.includes("Tester");
+      const orParts = [];
+      if (conditionValues.length > 0) {
+        orParts.push({ condition: { [Op.in]: conditionValues } });
+      }
+      if (includeTester) {
+        // Tester lives on ProductDetails — use a subquery to avoid JOIN complexity
+        orParts.push(
+          Sequelize.literal("`Products`.`sku` IN (SELECT `sku` FROM `ProductDetails` WHERE `tester` = 1)")
+        );
+      }
+      if (orParts.length > 0) {
+        typeWhereClause = orParts.length === 1 ? orParts[0] : { [Op.or]: orParts };
+      }
+    }
 
     const whereClauses = [
       buildContainsFilter("sku", filters.sku),
@@ -740,6 +778,10 @@ router.get("/list", auth, checkPermission('products', 'view'), async (req, res) 
       buildContainsFilter("location", filters.location),
       buildContainsFilter("upc", filters.upc, { castToChar: true }),
       buildContainsFilter("sizeOz", filters.sizeOz, { castToChar: true }),
+      categoryFilter && categoryFilter.length > 0
+        ? { category: { [Op.in]: categoryFilter } }
+        : null,
+      typeWhereClause,
     ].filter(Boolean);
 
     const where = whereClauses.length ? { [Op.and]: whereClauses } : {};
@@ -754,6 +796,7 @@ router.get("/list", auth, checkPermission('products', 'view'), async (req, res) 
         "sku",
         "brand",
         "itemName",
+        "category",
         "sizeOz",
         "sizeMl",
         "strength",
@@ -1342,6 +1385,89 @@ router.post("/test-email", auth, checkPermission('lowStock', 'view'), async (req
   } catch (error) {
     console.error("Error sending test email:", error);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Sales Summary — last 6 months per platform for a SKU ──────────────────
+router.get('/salesSummary/:sku', auth, async (req, res) => {
+  try {
+    const { sku } = req.params;
+    const now = new Date();
+
+    // Build the 6 most recent year/month pairs
+    const periods = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      periods.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
+    }
+
+    const rows = await SkuSalesSummary.findAll({
+      where: { sku },
+      attributes: ['platform', 'year', 'month', 'qty'],
+    });
+
+    // Shape into { months: ['Jan','Feb',...], tiktok: [0,5,...], whatnot: [...], ebay: [...] }
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const lookup = {};
+    rows.forEach((r) => {
+      const key = `${r.platform}_${r.year}_${r.month}`;
+      lookup[key] = Number(r.qty) || 0;
+    });
+
+    // ── Avg sold price per platform (direct query — fast single-pass per platform)
+    const [[tiktokAvgRow]] = await sequelize.query(
+      `SELECT AVG(tss.soldPrice) AS avg
+       FROM \`tiktokShipmentScans\` tss
+       WHERE tss.result = 'matched'
+         AND tss.productSku = :sku
+         AND tss.soldPrice IS NOT NULL
+         AND tss.soldPrice > 0
+         AND tss.previousQuantity IS NOT NULL
+         AND tss.newQuantity = tss.previousQuantity - 1`,
+      { replacements: { sku } }
+    );
+
+    const [[whatnotAvgRow]] = await sequelize.query(
+      `SELECT AVG(wss.soldPrice) AS avg
+       FROM \`whatnotShipmentScans\` wss
+       WHERE wss.result = 'matched'
+         AND wss.productSku = :sku
+         AND wss.soldPrice IS NOT NULL
+         AND wss.soldPrice > 0
+         AND wss.previousQuantity IS NOT NULL
+         AND wss.newQuantity = wss.previousQuantity - 1`,
+      { replacements: { sku } }
+    );
+
+    const [[ebayAvgRow]] = await sequelize.query(
+      `SELECT AVG(eo.price) AS avg
+       FROM \`EbayOrders\` eo
+       WHERE eo.sku = :sku
+         AND eo.orderStatus != 'CANCELLED'
+         AND eo.price IS NOT NULL
+         AND eo.price > 0`,
+      { replacements: { sku } }
+    );
+
+    const toAvg = (row) => row?.avg != null ? Number(Number(row.avg).toFixed(2)) : null;
+
+    const result = {
+      months:   periods.map((p) => monthNames[p.month - 1]),
+      tiktok:   periods.map((p) => lookup[`tiktok_${p.year}_${p.month}`]   || 0),
+      whatnot:  periods.map((p) => lookup[`whatnot_${p.year}_${p.month}`]  || 0),
+      ebay:     periods.map((p) => lookup[`ebay_${p.year}_${p.month}`]     || 0),
+      walmart:  periods.map((p) => lookup[`walmart_${p.year}_${p.month}`]  || 0),
+      avgPrice: {
+        tiktok:  toAvg(tiktokAvgRow),
+        whatnot: toAvg(whatnotAvgRow),
+        ebay:    toAvg(ebayAvgRow),
+      },
+    };
+
+    res.json(result);
+  } catch (err) {
+    console.error('Error fetching sales summary:', err);
+    res.status(500).json({ error: 'Failed to fetch sales summary' });
   }
 });
 

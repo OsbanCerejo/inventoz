@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowDropUp,
@@ -39,6 +40,7 @@ function ProductList({
   totalProducts,
 }: Props) {
   const navigate = useNavigate();
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const handleSelect = (product: any) => {
     navigate(`/products/${product.sku}`);
@@ -151,17 +153,14 @@ function ProductList({
               border: "1px solid #e2e8f0",
               borderRadius: 1.5,
               bgcolor: "#ffffff",
-              display: "flex",
+              display: "inline-flex",
               alignItems: "center",
               gap: 1,
-              width: "100%",
-              maxWidth: 320,
             }}
           >
             <QrCode2 sx={{ color: "#2563eb", fontSize: 18 }} />
             <TextField
               size="small"
-              fullWidth
               placeholder="Search by UPC..."
               value={getFilterValue("upc")}
               onChange={(e) => handleFilterChange(e, "upc")}
@@ -176,10 +175,8 @@ function ProductList({
                 ),
               }}
               sx={{
-                "& .MuiOutlinedInput-root": {
-                  bgcolor: "#fff",
-                  borderRadius: 1,
-                },
+                width: 220,
+                "& .MuiOutlinedInput-root": { bgcolor: "#fff", borderRadius: 1 },
               }}
             />
           </Box>
@@ -204,7 +201,7 @@ function ProductList({
               <thead>
                 <tr>
                   <th style={{ position: "sticky", top: 0, zIndex: 3, background: "#f8fafc", borderBottom: "1px solid #dbe2ea", borderRight: "1px solid #e5eaf1", textAlign: "left", padding: "12px 10px", fontSize: 14, fontWeight: 700, color: "#1e293b", width: 60 }}>#</th>
-                  <th onClick={() => handleSort("sku")} style={{ cursor: "pointer", position: "sticky", top: 0, zIndex: 3, background: "#f8fafc", borderBottom: "1px solid #dbe2ea", borderRight: "1px solid #e5eaf1", textAlign: "left", padding: "12px 10px", fontSize: 14, fontWeight: 700, color: "#1e293b", width: 230 }}>{getSortIcon("sku")} SKU</th>
+                  <th onClick={() => handleSort("sku")} style={{ cursor: "pointer", position: "sticky", top: 0, zIndex: 3, background: "#f8fafc", borderBottom: "1px solid #dbe2ea", borderRight: "1px solid #e5eaf1", textAlign: "left", padding: "12px 10px", fontSize: 14, fontWeight: 700, color: "#1e293b", width: 1, whiteSpace: "nowrap" }}>{getSortIcon("sku")} SKU</th>
                   <th onClick={() => handleSort("brand")} style={{ cursor: "pointer", position: "sticky", top: 0, zIndex: 3, background: "#f8fafc", borderBottom: "1px solid #dbe2ea", borderRight: "1px solid #e5eaf1", textAlign: "left", padding: "12px 10px", fontSize: 14, fontWeight: 700, color: "#1e293b", width: 170 }}>{getSortIcon("brand")} Brand</th>
                   <th onClick={() => handleSort("itemName")} style={{ cursor: "pointer", position: "sticky", top: 0, zIndex: 3, background: "#f8fafc", borderBottom: "1px solid #dbe2ea", borderRight: "1px solid #e5eaf1", textAlign: "left", padding: "12px 10px", fontSize: 14, fontWeight: 700, color: "#1e293b", minWidth: 280 }}>{getSortIcon("itemName")} Item Name</th>
                   <th style={{ position: "sticky", top: 0, zIndex: 3, background: "#f8fafc", borderBottom: "1px solid #dbe2ea", borderRight: "1px solid #e5eaf1", textAlign: "left", padding: "12px 10px", fontSize: 14, fontWeight: 700, color: "#1e293b", width: 105 }}>Size</th>
@@ -215,7 +212,7 @@ function ProductList({
                 </tr>
                 <tr>
                   <th style={{ position: "sticky", top: 46, zIndex: 2, background: "#ffffff", borderBottom: "1px solid #e7edf5", borderRight: "1px solid #eef2f7", padding: "8px 10px" }} />
-                  <th style={{ position: "sticky", top: 46, zIndex: 2, background: "#ffffff", borderBottom: "1px solid #e7edf5", borderRight: "1px solid #eef2f7", padding: "8px 10px" }}>{renderFilterInput("sku")}</th>
+                  <th style={{ position: "sticky", top: 46, zIndex: 2, background: "#ffffff", borderBottom: "1px solid #e7edf5", borderRight: "1px solid #eef2f7", padding: "8px 10px", whiteSpace: "nowrap" }}>{renderFilterInput("sku")}</th>
                   <th style={{ position: "sticky", top: 46, zIndex: 2, background: "#ffffff", borderBottom: "1px solid #e7edf5", borderRight: "1px solid #eef2f7", padding: "8px 10px" }}>{renderFilterInput("brand")}</th>
                   <th style={{ position: "sticky", top: 46, zIndex: 2, background: "#ffffff", borderBottom: "1px solid #e7edf5", borderRight: "1px solid #eef2f7", padding: "8px 10px" }}>{renderFilterInput("itemName")}</th>
                   <th style={{ position: "sticky", top: 46, zIndex: 2, background: "#ffffff", borderBottom: "1px solid #e7edf5", borderRight: "1px solid #eef2f7", padding: "8px 10px" }}>{renderFilterInput("sizeOz")}</th>
@@ -236,29 +233,35 @@ function ProductList({
                     ? { bg: "#B2FF59", border: "#86efac", color: "#166534" }
                     : { bg: "#FF5252", border: "#fca5a5", color: "#991b1b" };
 
+                  const isHovered = hoveredIndex === index;
+                  const rowBg = isHovered
+                    ? "#eff6ff"
+                    : index % 2 === 0 ? "#ffffff" : "#f8fafc";
+
                   return (
                     <tr
                       key={product.sku || index}
                       onClick={() => handleSelect(product)}
-                      style={{
-                        cursor: "pointer",
-                        background: index % 2 === 0 ? "#ffffff" : "#f8fafc",
-                      }}
+                      onMouseEnter={() => setHoveredIndex(index)}
+                      onMouseLeave={() => setHoveredIndex(null)}
+                      style={{ cursor: "pointer", background: rowBg, transition: "background 0.1s" }}
                     >
-                      <td style={{ padding: "10px", borderBottom: "1px solid #edf2f7", borderRight: "1px solid #eef2f7", verticalAlign: "top" }}>
-                        <div style={{ fontWeight: 700, color: "#334155", marginBottom: product.image ? 6 : 0 }}>{displayIndex}</div>
+                      <td style={{ padding: "10px", borderBottom: "1px solid #edf2f7", borderRight: "1px solid #eef2f7", verticalAlign: "middle", width: product.image ? 90 : undefined }}>
+                        <div style={{ fontWeight: 700, color: "#334155", textAlign: "center", marginBottom: product.image ? 4 : 0 }}>{displayIndex}</div>
                         {product.image ? (
-                          <img
-                            src={product.image}
-                            alt={product.itemName || "product image"}
-                            onError={(e) => {
-                              (e.currentTarget as HTMLImageElement).style.display = "none";
-                            }}
-                            style={{ width: 70, height: 70, objectFit: "contain", borderRadius: 8, background: "#fff" }}
-                          />
+                          <div style={{ width: 70, height: 70, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <img
+                              src={product.image}
+                              alt={product.itemName || "product image"}
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).style.display = "none";
+                              }}
+                              style={{ maxWidth: 70, maxHeight: 70, objectFit: "contain", borderRadius: 8, background: "#fff", display: "block" }}
+                            />
+                          </div>
                         ) : null}
                       </td>
-                      <td style={{ padding: "10px", borderBottom: "1px solid #edf2f7", borderRight: "1px solid #eef2f7", fontFamily: "Consolas, monospace", fontSize: 14, color: "#0f172a", whiteSpace: "nowrap" }}>
+                      <td style={{ padding: "10px", borderBottom: "1px solid #edf2f7", borderRight: "1px solid #eef2f7", fontFamily: "Consolas, monospace", fontSize: 14, color: "#0f172a", whiteSpace: "nowrap", width: 1 }}>
                         <IconButton
                           size="small"
                           onClick={(e) => {

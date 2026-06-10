@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Product Page Mockup</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f1f5f9; color: #1e293b; font-size: 14px; }
+
+  .page { max-width: 1300px; margin: 0 auto; padding: 20px 24px 40px; }
+
+  /* ── HERO ── */
+  .hero { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; display: flex; gap: 24px; align-items: flex-start; margin-bottom: 16px; }
+  .hero-image { width: 160px; height: 160px; flex-shrink: 0; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .hero-image img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .hero-identity { flex: 1; }
+  .hero-brand { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+  .hero-name { font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 6px; line-height: 1.3; }
+  .hero-sku { font-family: "Consolas", monospace; font-size: 13px; color: #475569; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 3px 9px; display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+  .hero-sku svg { width: 13px; height: 13px; color: #94a3b8; cursor: pointer; }
+  .badge-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+  .badge-category { background: #dbeafe; color: #1d4ed8; }
+  .badge-condition { background: #dcfce7; color: #15803d; }
+  .badge-tester { background: #fee2e2; color: #b91c1c; }
+  .badge-discontinued { background: #f3e8ff; color: #7e22ce; }
+  .badge-new-arrival { background: #fef9c3; color: #a16207; }
+  .hero-specs { display: flex; flex-wrap: wrap; gap: 18px; font-size: 13px; color: #475569; }
+  .hero-spec span { font-weight: 600; color: #1e293b; }
+
+  .hero-stats { display: flex; flex-direction: column; gap: 12px; flex-shrink: 0; align-items: flex-end; }
+  .stat-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 18px; text-align: center; min-width: 110px; }
+  .stat-label { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+  .stat-value { font-size: 26px; font-weight: 800; color: #0f172a; line-height: 1.1; }
+  .stat-value.green { color: #16a34a; }
+  .stat-value.small { font-size: 16px; font-weight: 700; margin-top: 2px; }
+  .stat-sub { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+
+  /* ── ACTION BAR ── */
+  .action-bar { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+  .action-group { display: flex; gap: 8px; align-items: center; }
+  .action-group-label { font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-right: 4px; }
+  .btn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px; border-radius: 7px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; white-space: nowrap; }
+  .btn svg { width: 14px; height: 14px; }
+  .btn-primary { background: #2563eb; color: #fff; }
+  .btn-success { background: #16a34a; color: #fff; }
+  .btn-secondary { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+  .btn-warning { background: #f59e0b; color: #fff; }
+  .btn-info { background: #0ea5e9; color: #fff; }
+  .btn-danger { background: #fff; color: #dc2626; border: 1px solid #fca5a5; }
+  .btn-violet { background: #7c3aed; color: #fff; }
+  .btn-cyan { background: #0891b2; color: #fff; }
+  .divider-v { width: 1px; height: 28px; background: #e2e8f0; }
+
+  /* ── GRID ── */
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .grid-wide { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+
+  .panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+  .panel-header { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
+  .panel-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #64748b; }
+  .panel-body { padding: 14px 16px; }
+
+  /* ── KV TABLE ── */
+  .kv-table { width: 100%; }
+  .kv-row { display: flex; align-items: baseline; padding: 5px 0; border-bottom: 1px solid #f8fafc; gap: 8px; }
+  .kv-row:last-child { border-bottom: none; }
+  .kv-label { font-size: 12px; color: #64748b; font-weight: 500; flex-shrink: 0; width: 140px; }
+  .kv-value { font-size: 13px; color: #0f172a; font-weight: 500; }
+  .kv-value.mono { font-family: "Consolas", monospace; font-size: 12px; }
+
+  /* ── CHART ── */
+  .chart-area { padding: 14px 16px; }
+  .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .chart-legend { display: flex; gap: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #64748b; font-weight: 600; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .bar-chart { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding-bottom: 20px; position: relative; border-bottom: 2px solid #e2e8f0; }
+  .bar-group { display: flex; gap: 2px; align-items: flex-end; flex: 1; }
+  .bar { border-radius: 3px 3px 0 0; min-width: 10px; }
+  .bar-tiktok { background: #e0f2fe; }
+  .bar-whatnot { background: #fce7f3; }
+  .bar-ebay { background: #fef9c3; }
+  .bar-month { position: absolute; bottom: 0; font-size: 10px; color: #94a3b8; text-align: center; }
+  .months-row { display: flex; gap: 6px; margin-top: 6px; }
+  .month-label { flex: 1; text-align: center; font-size: 10px; color: #94a3b8; font-weight: 500; }
+  .chart-summary { display: flex; gap: 10px; margin-top: 10px; }
+  .chart-stat { flex: 1; background: #f8fafc; border-radius: 7px; padding: 8px 10px; text-align: center; }
+  .chart-stat-label { font-size: 10px; color: #94a3b8; font-weight: 600; text-transform: uppercase; }
+  .chart-stat-value { font-size: 18px; font-weight: 800; color: #0f172a; }
+  .chart-stat-value.tiktok { color: #0369a1; }
+  .chart-stat-value.whatnot { color: #be185d; }
+  .chart-stat-value.ebay { color: #92400e; }
+
+  /* ── TABLE ── */
+  .mini-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .mini-table th { text-align: left; padding: 6px 8px; color: #64748b; font-weight: 600; font-size: 11px; border-bottom: 1px solid #f1f5f9; }
+  .mini-table td { padding: 7px 8px; border-bottom: 1px solid #f8fafc; color: #1e293b; }
+  .mini-table tr:last-child td { border-bottom: none; }
+  .mini-table tr:hover td { background: #f8fafc; }
+
+  /* ── MODAL ── */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity .18s; }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal { background: #fff; border-radius: 14px; width: 420px; max-width: 95vw; box-shadow: 0 20px 60px rgba(0,0,0,.18); transform: translateY(12px); transition: transform .18s; }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-header { padding: 18px 20px 14px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
+  .modal-title { font-size: 15px; font-weight: 700; color: #0f172a; }
+  .modal-close { background: none; border: none; cursor: pointer; color: #94a3b8; padding: 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+  .modal-close:hover { background: #f1f5f9; color: #475569; }
+  .modal-body { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .modal-footer { padding: 12px 20px 16px; border-top: 1px solid #f1f5f9; display: flex; justify-content: flex-end; gap: 8px; }
+  .field-group { display: flex; flex-direction: column; gap: 5px; }
+  .field-label { font-size: 12px; font-weight: 600; color: #475569; }
+  .field-input { padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 7px; font-size: 13px; color: #0f172a; outline: none; width: 100%; }
+  .field-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+  .field-select { padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 7px; font-size: 13px; color: #0f172a; outline: none; width: 100%; background: #fff; }
+  .field-helper { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+  .modal-toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; }
+  .modal-toggle-label { font-size: 13px; font-weight: 500; color: #1e293b; }
+  .btn-save { background: #2563eb; color: #fff; padding: 8px 18px; border-radius: 7px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; }
+  .btn-save:hover { background: #1d4ed8; }
+  .btn-cancel { background: #f1f5f9; color: #475569; padding: 8px 18px; border-radius: 7px; font-size: 13px; font-weight: 600; border: 1px solid #e2e8f0; cursor: pointer; }
+  .btn-cancel:hover { background: #e2e8f0; }
+
+  /* ── TOGGLE ── */
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #f8fafc; }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-label { font-size: 12px; color: #64748b; font-weight: 500; }
+  .toggle-switch { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-track { position: absolute; inset: 0; border-radius: 20px; background: #e2e8f0; cursor: pointer; transition: background .2s; }
+  .toggle-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .2s; }
+  .toggle-switch input:checked + .toggle-track { background: #2563eb; }
+  .toggle-switch input:checked + .toggle-track::after { transform: translateX(16px); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ACTION BAR -->
+  <div class="action-bar">
+    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+      <div class="action-group">
+        <span class="action-group-label">Product</span>
+        <button class="btn btn-success">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Edit
+        </button>
+        <button class="btn btn-violet">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Similar
+        </button>
+        <button class="btn btn-cyan">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Print Label
+        </button>
+      </div>
+      <div class="divider-v"></div>
+      <div class="action-group">
+        <button class="btn btn-secondary" id="ebay-toggle" onclick="toggleEbay()" style="gap:6px">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><circle cx="12" cy="12" r="10"/><path d="M8 12l4-4 4 4M8 16l4-4 4 4" transform="rotate(180,12,12)"/></svg>
+          eBay
+          <svg id="ebay-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:12px;height:12px;transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div id="ebay-actions" style="display:none;gap:8px;align-items:center">
+          <button class="btn btn-warning">Out of Stock</button>
+          <button class="btn btn-info">Restock</button>
+          <button class="btn btn-secondary">Update Price</button>
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-danger">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+      Delete
+    </button>
+  </div>
+
+  <!-- TOP ROW: 3 panels -->
+  <div class="grid">
+
+    <!-- Product Details -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Product Details</span>
+      </div>
+      <div class="panel-body">
+        <div class="kv-table">
+          <div class="kv-row"><span class="kv-label">Brand</span><span class="kv-value">Chanel</span></div>
+          <div class="kv-row"><span class="kv-label">Item Name</span><span class="kv-value">Chance Eau Tendre EDP</span></div>
+          <div class="kv-row"><span class="kv-label">Category</span><span class="kv-value">Fragrance</span></div>
+          <div class="kv-row"><span class="kv-label">Type</span><span class="kv-value">—</span></div>
+          <div class="kv-row"><span class="kv-label">Strength</span><span class="kv-value">Eau De Parfum</span></div>
+          <div class="kv-row"><span class="kv-label">Size</span><span class="kv-value">3.4 oz / 100 ml</span></div>
+          <div class="kv-row"><span class="kv-label">Shade / Variant</span><span class="kv-value">—</span></div>
+          <div class="kv-row"><span class="kv-label">Formulation</span><span class="kv-value">—</span></div>
+          <div class="kv-row"><span class="kv-label">Condition</span><span class="kv-value">Sealed</span></div>
+          <div class="kv-row"><span class="kv-label">PAO</span><span class="kv-value">36M</span></div>
+          <div class="kv-row"><span class="kv-label">UPC</span><span class="kv-value mono">3145891264803</span></div>
+          <div class="kv-row"><span class="kv-label">Batch</span><span class="kv-value">B-2024-09</span></div>
+          <div class="kv-row"><span class="kv-label">Description</span><span class="kv-value" style="font-size:12px;color:#64748b">A fresh, romantic floral scent...</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Warehouse -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Warehouse</span>
+      </div>
+      <div class="panel-body">
+        <div class="kv-table" style="margin-bottom:14px">
+          <div class="kv-row"><span class="kv-label">Location</span><span class="kv-value">A-12-C</span></div>
+          <div class="kv-row"><span class="kv-label">Qty Available</span><span class="kv-value" style="font-weight:800;font-size:15px;color:#16a34a">47</span></div>
+          <div class="toggle-row">
+            <span style="display:flex;align-items:center;gap:6px">
+              <span class="toggle-label">Track Qty</span>
+              <button id="trackqty-edit" onclick="openModalEdit('trackqty-modal')" title="Edit settings" style="display:inline-flex;align-items:center;background:none;border:none;cursor:pointer;padding:2px;color:#2563eb;opacity:.75;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:12px;height:12px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+            </span>
+            <label class="toggle-switch"><input id="trackqty-toggle" type="checkbox" checked onchange="handleToggle(this,'trackqty-modal','trackqty-edit')" /><span class="toggle-track"></span></label>
+          </div>
+          <div class="toggle-row">
+            <span style="display:flex;align-items:center;gap:6px">
+              <span class="toggle-label">HBA Listing</span>
+              <button id="hba-edit" onclick="openModalEdit('hba-modal')" title="Edit settings" style="display:none;align-items:center;background:none;border:none;cursor:pointer;padding:2px;color:#2563eb;opacity:.75;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:12px;height:12px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+            </span>
+            <label class="toggle-switch"><input id="hba-toggle" type="checkbox" onchange="handleToggle(this,'hba-modal','hba-edit')" /><span class="toggle-track"></span></label>
+          </div>
+        </div>
+        <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Warehouse Locations</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+          <span style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:3px 8px;font-size:12px;font-weight:600;">A-12-C</span>
+          <span style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:3px 8px;font-size:12px;font-weight:600;">B-04-A</span>
+          <span style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:3px 8px;font-size:12px;font-weight:600;">OVERFLOW-2</span>
+        </div>
+        <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Product Image</div>
+        <div style="width:160px;height:160px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+          <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Chanel_No5_Perfume.jpg/240px-Chanel_No5_Perfume.jpg" alt="Product" style="max-width:100%;max-height:100%;object-fit:contain;" onerror="this.style.display='none';this.parentNode.innerHTML='<span style=\'font-size:11px;color:#94a3b8;text-align:center;padding:12px;\'>No image</span>'" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Vendor Pricing -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Vendor Pricing</span>
+        <span style="font-size:12px;font-weight:700;color:#16a34a">Avg $84.50</span>
+      </div>
+      <div class="panel-body" style="padding:0">
+        <table class="mini-table">
+          <thead><tr><th>Vendor</th><th>Invoice</th><th style="text-align:right">Price</th><th style="text-align:right">Qty</th></tr></thead>
+          <tbody>
+            <tr><td>ABC Distributors</td><td style="color:#94a3b8">INV-2024-089</td><td style="text-align:right;font-weight:600">$82.00</td><td style="text-align:right">20</td></tr>
+            <tr><td>Global Scents Co.</td><td style="color:#94a3b8">INV-2024-102</td><td style="text-align:right;font-weight:600">$85.50</td><td style="text-align:right">15</td></tr>
+            <tr><td>Prestige Beauty</td><td style="color:#94a3b8">INV-2024-118</td><td style="text-align:right;font-weight:600">$87.00</td><td style="text-align:right">12</td></tr>
+            <tr><td>ABC Distributors</td><td style="color:#94a3b8">INV-2024-131</td><td style="text-align:right;font-weight:600">$83.50</td><td style="text-align:right">18</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM ROW: Sales trend + Inbound -->
+  <div class="grid-wide">
+
+    <!-- Sales Trend -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Sales Trend — Last 6 Months</span>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-dot" style="background:#0369a1"></span>TikTok</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#be185d"></span>Whatnot</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#92400e"></span>eBay</span>
+        </div>
+      </div>
+      <div class="chart-area">
+        <div class="bar-chart">
+          <!-- Jan -->
+          <div class="bar-group"><div class="bar bar-tiktok" style="height:40px"></div><div class="bar bar-whatnot" style="height:30px;background:#fbcfe8"></div><div class="bar bar-ebay" style="height:20px;background:#fde68a"></div></div>
+          <!-- Feb -->
+          <div class="bar-group"><div class="bar bar-tiktok" style="height:55px;background:#bae6fd"></div><div class="bar bar-whatnot" style="height:35px;background:#fbcfe8"></div><div class="bar bar-ebay" style="height:25px;background:#fde68a"></div></div>
+          <!-- Mar -->
+          <div class="bar-group"><div class="bar bar-tiktok" style="height:70px;background:#7dd3fc"></div><div class="bar bar-whatnot" style="height:50px;background:#f9a8d4"></div><div class="bar bar-ebay" style="height:30px;background:#fbbf24"></div></div>
+          <!-- Apr -->
+          <div class="bar-group"><div class="bar bar-tiktok" style="height:90px;background:#38bdf8"></div><div class="bar bar-whatnot" style="height:60px;background:#f472b6"></div><div class="bar bar-ebay" style="height:35px;background:#f59e0b"></div></div>
+          <!-- May -->
+          <div class="bar-group"><div class="bar bar-tiktok" style="height:80px;background:#0ea5e9"></div><div class="bar bar-whatnot" style="height:55px;background:#ec4899"></div><div class="bar bar-ebay" style="height:40px;background:#d97706"></div></div>
+          <!-- Jun -->
+          <div class="bar-group"><div class="bar bar-tiktok" style="height:100px;background:#0284c7"></div><div class="bar bar-whatnot" style="height:70px;background:#db2777"></div><div class="bar bar-ebay" style="height:45px;background:#b45309"></div></div>
+        </div>
+        <div class="months-row">
+          <span class="month-label">Jan</span>
+          <span class="month-label">Feb</span>
+          <span class="month-label">Mar</span>
+          <span class="month-label">Apr</span>
+          <span class="month-label">May</span>
+          <span class="month-label">Jun</span>
+        </div>
+        <div class="chart-summary">
+          <div class="chart-stat"><div class="chart-stat-label">TikTok</div><div class="chart-stat-value tiktok">182</div></div>
+          <div class="chart-stat"><div class="chart-stat-label">Whatnot</div><div class="chart-stat-value whatnot">124</div></div>
+          <div class="chart-stat"><div class="chart-stat-label">eBay</div><div class="chart-stat-value ebay">63</div></div>
+          <div class="chart-stat" style="background:#f0fdf4"><div class="chart-stat-label">Total</div><div class="chart-stat-value" style="color:#15803d">369</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inbound History -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Inbound History</span>
+        <span style="font-size:12px;color:#64748b">9 records</span>
+      </div>
+      <div class="panel-body" style="padding:0">
+        <table class="mini-table">
+          <thead><tr><th>Date</th><th>Vendor</th><th>Invoice</th><th style="text-align:right">Qty</th></tr></thead>
+          <tbody>
+            <tr><td style="color:#64748b">Jun 3, 2025</td><td>ABC Distributors</td><td style="color:#94a3b8">INV-2025-131</td><td style="text-align:right;font-weight:600;color:#16a34a">+18</td></tr>
+            <tr><td style="color:#64748b">May 12, 2025</td><td>Prestige Beauty</td><td style="color:#94a3b8">INV-2025-118</td><td style="text-align:right;font-weight:600;color:#16a34a">+12</td></tr>
+            <tr><td style="color:#64748b">Apr 28, 2025</td><td>Global Scents Co.</td><td style="color:#94a3b8">INV-2025-102</td><td style="text-align:right;font-weight:600;color:#16a34a">+15</td></tr>
+            <tr><td style="color:#64748b">Mar 15, 2025</td><td>ABC Distributors</td><td style="color:#94a3b8">INV-2025-089</td><td style="text-align:right;font-weight:600;color:#16a34a">+20</td></tr>
+            <tr><td style="color:#64748b">Feb 8, 2025</td><td>Prestige Beauty</td><td style="color:#94a3b8">INV-2025-071</td><td style="text-align:right;font-weight:600;color:#16a34a">+10</td></tr>
+            <tr><td style="color:#64748b">Jan 20, 2025</td><td>Global Scents Co.</td><td style="color:#94a3b8">INV-2025-044</td><td style="text-align:right;font-weight:600;color:#16a34a">+25</td></tr>
+            <tr><td style="color:#64748b">Dec 5, 2024</td><td>ABC Distributors</td><td style="color:#94a3b8">INV-2024-212</td><td style="text-align:right;font-weight:600;color:#16a34a">+30</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+<!-- Track Qty Modal -->
+<div class="modal-overlay" id="trackqty-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Track Quantity Settings</span>
+      <button class="modal-close" onclick="closeModal('trackqty-modal','trackqty-toggle','trackqty-edit')">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="field-group">
+        <label class="field-label">Minimum Quantity</label>
+        <input class="field-input" type="number" min="0" value="10" placeholder="e.g. 10" />
+        <span class="field-helper">Alert when stock falls below this number</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('trackqty-modal','trackqty-toggle','trackqty-edit')">Cancel</button>
+      <button class="btn-save" onclick="closeModal('trackqty-modal','trackqty-toggle','trackqty-edit'); modalOpenedFresh['trackqty-modal']=false;">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- HBA Listing Modal -->
+<div class="modal-overlay" id="hba-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">HBA Listing Settings</span>
+      <button class="modal-close" onclick="closeModal('hba-modal','hba-toggle','hba-edit')">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="field-group">
+          <label class="field-label">HBA Quantity</label>
+          <input class="field-input" type="number" min="0" value="" placeholder="0" />
+        </div>
+        <div class="field-group">
+          <label class="field-label">HBA Price ($)</label>
+          <input class="field-input" type="number" min="0" step="0.01" value="" placeholder="0.00" />
+        </div>
+        <div class="field-group">
+          <label class="field-label">MOQ</label>
+          <input class="field-input" type="number" min="1" value="1" />
+          <span class="field-helper">Minimum order quantity</span>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Step Count</label>
+          <input class="field-input" type="number" min="1" value="1" />
+          <span class="field-helper">Order increment</span>
+        </div>
+      </div>
+      <div class="field-group">
+        <label class="field-label">HBA Condition</label>
+        <select class="field-select">
+          <option value="">Use SKU condition (Sealed)</option>
+          <option>Unboxed</option>
+          <option>Sealed</option>
+          <option>Damaged</option>
+          <option>Old Batch</option>
+        </select>
+      </div>
+      <div class="modal-toggle-row">
+        <span class="modal-toggle-label">New Arrival</span>
+        <label class="toggle-switch"><input type="checkbox" /><span class="toggle-track"></span></label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('hba-modal','hba-toggle','hba-edit')">Cancel</button>
+      <button class="btn-save" onclick="closeModal('hba-modal','hba-toggle','hba-edit'); modalOpenedFresh['hba-modal']=false;">Save HBA</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleEbay() {
+    const actions = document.getElementById('ebay-actions');
+    const chevron = document.getElementById('ebay-chevron');
+    const open = actions.style.display === 'flex';
+    actions.style.display = open ? 'none' : 'flex';
+    chevron.style.transform = open ? '' : 'rotate(180deg)';
+  }
+  // tracks whether each modal was opened fresh (toggle just turned on) or via pencil edit
+  const modalOpenedFresh = {};
+
+  function handleToggle(cb, modalId, editBtnId) {
+    const editBtn = document.getElementById(editBtnId);
+    if (cb.checked) {
+      modalOpenedFresh[modalId] = true;
+      openModal(modalId);
+      if (editBtn) editBtn.style.display = 'inline-flex';
+    } else {
+      if (editBtn) editBtn.style.display = 'none';
+    }
+  }
+  function openModalEdit(modalId) {
+    modalOpenedFresh[modalId] = false;
+    openModal(modalId);
+  }
+  function openModal(id) {
+    document.getElementById(id).classList.add('open');
+  }
+  function closeModal(id, toggleId, editBtnId) {
+    document.getElementById(id).classList.remove('open');
+    // only revert the toggle if it was opened fresh (not via pencil)
+    if (modalOpenedFresh[id]) {
+      const cb = document.getElementById(toggleId);
+      if (cb) cb.checked = false;
+      const editBtn = document.getElementById(editBtnId);
+      if (editBtn) editBtn.style.display = 'none';
+    }
+    modalOpenedFresh[id] = false;
+  }
+  // close on overlay click
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === this) {
+        const isHba = this.id === 'hba-modal';
+        closeModal(this.id, isHba ? 'hba-toggle' : 'trackqty-toggle', isHba ? 'hba-edit' : 'trackqty-edit');
+      }
+    });
+  });
+</script>
+</body>
+</html>

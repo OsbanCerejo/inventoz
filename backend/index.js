@@ -9,6 +9,7 @@ const stockUpdateCron = require("./cron/stockUpdate");
 const orderProcessingCron = require("./cron/orderProcessing");
 const invoiceTrackerPaymentReminderCron = require("./cron/invoiceTrackerPaymentReminders");
 const customerServiceOverdueCron = require("./cron/customerServiceOverdue");
+const { aggregateSalesSummary } = require("./cron/salesSummary");
 const path = require("path");
 
 app.use(express.json());
@@ -256,7 +257,10 @@ sequelize
     // orderProcessingCron;
     // invoiceTrackerPaymentReminderCron;
     customerServiceOverdueCron;
-    
+
+    // Run sales summary aggregation once on startup, then nightly at 2AM
+    aggregateSalesSummary();
+
     startServer();
   })
   .catch((err) => {

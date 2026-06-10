@@ -71,6 +71,16 @@ const MODULE_CONFIG: Record<string, ModuleConfig> = {
       edit:   { label: 'Edit',   description: 'Update product details and stock' },
       delete: { label: 'Delete', description: 'Remove products from the system' },
     },
+    subSections: [
+      {
+        label: 'Track Quantity',
+        resources: ['trackQuantity'],
+        actions: {
+          view: { label: 'View', description: 'See the Track Quantity toggle on the product page' },
+          edit: { label: 'Edit', description: 'Toggle and configure Track Quantity settings' },
+        },
+      },
+    ],
   },
   inbound: {
     label: 'Inbound',
