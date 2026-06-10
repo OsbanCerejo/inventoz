@@ -68,7 +68,6 @@ function NavBar() {
   // Menu items configuration
   const menuItems = [
     { key: 'products', label: 'Products', path: '/products', onClick: handleHomeClick, isButton: true },
-    { key: 'inbound', label: 'Inbound', path: '/inbound/showAll' },
     { key: 'orders', label: 'Orders', path: '/orders/showAll' },
     { key: 'hbaOrders', label: 'HBA Orders', path: '/hba-orders' },
     { key: 'packing', label: 'Packing', path: '/orders/packingMode' },
@@ -104,11 +103,7 @@ function NavBar() {
     { key: 'barcode-tool', permissionKey: 'barcodeScan', label: 'Barcode Scan', path: '/barcode-scan' },
   ];
 
-  const walmartItems = [
-    { key: 'walmartIntegration', label: 'Walmart Product Catalog', path: '/walmart-product-catalog' },
-    { key: 'walmartIntegration', label: 'Walmart Integration', path: '/walmart-integration' },
-    { key: 'walmartOrders', label: 'Walmart Orders', path: '/walmart-orders' },
-  ];
+  const walmartItems: { key: string; label: string; path: string }[] = [];
 
   const visibleAnalyticsItems = analyticsItems.filter((item) => hasMenuAccess(item.key));
   const visibleToolsItems = toolsItems.filter((item) =>

@@ -34,16 +34,26 @@ module.exports = {
         type: Sequelize.DATE,
         allowNull: false,
       },
-    });
+    }, { ifNotExists: true });
 
-    await queryInterface.addIndex('skuSalesSummary', ['sku', 'platform', 'year', 'month'], {
-      unique: true,
-      name: 'unique_sku_platform_period',
-    });
+    const [[indexes]] = await queryInterface.sequelize.query(
+      "SHOW INDEX FROM `skuSalesSummary` WHERE Key_name = 'unique_sku_platform_period'"
+    );
+    if (!indexes) {
+      await queryInterface.addIndex('skuSalesSummary', ['sku', 'platform', 'year', 'month'], {
+        unique: true,
+        name: 'unique_sku_platform_period',
+      });
+    }
 
-    await queryInterface.addIndex('skuSalesSummary', ['sku'], {
-      name: 'idx_sku_sales_summary_sku',
-    });
+    const [[skuIndex]] = await queryInterface.sequelize.query(
+      "SHOW INDEX FROM `skuSalesSummary` WHERE Key_name = 'idx_sku_sales_summary_sku'"
+    );
+    if (!skuIndex) {
+      await queryInterface.addIndex('skuSalesSummary', ['sku'], {
+        name: 'idx_sku_sales_summary_sku',
+      });
+    }
   },
 
   down: async (queryInterface) => {
