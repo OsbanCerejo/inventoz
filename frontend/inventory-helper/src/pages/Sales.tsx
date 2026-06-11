@@ -305,7 +305,15 @@ function Sales() {
   const [voiding, setVoiding] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [removingAttachment, setRemovingAttachment] = useState(false);
-  const [filters, setFilters] = useState({ search: "", status: "", category: "" });
+  const [filters, setFilters] = useState({
+    search: "",
+    status: "",
+    category: "",
+    paymentStatus: "",
+    shipmentStatus: "",
+    dateFrom: dayjs().startOf("month"),
+    dateTo: dayjs(),
+  });
   const [productSearchLoading, setProductSearchLoading] = useState(false);
   const [productOptions, setProductOptions] = useState<ProductOption[]>([]);
   const [activeLookupRowId, setActiveLookupRowId] = useState<string | null>(null);
@@ -325,6 +333,10 @@ function Sales() {
           search: filters.search || undefined,
           status: filters.status || undefined,
           category: filters.category || undefined,
+          paymentStatus: filters.paymentStatus || undefined,
+          shipmentStatus: filters.shipmentStatus || undefined,
+          dateFrom: filters.dateFrom ? filters.dateFrom.format("YYYY-MM-DD") : undefined,
+          dateTo: filters.dateTo ? filters.dateTo.format("YYYY-MM-DD") : undefined,
         },
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -335,7 +347,7 @@ function Sales() {
     } finally {
       setLoading(false);
     }
-  }, [filters.category, filters.search, filters.status, token]);
+  }, [filters.category, filters.search, filters.status, filters.paymentStatus, filters.shipmentStatus, filters.dateFrom, filters.dateTo, token]);
 
   useEffect(() => {
     loadSales();
@@ -655,7 +667,10 @@ function Sales() {
     const finalized = sales.filter((sale) => sale.status === "finalized").length;
     const voided = sales.filter((sale) => sale.status === "voided").length;
     const units = sales.reduce((sum, sale) => sum + Number(sale.totalUnits || 0), 0);
-    return { draft, finalized, voided, total: sales.length, units };
+    const finalizedRevenue = sales
+      .filter((sale) => sale.status === "finalized")
+      .reduce((sum, sale) => sum + Number(sale.pricedSubtotal || 0), 0);
+    return { draft, finalized, voided, total: sales.length, units, finalizedRevenue };
   }, [sales]);
 
   const lineItemsEditable = form.status === "draft";
@@ -699,35 +714,37 @@ function Sales() {
         </Stack>
 
         <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={3}>
+          <Grid item xs={6} md={3}>
             <Paper sx={{ p: 2 }}>
               <Typography variant="body2" color="text.secondary">Total Records</Typography>
               <Typography variant="h5" sx={{ fontWeight: 700 }}>{salesSummary.total}</Typography>
             </Paper>
           </Grid>
-          <Grid item xs={12} md={3}>
+          <Grid item xs={6} md={3}>
             <Paper sx={{ p: 2 }}>
               <Typography variant="body2" color="text.secondary">Draft</Typography>
-              <Typography variant="h5" sx={{ fontWeight: 700 }}>{salesSummary.draft}</Typography>
+              <Typography variant="h5" sx={{ fontWeight: 700, color: "warning.main" }}>{salesSummary.draft}</Typography>
             </Paper>
           </Grid>
-          <Grid item xs={12} md={3}>
+          <Grid item xs={6} md={3}>
             <Paper sx={{ p: 2 }}>
               <Typography variant="body2" color="text.secondary">Finalized</Typography>
-              <Typography variant="h5" sx={{ fontWeight: 700 }}>{salesSummary.finalized}</Typography>
+              <Typography variant="h5" sx={{ fontWeight: 700, color: "success.main" }}>{salesSummary.finalized}</Typography>
             </Paper>
           </Grid>
-          <Grid item xs={12} md={3}>
+          <Grid item xs={6} md={3}>
             <Paper sx={{ p: 2 }}>
-              <Typography variant="body2" color="text.secondary">Units Logged</Typography>
-              <Typography variant="h5" sx={{ fontWeight: 700 }}>{salesSummary.units}</Typography>
+              <Typography variant="body2" color="text.secondary">Finalized Revenue</Typography>
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>{formatCurrency(salesSummary.finalizedRevenue)}</Typography>
+              <Typography variant="caption" color="text.secondary">{salesSummary.units} units</Typography>
             </Paper>
           </Grid>
         </Grid>
 
         <Paper sx={{ p: 2, mb: 3 }}>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={5}>
+            {/* Row 1 */}
+            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
                 label="Search receipt or buyer/channel"
@@ -735,7 +752,7 @@ function Sales() {
                 onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
               />
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={6} md={2}>
               <TextField
                 select
                 fullWidth
@@ -743,13 +760,13 @@ function Sales() {
                 value={filters.status}
                 onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
               >
-                <MenuItem value="">All</MenuItem>
+                <MenuItem value="">All Statuses</MenuItem>
                 <MenuItem value="draft">Draft</MenuItem>
                 <MenuItem value="finalized">Finalized</MenuItem>
                 <MenuItem value="voided">Voided</MenuItem>
               </TextField>
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={6} md={2}>
               <TextField
                 select
                 fullWidth
@@ -757,7 +774,7 @@ function Sales() {
                 value={filters.category}
                 onChange={(event) => setFilters((current) => ({ ...current, category: event.target.value }))}
               >
-                <MenuItem value="">All</MenuItem>
+                <MenuItem value="">All Categories</MenuItem>
                 {SALE_CATEGORY_OPTIONS.map((option) => (
                   <MenuItem key={option.value} value={option.value}>
                     {option.label}
@@ -765,8 +782,83 @@ function Sales() {
                 ))}
               </TextField>
             </Grid>
-            <Grid item xs={12} md={1}>
-              <Button fullWidth variant="outlined" startIcon={<RefreshIcon />} onClick={loadSales}>
+            <Grid item xs={6} md={2}>
+              <TextField
+                select
+                fullWidth
+                label="Payment"
+                value={filters.paymentStatus}
+                onChange={(event) => setFilters((current) => ({ ...current, paymentStatus: event.target.value }))}
+              >
+                <MenuItem value="">All Payments</MenuItem>
+                {PAYMENT_STATUS_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={6} md={2}>
+              <TextField
+                select
+                fullWidth
+                label="Shipment"
+                value={filters.shipmentStatus}
+                onChange={(event) => setFilters((current) => ({ ...current, shipmentStatus: event.target.value }))}
+              >
+                <MenuItem value="">All Shipments</MenuItem>
+                {SHIPMENT_STATUS_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            {/* Row 2 */}
+            <Grid item xs={6} md={3}>
+              <DatePicker
+                label="From"
+                value={filters.dateFrom}
+                onChange={(value) => setFilters((current) => ({ ...current, dateFrom: value }))}
+                slotProps={{ textField: { fullWidth: true, size: "small" } }}
+              />
+            </Grid>
+            <Grid item xs={6} md={3}>
+              <DatePicker
+                label="To"
+                value={filters.dateTo}
+                onChange={(value) => setFilters((current) => ({ ...current, dateTo: value }))}
+                slotProps={{ textField: { fullWidth: true, size: "small" } }}
+              />
+            </Grid>
+            <Grid item xs={6} md={2}>
+              <Button
+                fullWidth
+                variant="text"
+                size="small"
+                onClick={() => setFilters((current) => ({ ...current, dateFrom: dayjs().startOf("month"), dateTo: dayjs() }))}
+              >
+                This Month
+              </Button>
+            </Grid>
+            <Grid item xs={6} md={2}>
+              <Button
+                fullWidth
+                variant="text"
+                size="small"
+                onClick={() => setFilters((current) => ({ ...current, dateFrom: dayjs().subtract(30, "day"), dateTo: dayjs() }))}
+              >
+                Last 30 Days
+              </Button>
+            </Grid>
+            <Grid item xs={6} md={1}>
+              <Button
+                fullWidth
+                variant="text"
+                size="small"
+                onClick={() => setFilters((current) => ({ ...current, dateFrom: null, dateTo: null }))}
+              >
+                All Time
+              </Button>
+            </Grid>
+            <Grid item xs={6} md={1}>
+              <Button fullWidth variant="outlined" size="small" startIcon={<RefreshIcon />} onClick={loadSales}>
                 Refresh
               </Button>
             </Grid>
@@ -820,11 +912,21 @@ function Sales() {
                         />
                       </TableCell>
                       <TableCell>
-                        <Stack direction="row" spacing={0.75} flexWrap="wrap">
-                          <Chip size="small" variant="outlined" label={`Pay: ${sale.paymentStatus}`} />
-                          <Chip size="small" variant="outlined" label={`Ship: ${sale.shipmentStatus}`} />
-                          <Chip size="small" variant="outlined" label={`Pack: ${sale.packingStatus}`} />
-                        </Stack>
+                        {sale.paymentStatus === "paid" && sale.shipmentStatus === "delivered" && sale.packingStatus === "packed" ? (
+                          <Chip size="small" color="success" variant="outlined" label="Fulfilled" />
+                        ) : (
+                          <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                            {sale.paymentStatus !== "paid" && (
+                              <Chip size="small" variant="outlined" color={sale.paymentStatus === "unpaid" ? "error" : "warning"} label={`Pay: ${sale.paymentStatus}`} />
+                            )}
+                            {sale.shipmentStatus !== "delivered" && (
+                              <Chip size="small" variant="outlined" color={sale.shipmentStatus === "pending" ? "default" : "info"} label={`Ship: ${sale.shipmentStatus}`} />
+                            )}
+                            {sale.packingStatus !== "packed" && (
+                              <Chip size="small" variant="outlined" color={sale.packingStatus === "not_packed" ? "default" : "warning"} label={`Pack: ${sale.packingStatus}`} />
+                            )}
+                          </Stack>
+                        )}
                       </TableCell>
                       <TableCell>{sale.totalUnits}</TableCell>
                       <TableCell>{formatCurrency(sale.pricedSubtotal)}</TableCell>

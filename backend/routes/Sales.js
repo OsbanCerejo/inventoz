@@ -466,6 +466,10 @@ router.get("/", auth, checkPermission("sales", "view"), async (req, res) => {
     const search = sanitizeString(req.query.search);
     const status = sanitizeString(req.query.status);
     const category = sanitizeString(req.query.category);
+    const paymentStatus = sanitizeString(req.query.paymentStatus);
+    const shipmentStatus = sanitizeString(req.query.shipmentStatus);
+    const dateFrom = sanitizeString(req.query.dateFrom);
+    const dateTo = sanitizeString(req.query.dateTo);
 
     const where = {};
     if (status && VALID_SALE_STATUSES.includes(status)) {
@@ -473,6 +477,19 @@ router.get("/", auth, checkPermission("sales", "view"), async (req, res) => {
     }
     if (category && VALID_SALE_CATEGORIES.includes(category)) {
       where.saleCategory = category;
+    }
+    if (paymentStatus && VALID_PAYMENT_STATUSES.includes(paymentStatus)) {
+      where.paymentStatus = paymentStatus;
+    }
+    if (shipmentStatus && VALID_SHIPMENT_STATUSES.includes(shipmentStatus)) {
+      where.shipmentStatus = shipmentStatus;
+    }
+    if (dateFrom && dateTo) {
+      where.saleDate = { [Op.between]: [dateFrom, dateTo] };
+    } else if (dateFrom) {
+      where.saleDate = { [Op.gte]: dateFrom };
+    } else if (dateTo) {
+      where.saleDate = { [Op.lte]: dateTo };
     }
     if (search) {
       where[Op.or] = [
@@ -490,7 +507,7 @@ router.get("/", auth, checkPermission("sales", "view"), async (req, res) => {
       where,
       include: listIncludes,
       order: [
-        ["createdAt", "DESC"],
+        ["saleDate", "DESC"],
         ["id", "DESC"],
       ],
     });

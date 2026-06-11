@@ -463,11 +463,27 @@ function Product() {
     trackQtyOpenedFresh.current = false;
   };
 
-  const handleHbaToggle = (val: boolean) => {
+  const handleHbaToggle = async (val: boolean) => {
     setHbaEnabled(val);
     if (val) {
       hbaOpenedFresh.current = true;
       setHbaDialogOpen(true);
+    } else {
+      // Toggling off — save immediately so the HBA catalog reflects the change
+      setSavingHba(true);
+      try {
+        const payload = { ...productObject, hbaEnabled: false };
+        const { data: updatedProduct } = await axios.put(getApiUrl("products"), payload);
+        setProductObject(updatedProduct);
+        invalidateProductsCache();
+        toast.success("HBA listing disabled.", { position: "top-right" });
+      } catch (error) {
+        console.error("Error disabling HBA listing:", error);
+        setHbaEnabled(true); // revert toggle on failure
+        toast.error("Failed to disable HBA listing.", { position: "top-right" });
+      } finally {
+        setSavingHba(false);
+      }
     }
   };
 
