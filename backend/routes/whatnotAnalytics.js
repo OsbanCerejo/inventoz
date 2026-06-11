@@ -3112,5 +3112,81 @@ router.get("/fulfillment-sorting-shipments", auth, checkPermission("sortingAnaly
   }
 });
 
+// Misscans (unexpected item scans) per user, grouped by day/week/month
+router.get("/fulfillment-sorting-misscans-daily", auth, checkPermission("sortingAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) return res.status(400).json({ error: "Invalid date range" });
+
+  const sorterId = req.query.sorterId ? String(req.query.sorterId).trim() : null;
+  const granularity = ["day", "week", "month"].includes(req.query.granularity) ? req.query.granularity : "day";
+
+  const bucketExpr =
+    granularity === "month"
+      ? `DATE_FORMAT(wss.createdAt, '%Y-%m')`
+      : granularity === "week"
+      ? `DATE_FORMAT(DATE_SUB(wss.createdAt, INTERVAL WEEKDAY(wss.createdAt) DAY), '%Y-%m-%d')`
+      : `DATE_FORMAT(wss.createdAt, '%Y-%m-%d')`;
+
+  try {
+    // Per-user per-bucket unexpected scan counts
+    const [dailyRows] = await sequelize.query(
+      `
+      SELECT
+        ${bucketExpr} AS bucket,
+        wss.userId,
+        COALESCE(u.name, u.username, CONCAT('User ', wss.userId)) AS sorterName,
+        COUNT(*) AS misscans
+      FROM ${TABLES.shipmentScans} wss
+      LEFT JOIN ${TABLES.users} u ON u.id = wss.userId
+      WHERE wss.result = 'unexpected'
+        AND wss.scanType = 'item'
+        AND wss.createdAt >= :from
+        AND wss.createdAt < :to
+        AND (:sorterId IS NULL OR wss.userId = :sorterId)
+      GROUP BY bucket, wss.userId, sorterName
+      ORDER BY bucket ASC, misscans DESC
+      `,
+      { replacements: { from: range.from, to: range.to, sorterId } }
+    );
+
+    // Per-user totals + misscan rate (misscans / total item scans)
+    const [summaryRows] = await sequelize.query(
+      `
+      SELECT
+        wss.userId,
+        COALESCE(u.name, u.username, CONCAT('User ', wss.userId)) AS sorterName,
+        COUNT(*) AS totalItemScans,
+        SUM(CASE WHEN wss.result = 'unexpected' THEN 1 ELSE 0 END) AS misscans,
+        ROUND(
+          SUM(CASE WHEN wss.result = 'unexpected' THEN 1 ELSE 0 END) / COUNT(*) * 100,
+          2
+        ) AS misscanRatePct
+      FROM ${TABLES.shipmentScans} wss
+      LEFT JOIN ${TABLES.users} u ON u.id = wss.userId
+      WHERE wss.scanType = 'item'
+        AND wss.createdAt >= :from
+        AND wss.createdAt < :to
+        AND (:sorterId IS NULL OR wss.userId = :sorterId)
+      GROUP BY wss.userId, sorterName
+      ORDER BY misscans DESC
+      `,
+      { replacements: { from: range.from, to: range.to, sorterId } }
+    );
+
+    res.json({
+      daily: dailyRows.map((r) => ({ ...r, misscans: Number(r.misscans || 0) })),
+      summary: summaryRows.map((r) => ({
+        ...r,
+        totalItemScans: Number(r.totalItemScans || 0),
+        misscans: Number(r.misscans || 0),
+        misscanRatePct: Number(r.misscanRatePct || 0),
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching misscan analytics:", error);
+    res.status(500).json({ error: "Failed to fetch misscan analytics" });
+  }
+});
+
 module.exports = router;
 

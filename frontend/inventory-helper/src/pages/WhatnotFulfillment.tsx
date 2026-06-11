@@ -369,6 +369,8 @@ const WhatnotFulfillment = () => {
   const [shows, setShows] = useState<ShowItem[]>([]);
   const [showsLoading, setShowsLoading] = useState(false);
   const [selectedShowId, setSelectedShowId] = useState<string>("");
+  const [newShowName, setNewShowName] = useState("");
+  const [creatingShow, setCreatingShow] = useState(false);
 
   const [summary, setSummary] = useState<FulfillmentSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -584,6 +586,25 @@ const WhatnotFulfillment = () => {
       setError("Failed to load shows");
     } finally {
       setShowsLoading(false);
+    }
+  };
+
+  const handleCreateShow = async () => {
+    const trimmed = newShowName.trim();
+    if (!trimmed) return;
+    setCreatingShow(true);
+    try {
+      const response = await axios.post(getApiUrl("whatnot/shows"), { name: trimmed });
+      const created = response.data as ShowItem;
+      setNewShowName("");
+      await fetchShows();
+      if (created?.id) setSelectedShowId(String(created.id));
+      setSuccess(`Whatnot show "${trimmed}" created.`);
+    } catch (createError: any) {
+      console.error("Error creating Whatnot show:", createError);
+      setError(createError?.response?.data?.error || "Failed to create show");
+    } finally {
+      setCreatingShow(false);
     }
   };
 
@@ -1125,6 +1146,30 @@ const WhatnotFulfillment = () => {
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 0.5 }}>
                 Selected show: <strong>{selectedShowName || "N/A"}</strong>
               </Typography>
+              {isAdmin && (
+                <Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    label="New Whatnot Show"
+                    value={newShowName}
+                    onChange={(e) => setNewShowName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleCreateShow();
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outlined"
+                    onClick={handleCreateShow}
+                    disabled={!newShowName.trim() || creatingShow}
+                  >
+                    {creatingShow ? <CircularProgress size={18} /> : "Create"}
+                  </Button>
+                </Box>
+              )}
               {summary?.activeImport ? (
                 <Typography variant="body2" color="text.secondary" sx={{ wordBreak: "break-all" }}>
                   Active CSV: <strong>{summary.activeImport.fileName}</strong>

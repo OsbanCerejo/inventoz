@@ -14,6 +14,8 @@ interface SortingCategoryRow { itemCategory: string; shipmentCount: number; tota
 interface SortingSorterDailyRow { bucket: string; sorterId: string | null; sorterName: string; shipmentsClosed: number; totalUnits: number; closeRelevantUnits: number; }
 interface SortingShowSorterRow { showId: number; showName: string; sorterId: string | null; sorterName: string; shipmentsClosed: number; totalUnits: number; closeRelevantUnits: number; avgSecondsBetweenScans: number | null; avgHandlingMinutes: number | null; totalScans: number; }
 interface SortingScanTimingRow { sorterId: string | null; sorterName: string; shipmentsClosed: number; avgSecondsBetweenScans: number | null; avgHandlingMinutes: number | null; avgScansPerShipment: number | null; totalScans: number; }
+interface MisscanDailyRow { bucket: string; userId: string | null; sorterName: string; misscans: number; }
+interface MisscanSummaryRow { userId: string | null; sorterName: string; totalItemScans: number; misscans: number; misscanRatePct: number; }
 interface SortingShipmentRow { showId: number; showName: string; importId: number; shipmentId: string; tracking: string | null; closedAt: string | null; sorterId: string | null; sorterName: string; totalExpectedUnits: number; closeRelevantUnits: number; lineCount: number; categoryTypeCount: number; categories: string; hasMismatch: boolean; hasRandomGiveaway: boolean; hasNonRandomGiveaway: boolean; auctionUnits: number; flashSaleUnits: number; raidGiveawayUnits: number; buyersGiveawayUnits: number; randomGiveawayUnits: number; coffeeUnits: number; sponsoredGiveawayUnits: number; otherUnits: number; buyer: string | null; orderId: string | null; orderNumericId: string | null; }
 
 const formatDateInput = (date: Date) => date.toISOString().slice(0, 10);
@@ -107,6 +109,10 @@ function SortingAnalytics() {
   const [showSorterRows, setShowSorterRows] = useState<SortingShowSorterRow[]>([]);
   const [scanTimingRows, setScanTimingRows] = useState<SortingScanTimingRow[]>([]);
   const [shipments, setShipments] = useState<SortingShipmentRow[]>([]);
+  const [misscanByGranularity, setMisscanByGranularity] = useState<Record<"day" | "week" | "month", MisscanDailyRow[]>>({ day: [], week: [], month: [] });
+  const [misscanSummary, setMisscanSummary] = useState<MisscanSummaryRow[]>([]);
+  const [misscanGranularity, setMisscanGranularity] = useState<"day" | "week" | "month">("day");
+  const misscanDaily = misscanByGranularity[misscanGranularity];
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -117,7 +123,7 @@ function SortingAnalytics() {
   const weekdayRows = useMemo(() => dayLabels.map((label, index) => { const row = weekday.find((entry) => Number(entry.dayIndex) === index); return { dayName: label, shipmentsClosed: Number(row?.shipmentsClosed || 0), totalUnits: Number(row?.totalUnits || 0) }; }), [weekday]);
   const heatmapGrid = useMemo(() => { const grid = new Map<string, number>(); heatmap.forEach((row) => grid.set(`${row.dayIndex}-${row.hourOfDay}`, Number(row.shipmentsClosed || 0))); return { grid, max: Math.max(1, ...Array.from(grid.values())) }; }, [heatmap]);
   const topDailyRows = useMemo(() => daily.slice().sort((a, b) => Number(b.shipmentsClosed || 0) - Number(a.shipmentsClosed || 0)).slice(0, 12), [daily]);
-  const sorterColors = useMemo(() => Array.from(new Set(showSorterRows.map((row) => row.sorterName).concat(leaderboard.map((row) => row.sorterName)).filter(Boolean))).reduce<Record<string, string>>((acc, sorterName, index) => { acc[sorterName] = sorterPalette[index % sorterPalette.length]; return acc; }, {}), [showSorterRows, leaderboard]);
+  const sorterColors = useMemo(() => Array.from(new Set(showSorterRows.map((row) => row.sorterName).concat(leaderboard.map((row) => row.sorterName)).concat(misscanSummary.map((r) => r.sorterName)).filter(Boolean))).reduce<Record<string, string>>((acc, sorterName, index) => { acc[sorterName] = sorterPalette[index % sorterPalette.length]; return acc; }, {}), [showSorterRows, leaderboard, misscanSummary]);
   const sorterShipmentShare = useMemo(() => leaderboard.slice(0, 8).map((row) => ({ label: row.sorterName, value: Number(row.shipmentsClosed || 0), color: sorterColors[row.sorterName] || "#94a3b8" })), [leaderboard, sorterColors]);
   const categoryShare = useMemo(() => categoryRows.map((row, index) => ({ label: categoryLabel(row.itemCategory), value: Number(row.totalUnits || 0), color: sorterPalette[index % sorterPalette.length] })), [categoryRows]);
   const averageScanGap = useMemo(() => { const valid = scanTimingRows.filter((row) => row.avgSecondsBetweenScans !== null && row.avgSecondsBetweenScans !== undefined); if (valid.length === 0) return null; return valid.reduce((sum, row) => sum + Number(row.avgSecondsBetweenScans || 0), 0) / valid.length; }, [scanTimingRows]);
@@ -141,8 +147,11 @@ function SortingAnalytics() {
           axios.get(getApiUrl("whatnot/analytics/fulfillment-sorting-show-sorters"), { params: { ...params, limit: 250 } }),
           axios.get(getApiUrl("whatnot/analytics/fulfillment-sorting-scan-timing"), { params: { ...params, limit: 50 } }),
           axios.get(getApiUrl("whatnot/analytics/fulfillment-sorting-shipments"), { params: { ...params, limit: 100 } }),
+          axios.get(getApiUrl("whatnot/analytics/fulfillment-sorting-misscans-daily"), { params: { ...params, granularity: "day" } }),
+          axios.get(getApiUrl("whatnot/analytics/fulfillment-sorting-misscans-daily"), { params: { ...params, granularity: "week" } }),
+          axios.get(getApiUrl("whatnot/analytics/fulfillment-sorting-misscans-daily"), { params: { ...params, granularity: "month" } }),
         ]);
-        const [overviewResult, leaderboardResult, dailyResult, showsResult, weekdayResult, heatmapResult, categoriesResult, sorterDailyResult, showSortersResult, scanTimingResult, shipmentsResult] = results;
+        const [overviewResult, leaderboardResult, dailyResult, showsResult, weekdayResult, heatmapResult, categoriesResult, sorterDailyResult, showSortersResult, scanTimingResult, shipmentsResult, misscansDayResult, misscansWeekResult, misscansMonthResult] = results;
         if (overviewResult.status === "fulfilled") setOverview(overviewResult.value.data || null);
         if (leaderboardResult.status === "fulfilled") setLeaderboard(leaderboardResult.value.data || []);
         if (dailyResult.status === "fulfilled") setDaily(dailyResult.value.data || []);
@@ -154,7 +163,13 @@ function SortingAnalytics() {
         if (showSortersResult.status === "fulfilled") setShowSorterRows(showSortersResult.value.data || []);
         if (scanTimingResult.status === "fulfilled") setScanTimingRows(scanTimingResult.value.data || []);
         if (shipmentsResult.status === "fulfilled") setShipments(shipmentsResult.value.data || []);
-        const failedPanels = [{ name: "sorting-overview", result: overviewResult }, { name: "sorting-leaderboard", result: leaderboardResult }, { name: "sorting-daily", result: dailyResult }, { name: "sorting-shows", result: showsResult }, { name: "sorting-weekday", result: weekdayResult }, { name: "sorting-time-heatmap", result: heatmapResult }, { name: "sorting-categories", result: categoriesResult }, { name: "sorting-sorters-daily", result: sorterDailyResult }, { name: "sorting-show-sorters", result: showSortersResult }, { name: "sorting-scan-timing", result: scanTimingResult }, { name: "sorting-shipments", result: shipmentsResult }].filter((entry) => entry.result.status === "rejected");
+        setMisscanByGranularity({
+          day: misscansDayResult.status === "fulfilled" ? (misscansDayResult.value.data?.daily || []) : [],
+          week: misscansWeekResult.status === "fulfilled" ? (misscansWeekResult.value.data?.daily || []) : [],
+          month: misscansMonthResult.status === "fulfilled" ? (misscansMonthResult.value.data?.daily || []) : [],
+        });
+        if (misscansDayResult.status === "fulfilled") setMisscanSummary(misscansDayResult.value.data?.summary || []);
+        const failedPanels = [{ name: "sorting-overview", result: overviewResult }, { name: "sorting-leaderboard", result: leaderboardResult }, { name: "sorting-daily", result: dailyResult }, { name: "sorting-shows", result: showsResult }, { name: "sorting-weekday", result: weekdayResult }, { name: "sorting-time-heatmap", result: heatmapResult }, { name: "sorting-categories", result: categoriesResult }, { name: "sorting-sorters-daily", result: sorterDailyResult }, { name: "sorting-show-sorters", result: showSortersResult }, { name: "sorting-scan-timing", result: scanTimingResult }, { name: "sorting-shipments", result: shipmentsResult }, { name: "sorting-misscans-day", result: misscansDayResult }, { name: "sorting-misscans-week", result: misscansWeekResult }, { name: "sorting-misscans-month", result: misscansMonthResult }].filter((entry) => entry.result.status === "rejected");
         if (failedPanels.length > 0) setError(`Some sorting analytics panels failed to load: ${failedPanels.map((entry) => entry.name).join(", ")}.`);
       } catch (fetchError) {
         console.error("Error fetching sorting analytics:", fetchError);
@@ -179,11 +194,172 @@ function SortingAnalytics() {
         <Box><Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>Sorting Analytics</Typography><Typography variant="body1" color="text.secondary">Operational dashboard for Whatnot shipment sorting, sorter split by show, scan timing, and context mix.</Typography></Box>
         <Paper sx={{ p: 2, borderRadius: 2 }}><Grid container spacing={2}><Grid item xs={12} sm={6} md={3}><TextField fullWidth label="From" type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} InputLabelProps={{ shrink: true }} /></Grid><Grid item xs={12} sm={6} md={3}><TextField fullWidth label="To" type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} InputLabelProps={{ shrink: true }} /></Grid><Grid item xs={12} sm={6} md={3}><FormControl fullWidth><InputLabel id="sorting-analytics-show-label">Show</InputLabel><Select labelId="sorting-analytics-show-label" value={selectedShowId} label="Show" onChange={(event) => setSelectedShowId(String(event.target.value || ""))}><MenuItem value="">All Shows</MenuItem>{shows.map((show) => <MenuItem key={show.id} value={String(show.id)}>{show.name}</MenuItem>)}</Select></FormControl></Grid><Grid item xs={12} sm={6} md={3}><FormControl fullWidth><InputLabel id="sorting-analytics-sorter-label">Sorter</InputLabel><Select labelId="sorting-analytics-sorter-label" value={selectedSorterId} label="Sorter" onChange={(event) => setSelectedSorterId(String(event.target.value || ""))}><MenuItem value="">All Sorters</MenuItem>{sorterOptions.map((sorter) => <MenuItem key={sorter.sorterId} value={sorter.sorterId}>{sorter.sorterName}</MenuItem>)}</Select></FormControl></Grid></Grid></Paper>
         {error ? <Alert severity="warning">{error}</Alert> : null}
-        {loading ? <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}><CircularProgress /></Box> : <><Grid container spacing={2}>{overviewCards.map((card) => <Grid item xs={12} sm={6} md={4} lg={2} key={card.label}><MetricCard {...card} /></Grid>)}</Grid><Paper sx={{ borderRadius: 2 }}><Tabs value={activeTab} onChange={(_, value) => setActiveTab(value)} variant="scrollable" scrollButtons="auto"><Tab label="Overview" /><Tab label="Sorters" /><Tab label="Timing" /><Tab label="Categories" /><Tab label="Shipments" /></Tabs></Paper>
+        {loading ? <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}><CircularProgress /></Box> : <><Grid container spacing={2}>{overviewCards.map((card) => <Grid item xs={12} sm={6} md={4} lg={2} key={card.label}><MetricCard {...card} /></Grid>)}</Grid><Paper sx={{ borderRadius: 2 }}><Tabs value={activeTab} onChange={(_, value) => setActiveTab(value)} variant="scrollable" scrollButtons="auto"><Tab label="Overview" /><Tab label="Sorters" /><Tab label="Timing" /><Tab label="Categories" /><Tab label="Shipments" /><Tab label="Misscans" /></Tabs></Paper>
           {activeTab === 0 && <Grid container spacing={2}><Grid item xs={12} xl={8}><Stack spacing={2}><StackedShowBars title="Show Split By Sorter (Closed Shipments)" rows={showSorterRows} valueKey="shipmentsClosed" valueLabel="shipments" sorterColors={sorterColors} /><StackedShowBars title="Show Split By Sorter (Units Sorted)" rows={showSorterRows} valueKey="totalUnits" valueLabel="units" sorterColors={sorterColors} /></Stack></Grid><Grid item xs={12} xl={4}><Stack spacing={2}><DonutShareChart title="Sorter Share Of Closed Shipments" items={sorterShipmentShare} totalLabel="shipments" formatter={(value) => formatNumber(value)} /><Paper sx={{ p: 2, borderRadius: 2 }}><Typography variant="h6" sx={{ mb: 1.2 }}>Sorter Color Key</Typography>{Object.keys(sorterColors).length === 0 ? <Typography variant="body2" color="text.secondary">No sorter split found for this range.</Typography> : <Stack spacing={0.8}>{Object.entries(sorterColors).map(([sorterName, color]) => <Stack key={sorterName} direction="row" spacing={1} alignItems="center"><Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: color }} /><Typography variant="body2">{sorterName}</Typography></Stack>)}</Stack>}</Paper></Stack></Grid><Grid item xs={12} md={6}><Paper sx={{ p: 2, borderRadius: 2 }}><Typography variant="h6" sx={{ mb: 1.2 }}>Top Days By Shipments</Typography><HorizontalBarList items={topDailyRows} labelKey="bucket" valueKey="shipmentsClosed" color="#1565c0" maxItems={12} valueFormatter={(value) => `${formatNumber(value)} shipments`} /></Paper></Grid><Grid item xs={12} md={6}><Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}><Typography variant="h6" sx={{ mb: 1.2 }}>Snapshot</Typography><Stack spacing={1.2}><Box sx={{ p: 1.4, borderRadius: 2, bgcolor: "#f7fbff", border: "1px solid #d7e7fb" }}><Typography variant="caption" color="text.secondary">Avg Scan Gap Between Scans</Typography><Typography variant="h6" sx={{ color: "#1565c0", fontWeight: 700 }}>{averageScanGap !== null ? formatDurationSeconds(averageScanGap) : "N/A"}</Typography></Box><Box sx={{ p: 1.4, borderRadius: 2, bgcolor: "#f5fff7", border: "1px solid #d8efdc" }}><Typography variant="caption" color="text.secondary">Avg Shipment Handling Time</Typography><Typography variant="h6" sx={{ color: "#2e7d32", fontWeight: 700 }}>{averageHandlingMinutes !== null ? formatDurationMinutes(averageHandlingMinutes) : "N/A"}</Typography></Box><Box sx={{ p: 1.4, borderRadius: 2, bgcolor: "#fff7f2", border: "1px solid #f5ddca" }}><Typography variant="caption" color="text.secondary">Mixed GVY Shipments</Typography><Typography variant="h6" sx={{ color: "#ef6c00", fontWeight: 700 }}>{formatNumber(overview?.mixedGiveawayShipments || 0)}</Typography></Box></Stack></Paper></Grid></Grid>}
           {activeTab === 1 && <Grid container spacing={2}><Grid item xs={12} lg={7}><Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}><Typography variant="h6" sx={{ mb: 1.5 }}>Sorter Leaderboard</Typography><TableContainer><Table size="small"><TableHead><TableRow><TableCell>Sorter</TableCell><TableCell align="right">Shipments</TableCell><TableCell align="right">Units</TableCell><TableCell align="right">Close-Relevant</TableCell><TableCell align="right">Avg Units</TableCell><TableCell align="right">Review %</TableCell><TableCell align="right">Last Activity</TableCell></TableRow></TableHead><TableBody>{leaderboard.length === 0 ? <TableRow><TableCell colSpan={7}><Typography variant="body2" color="text.secondary">No sorter activity found in this range.</Typography></TableCell></TableRow> : leaderboard.map((row) => <TableRow key={`${row.sorterId || "unknown"}-${row.sorterName}`}><TableCell><Stack spacing={0.25}><Typography variant="body2" sx={{ fontWeight: 600 }}>{row.sorterName}</Typography><Typography variant="caption" color="text.secondary">{row.activeDays} active day(s)</Typography></Stack></TableCell><TableCell align="right">{formatNumber(row.shipmentsClosed)}</TableCell><TableCell align="right">{formatNumber(row.totalUnits)}</TableCell><TableCell align="right">{formatNumber(row.closeRelevantUnits)}</TableCell><TableCell align="right">{formatDecimal(row.avgUnitsPerShipment)}</TableCell><TableCell align="right">{formatPct(row.reviewRate)}</TableCell><TableCell align="right">{formatDateTime(row.lastClosedAt)}</TableCell></TableRow>)}</TableBody></Table></TableContainer></Paper></Grid><Grid item xs={12} lg={5}><DonutShareChart title="Sorter Share Of Units" items={leaderboard.slice(0, 8).map((row) => ({ label: row.sorterName, value: Number(row.totalUnits || 0), color: sorterColors[row.sorterName] || "#94a3b8" }))} totalLabel="units" formatter={(value) => formatNumber(value)} /></Grid><Grid item xs={12} md={6}><Paper sx={{ p: 2, borderRadius: 2 }}><Typography variant="h6" sx={{ mb: 1.5 }}>Shipments Closed By Sorter</Typography><HorizontalBarList items={leaderboard} labelKey="sorterName" valueKey="shipmentsClosed" color="#1565c0" maxItems={12} valueFormatter={(value) => `${formatNumber(value)} shipments`} /></Paper></Grid><Grid item xs={12} md={6}><Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}><Typography variant="h6" sx={{ mb: 1.5 }}>Selected Sorter Snapshot</Typography>{selectedSorterSnapshot ? <Stack spacing={1.2}><Box sx={{ p: 1.4, borderRadius: 2, bgcolor: "#f7fbff", border: "1px solid #d7e7fb" }}><Typography variant="caption" color="text.secondary">{selectedSorterSnapshot.sorterName}</Typography><Typography variant="h6" sx={{ color: "#1565c0", fontWeight: 700 }}>{formatNumber(selectedSorterSnapshot.shipmentsClosed)} shipments</Typography></Box><Typography variant="body2" color="text.secondary">{formatNumber(selectedSorterSnapshot.totalUnits)} total units, {formatNumber(selectedSorterSnapshot.closeRelevantUnits)} close-relevant units, review rate {formatPct(selectedSorterSnapshot.reviewRate)}.</Typography><Typography variant="body2" color="text.secondary">First close: {formatDateTime(selectedSorterSnapshot.firstClosedAt)}</Typography><Typography variant="body2" color="text.secondary">Last close: {formatDateTime(selectedSorterSnapshot.lastClosedAt)}</Typography></Stack> : <Typography variant="body2" color="text.secondary">Pick a sorter from the filter above to get an individual snapshot.</Typography>}</Paper></Grid><Grid item xs={12}><Paper sx={{ p: 2, borderRadius: 2 }}><Typography variant="h6" sx={{ mb: 1.5 }}>Top Sorters Daily Output</Typography>{sorterDaily.length === 0 ? <Typography variant="body2" color="text.secondary">No daily sorter comparison available for this range.</Typography> : <TableContainer><Table size="small"><TableHead><TableRow><TableCell>Date</TableCell><TableCell>Sorter</TableCell><TableCell align="right">Shipments</TableCell><TableCell align="right">Units</TableCell><TableCell align="right">Close-Relevant</TableCell></TableRow></TableHead><TableBody>{sorterDaily.map((row, index) => <TableRow key={`${row.bucket}-${row.sorterName}-${index}`}><TableCell>{row.bucket}</TableCell><TableCell>{row.sorterName}</TableCell><TableCell align="right">{formatNumber(row.shipmentsClosed)}</TableCell><TableCell align="right">{formatNumber(row.totalUnits)}</TableCell><TableCell align="right">{formatNumber(row.closeRelevantUnits)}</TableCell></TableRow>)}</TableBody></Table></TableContainer>}</Paper></Grid></Grid>}
           {activeTab === 2 && <Grid container spacing={2}><Grid item xs={12} lg={6}><Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}><Typography variant="h6" sx={{ mb: 1.5 }}>Average Gap Between Scans By Sorter</Typography><HorizontalBarList items={scanTimingRows.slice().sort((a, b) => Number(a.avgSecondsBetweenScans ?? Number.MAX_SAFE_INTEGER) - Number(b.avgSecondsBetweenScans ?? Number.MAX_SAFE_INTEGER)).map((row) => ({ ...row, displayValue: row.avgSecondsBetweenScans ?? 0 }))} labelKey="sorterName" valueKey="displayValue" color="#00838f" maxItems={12} valueFormatter={(value) => formatDurationSeconds(value)} /></Paper></Grid><Grid item xs={12} lg={6}><Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}><Typography variant="h6" sx={{ mb: 1.5 }}>Average Shipment Handling Time By Sorter</Typography><HorizontalBarList items={scanTimingRows.slice().sort((a, b) => Number(a.avgHandlingMinutes ?? Number.MAX_SAFE_INTEGER) - Number(b.avgHandlingMinutes ?? Number.MAX_SAFE_INTEGER)).map((row) => ({ ...row, displayValue: row.avgHandlingMinutes ?? 0 }))} labelKey="sorterName" valueKey="displayValue" color="#6a1b9a" maxItems={12} valueFormatter={(value) => formatDurationMinutes(value)} /></Paper></Grid><Grid item xs={12} md={6}><Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}><Typography variant="h6" sx={{ mb: 1.5 }}>Timing Detail By Sorter</Typography><TableContainer><Table size="small"><TableHead><TableRow><TableCell>Sorter</TableCell><TableCell align="right">Avg Gap</TableCell><TableCell align="right">Avg Handling</TableCell><TableCell align="right">Scans / Shipment</TableCell><TableCell align="right">Total Scans</TableCell></TableRow></TableHead><TableBody>{scanTimingRows.length === 0 ? <TableRow><TableCell colSpan={5}><Typography variant="body2" color="text.secondary">No scan timing data available.</Typography></TableCell></TableRow> : scanTimingRows.map((row) => <TableRow key={`${row.sorterId || "unknown"}-${row.sorterName}`}><TableCell>{row.sorterName}</TableCell><TableCell align="right">{formatDurationSeconds(row.avgSecondsBetweenScans)}</TableCell><TableCell align="right">{formatDurationMinutes(row.avgHandlingMinutes)}</TableCell><TableCell align="right">{row.avgScansPerShipment === null || row.avgScansPerShipment === undefined ? "N/A" : formatDecimal(row.avgScansPerShipment)}</TableCell><TableCell align="right">{formatNumber(row.totalScans)}</TableCell></TableRow>)}</TableBody></Table></TableContainer></Paper></Grid><Grid item xs={12} md={6}><Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}><Typography variant="h6" sx={{ mb: 1.5 }}>Day-Of-Week Pattern</Typography><HorizontalBarList items={weekdayRows} labelKey="dayName" valueKey="shipmentsClosed" color="#ef6c00" maxItems={7} valueFormatter={(value) => `${formatNumber(value)} shipments`} /><Box sx={{ mt: 2 }}><Typography variant="subtitle2" sx={{ mb: 1 }}>Weekday Units Pattern</Typography><HorizontalBarList items={weekdayRows} labelKey="dayName" valueKey="totalUnits" color="#2e7d32" maxItems={7} valueFormatter={(value) => `${formatNumber(value)} units`} /></Box></Paper></Grid><Grid item xs={12}><Paper sx={{ p: 2, borderRadius: 2 }}><Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}><Typography variant="h6">Day-Of-Week x Hour Heatmap</Typography><Typography variant="caption" color="text.secondary">Color intensity = shipments closed in that hour block</Typography></Box><Box sx={{ overflowX: "auto" }}><Grid container><Grid item sx={{ width: 74 }} />{Array.from({ length: 24 }, (_, hour) => <Grid key={`hour-header-${hour}`} item sx={{ width: 34, textAlign: "center" }}><Typography variant="caption" color="text.secondary">{hour}</Typography></Grid>)}</Grid>{dayLabels.map((label, dayIndex) => <Grid container key={`day-${label}`} alignItems="center"><Grid item sx={{ width: 74 }}><Typography variant="caption" sx={{ fontWeight: 700 }}>{label}</Typography></Grid>{Array.from({ length: 24 }, (_, hour) => { const value = heatmapGrid.grid.get(`${dayIndex}-${hour}`) || 0; const intensity = value > 0 ? Math.max(0.15, value / heatmapGrid.max) : 0; return <Grid key={`${label}-${hour}`} item sx={{ width: 34 }}><Box title={`${label} ${hour}:00 - ${formatNumber(value)} shipment(s)`} sx={{ width: 28, height: 24, borderRadius: 1, bgcolor: value > 0 ? `rgba(21, 101, 192, ${intensity})` : "#f3f6fb", border: "1px solid #e4ebf3", display: "flex", alignItems: "center", justifyContent: "center" }}><Typography variant="caption" sx={{ fontSize: 10, color: value > 0 ? "#0f172a" : "#94a3b8" }}>{value > 0 ? value : ""}</Typography></Box></Grid>; })}</Grid>)}</Box></Paper></Grid></Grid>}
           {activeTab === 3 && <Grid container spacing={2}><Grid item xs={12} md={5}><DonutShareChart title="Category Mix By Units" items={categoryShare} totalLabel="units" formatter={(value) => formatNumber(value)} /></Grid><Grid item xs={12} md={7}><Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}><Typography variant="h6" sx={{ mb: 1.5 }}>Category Detail</Typography><TableContainer><Table size="small"><TableHead><TableRow><TableCell>Category</TableCell><TableCell align="right">Shipments</TableCell><TableCell align="right">Units</TableCell><TableCell align="right">Close-Relevant</TableCell><TableCell align="right">Share</TableCell></TableRow></TableHead><TableBody>{categoryRows.length === 0 ? <TableRow><TableCell colSpan={5}><Typography variant="body2" color="text.secondary">No category data available.</Typography></TableCell></TableRow> : categoryRows.map((row) => { const share = categoryMixTotal > 0 ? (Number(row.totalUnits || 0) / categoryMixTotal) * 100 : 0; return <TableRow key={row.itemCategory}><TableCell>{categoryLabel(row.itemCategory)}</TableCell><TableCell align="right">{formatNumber(row.shipmentCount)}</TableCell><TableCell align="right">{formatNumber(row.totalUnits)}</TableCell><TableCell align="right">{formatNumber(row.closeRelevantUnits)}</TableCell><TableCell align="right">{formatPct(share)}</TableCell></TableRow>; })}</TableBody></Table></TableContainer></Paper></Grid><Grid item xs={12}><Paper sx={{ p: 2, borderRadius: 2 }}><Typography variant="h6" sx={{ mb: 1.5 }}>Show Breakdown</Typography><TableContainer><Table size="small"><TableHead><TableRow><TableCell>Show</TableCell><TableCell align="right">Shipments</TableCell><TableCell align="right">Units</TableCell><TableCell align="right">Close-Relevant</TableCell><TableCell align="right">Sorters</TableCell><TableCell align="right">Review %</TableCell></TableRow></TableHead><TableBody>{showRows.length === 0 ? <TableRow><TableCell colSpan={6}><Typography variant="body2" color="text.secondary">No show data found in this range.</Typography></TableCell></TableRow> : showRows.map((row) => <TableRow key={row.showId}><TableCell>{row.showName}</TableCell><TableCell align="right">{formatNumber(row.shipmentsClosed)}</TableCell><TableCell align="right">{formatNumber(row.totalUnits)}</TableCell><TableCell align="right">{formatNumber(row.closeRelevantUnits)}</TableCell><TableCell align="right">{formatNumber(row.activeSorters)}</TableCell><TableCell align="right">{formatPct(row.reviewRate)}</TableCell></TableRow>)}</TableBody></Table></TableContainer></Paper></Grid></Grid>}
+          {activeTab === 5 && (() => {
+            // Build sorted list of unique dates and sorters
+            const dates = Array.from(new Set(misscanDaily.map((r) => r.bucket))).sort();
+            const sorters = Array.from(new Set(misscanDaily.map((r) => r.sorterName))).filter(Boolean);
+            // lookup map: date+sorter -> misscans
+            const lookup = new Map<string, number>();
+            misscanDaily.forEach((r) => lookup.set(`${r.bucket}__${r.sorterName}`, r.misscans));
+            const maxMisscans = Math.max(1, ...misscanDaily.map((r) => r.misscans));
+            const BAR_GROUP_WIDTH = Math.max(32, Math.min(64, Math.floor(600 / Math.max(dates.length, 1))));
+
+            return (
+              <Grid container spacing={2}>
+                {/* Summary table */}
+                <Grid item xs={12} md={4}>
+                  <Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}>
+                    <Typography variant="h6" sx={{ mb: 1.5 }}>Misscan Summary By Sorter</Typography>
+                    {misscanSummary.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">No unexpected scans found in this range.</Typography>
+                    ) : (
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Sorter</TableCell>
+                              <TableCell align="right">Misscans</TableCell>
+                              <TableCell align="right">Total Scans</TableCell>
+                              <TableCell align="right">Rate</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {misscanSummary.map((row) => (
+                              <TableRow key={row.userId || row.sorterName}>
+                                <TableCell>
+                                  <Stack direction="row" spacing={1} alignItems="center">
+                                    <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: sorterColors[row.sorterName] || "#94a3b8", flexShrink: 0 }} />
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{row.sorterName}</Typography>
+                                  </Stack>
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Typography variant="body2" sx={{ fontWeight: 700, color: row.misscans > 0 ? "#c62828" : "text.secondary" }}>{formatNumber(row.misscans)}</Typography>
+                                </TableCell>
+                                <TableCell align="right">{formatNumber(row.totalItemScans)}</TableCell>
+                                <TableCell align="right">
+                                  <Typography variant="body2" sx={{ fontWeight: 600, color: row.misscanRatePct > 5 ? "#c62828" : row.misscanRatePct > 2 ? "#ef6c00" : "#2e7d32" }}>
+                                    {formatPct(row.misscanRatePct)}
+                                  </Typography>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+                  </Paper>
+                </Grid>
+
+                {/* Bar chart over time */}
+                <Grid item xs={12} md={8}>
+                  <Paper sx={{ p: 2, borderRadius: 2 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <Typography variant="h6">Misscans Per User Over Time</Typography>
+                        <Box sx={{ display: "flex", border: "1px solid", borderColor: "divider", borderRadius: 1, overflow: "hidden" }}>
+                          {(["day", "week", "month"] as const).map((g) => (
+                            <Box
+                              key={g}
+                              onClick={() => setMisscanGranularity(g)}
+                              sx={{ px: 1.5, py: 0.5, cursor: "pointer", fontSize: 12, fontWeight: 600, textTransform: "capitalize", bgcolor: misscanGranularity === g ? "primary.main" : "transparent", color: misscanGranularity === g ? "primary.contrastText" : "text.secondary", "&:hover": { bgcolor: misscanGranularity === g ? "primary.main" : "action.hover" } }}
+                            >
+                              {g}
+                            </Box>
+                          ))}
+                        </Box>
+                      </Box>
+                      <Stack direction="row" spacing={1} flexWrap="wrap">
+                        {sorters.map((name, i) => (
+                          <Stack key={name} direction="row" spacing={0.5} alignItems="center">
+                            <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: sorterColors[name] || sorterPalette[i % sorterPalette.length] }} />
+                            <Typography variant="caption" sx={{ fontWeight: 600 }}>{name}</Typography>
+                          </Stack>
+                        ))}
+                      </Stack>
+                    </Box>
+                    {dates.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">No unexpected scans found in this range.</Typography>
+                    ) : (
+                      <Box sx={{ overflowX: "auto" }}>
+                        <Box sx={{ display: "flex", alignItems: "flex-end", gap: "4px", minHeight: 180, pb: 1 }}>
+                          {dates.map((date) => (
+                            <Box key={date} sx={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: BAR_GROUP_WIDTH }}>
+                              {/* Bars for each sorter */}
+                              <Box sx={{ display: "flex", alignItems: "flex-end", gap: "2px", height: 140 }}>
+                                {sorters.map((name, i) => {
+                                  const val = lookup.get(`${date}__${name}`) ?? 0;
+                                  const h = val > 0 ? Math.max(4, Math.round((val / maxMisscans) * 130)) : 0;
+                                  const color = sorterColors[name] || sorterPalette[i % sorterPalette.length];
+                                  return (
+                                    <Box
+                                      key={name}
+                                      title={`${name} on ${date}: ${val} misscan(s)`}
+                                      sx={{ width: Math.max(8, Math.floor((BAR_GROUP_WIDTH - 8) / Math.max(sorters.length, 1))), height: h, bgcolor: color, borderRadius: "2px 2px 0 0", opacity: 0.85, alignSelf: "flex-end" }}
+                                    />
+                                  );
+                                })}
+                              </Box>
+                              {/* Date label */}
+                              <Typography variant="caption" sx={{ fontSize: 9, color: "#94a3b8", mt: 0.5, transform: "rotate(-45deg)", transformOrigin: "top left", whiteSpace: "nowrap", ml: 1 }}>
+                                {date.slice(5)}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Box>
+                        {/* Y-axis reference */}
+                        <Box display="flex" justifyContent="flex-end" mt={1}>
+                          <Typography variant="caption" color="text.secondary">Max: {maxMisscans} misscans</Typography>
+                        </Box>
+                      </Box>
+                    )}
+                  </Paper>
+                </Grid>
+
+                {/* Raw daily table */}
+                <Grid item xs={12}>
+                  <Paper sx={{ p: 2, borderRadius: 2 }}>
+                    <Typography variant="h6" sx={{ mb: 1.5 }}>{misscanGranularity === "month" ? "Monthly" : misscanGranularity === "week" ? "Weekly" : "Daily"} Misscan Detail</Typography>
+                    {misscanDaily.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">No unexpected scans found in this range.</Typography>
+                    ) : (
+                      <TableContainer sx={{ maxHeight: 420 }}>
+                        <Table size="small" stickyHeader>
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>{misscanGranularity === "month" ? "Month" : misscanGranularity === "week" ? "Week of" : "Date"}</TableCell>
+                              <TableCell>Sorter</TableCell>
+                              <TableCell align="right">Misscans</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {misscanDaily.map((row, i) => (
+                              <TableRow key={`${row.bucket}-${row.sorterName}-${i}`}>
+                                <TableCell>{row.bucket}</TableCell>
+                                <TableCell>
+                                  <Stack direction="row" spacing={1} alignItems="center">
+                                    <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: sorterColors[row.sorterName] || "#94a3b8" }} />
+                                    <Typography variant="body2">{row.sorterName}</Typography>
+                                  </Stack>
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Typography variant="body2" sx={{ fontWeight: 700, color: "#c62828" }}>{row.misscans}</Typography>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+                  </Paper>
+                </Grid>
+              </Grid>
+            );
+          })()}
           {activeTab === 4 && <Paper sx={{ p: 2, borderRadius: 2 }}><Typography variant="h6" sx={{ mb: 1.5 }}>Shipment Drilldown</Typography><TableContainer sx={{ maxHeight: 620 }}><Table size="small" stickyHeader><TableHead><TableRow><TableCell>Closed At</TableCell><TableCell>Sorter</TableCell><TableCell>Show</TableCell><TableCell>Shipment</TableCell><TableCell>Tracking</TableCell><TableCell align="right">Units</TableCell><TableCell align="right">Close-Relevant</TableCell><TableCell>Categories</TableCell><TableCell>Flags</TableCell></TableRow></TableHead><TableBody>{shipments.length === 0 ? <TableRow><TableCell colSpan={9}><Typography variant="body2" color="text.secondary">No shipments found in this range.</Typography></TableCell></TableRow> : shipments.map((row) => <TableRow key={`${row.showId}-${row.importId}-${row.shipmentId}`}><TableCell>{formatDateTime(row.closedAt)}</TableCell><TableCell>{row.sorterName}</TableCell><TableCell>{row.showName}</TableCell><TableCell><Stack spacing={0.25}><Typography variant="body2" sx={{ fontWeight: 600 }}>{row.shipmentId}</Typography><Typography variant="caption" color="text.secondary">Import {row.importId}</Typography></Stack></TableCell><TableCell>{row.tracking || "N/A"}</TableCell><TableCell align="right">{formatNumber(row.totalExpectedUnits)}</TableCell><TableCell align="right">{formatNumber(row.closeRelevantUnits)}</TableCell><TableCell><Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap">{row.categories.split(",").map((entry) => entry.trim()).filter(Boolean).map((entry) => <Chip key={`${row.shipmentId}-${entry}`} size="small" label={categoryLabel(entry)} variant="outlined" />)}</Stack></TableCell><TableCell><Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap">{row.hasMismatch ? <Chip size="small" label="Review" color="warning" /> : null}{row.randomGiveawayUnits > 0 && row.hasNonRandomGiveaway ? <Chip size="small" label="Mixed GVY" color="info" variant="outlined" /> : null}{row.otherUnits > 0 ? <Chip size="small" label="OTH" variant="outlined" /> : null}</Stack></TableCell></TableRow>)}</TableBody></Table></TableContainer></Paper>}
         </>}
       </Stack>
