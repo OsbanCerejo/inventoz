@@ -25,6 +25,7 @@ import TikTokFulfillment from "./pages/TikTokFulfillment";
 import WhatnotFulfillmentAnalytics from "./pages/WhatnotFulfillmentAnalytics";
 import TikTokFulfillmentAnalytics from "./pages/TikTokFulfillmentAnalytics";
 import SortingAnalytics from "./pages/SortingAnalytics";
+import OperationsCost from "./pages/OperationsCost";
 import WalmartIntegration from "./pages/WalmartIntegration";
 import WalmartOrders from "./pages/WalmartOrders";
 import WalmartProductCatalog from "./pages/WalmartProductCatalog";
@@ -304,6 +305,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="sortingAnalytics" action="view" menuItem="sortingAnalytics">
                   <SortingAnalytics />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/operations-cost"
+              element={
+                <ProtectedRoute resource="operationsCost" action="view" menuItem="operationsCost">
+                  <OperationsCost />
                 </ProtectedRoute>
               }
             />

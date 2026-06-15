@@ -83,6 +83,7 @@ function NavBar() {
     { key: 'hbaAnalytics', label: 'HBA Analytics', path: '/hba-analytics' },
     { key: 'sortingAnalytics', label: 'Sorting Analytics', path: '/sorting-analytics' },
     { key: 'packingAnalytics', label: 'Packing Analytics', path: '/packing-analytics' },
+    { key: 'operationsCost', label: 'Operations Cost', path: '/operations-cost' },
   ];
 
   const toolsItems = [

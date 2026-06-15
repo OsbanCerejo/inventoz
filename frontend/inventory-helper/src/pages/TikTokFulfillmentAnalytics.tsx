@@ -662,7 +662,7 @@ function TikTokFulfillmentAnalytics() {
         {/* KPI row */}
         <Grid container spacing={2}>
           {[
-            { label: "Revenue", value: formatCurrency(ov?.revenue), icon: <AttachMoneyIcon />, subtext: `${formatNumber(ov?.completedShipments)} completed shipments` },
+            { label: "Revenue", value: formatCurrency(ov?.revenue), icon: <AttachMoneyIcon />, subtext: `${formatNumber(ov?.completedShipments)} total items sold` },
             { label: "Avg Sold Price", value: formatCurrency(ov?.avgSoldPrice), icon: <LocalOfferIcon />, subtext: `${formatNumber(ov?.uniqueSkusSold)} unique SKUs` },
             { label: "Pending Shipments", value: formatNumber(ov?.pendingShipments), icon: <HourglassEmptyIcon />, color: "#f57c00", subtext: `${formatCurrency(ov?.pendingRevenue)} at risk` },
             { label: "Under Review", value: formatNumber(ov?.reviewShipments), icon: <ErrorOutlineIcon />, color: "#d32f2f", subtext: `${formatCurrency(ov?.reviewRevenue)} affected` },

@@ -44,6 +44,70 @@ const fulfilledSaleCondition = (alias = "tss") => `
   AND ${alias}.newQuantity = ${alias}.previousQuantity - 1
 `;
 
+// EXISTS filter replacing the fan-out-causing JOIN to tsi for date range filtering.
+// One tsi (shipmentItems) row per (showId,importId,shipmentId) is NOT guaranteed —
+// there may be multiple items per shipment — so a direct JOIN multiplies scan rows.
+const tsiExistsDateFilter = (tssAlias = "tss") => `
+  EXISTS (
+    SELECT 1 FROM ${TABLES.shipmentItems} _tsi
+    WHERE _tsi.tiktokShowId = ${tssAlias}.tiktokShowId
+      AND _tsi.importId     = ${tssAlias}.importId
+      AND _tsi.shipmentId   = ${tssAlias}.shipmentId
+      AND _tsi.placedAt >= :from
+      AND _tsi.placedAt  < :to
+  )
+`;
+
+// Aggregated tsi subquery — one row per (showId,importId,shipmentId), safe to JOIN.
+// Used when we need tsi columns (like placedAt, itemCategory) for bucketing/grouping.
+const TSI_ONE_PER_SHIPMENT = `
+  (
+    SELECT
+      tiktokShowId,
+      importId,
+      shipmentId,
+      MIN(placedAt)    AS placedAt,
+      MAX(itemCategory) AS itemCategory
+    FROM ${TABLES.shipmentItems}
+    GROUP BY tiktokShowId, importId, shipmentId
+  )
+`;
+
+// Scan count per shipment — used to pro-rate bundle revenue across individual scans.
+// A bundle (one tracking number, many SKUs) has one soldPrice but N scan rows.
+// Dividing soldPrice by scan_count then summing gives the correct total: N × (price/N) = price.
+// For single-item shipments, scan_count=1 so nothing changes.
+// scan_count = fulfilled scans per shipment
+// tsi_count  = TikTok order lines per shipment (from shipmentItems)
+// Bundle detection: tsi_count < scan_count means one order line produced N scans (a lot/bundle).
+//   → divide soldPrice by scan_count so the lot price is counted once.
+// Regular multi-item shipment: tsi_count = scan_count (one order line per scan).
+//   → each scan has its own price, no division needed.
+const TSS_SCAN_COUNT_PER_SHIPMENT = `
+  (
+    SELECT
+      s.tiktokShowId, s.importId, s.shipmentId,
+      s.scan_count,
+      COALESCE(i.tsi_count, 1) AS tsi_count
+    FROM (
+      SELECT tiktokShowId, importId, shipmentId, COUNT(*) AS scan_count
+      FROM ${TABLES.shipmentScans}
+      WHERE result = 'matched'
+        AND productSku IS NOT NULL AND productSku <> ''
+        AND previousQuantity IS NOT NULL
+        AND newQuantity = previousQuantity - 1
+      GROUP BY tiktokShowId, importId, shipmentId
+    ) s
+    LEFT JOIN (
+      SELECT tiktokShowId, importId, shipmentId, COUNT(*) AS tsi_count
+      FROM ${TABLES.shipmentItems}
+      GROUP BY tiktokShowId, importId, shipmentId
+    ) i ON i.tiktokShowId = s.tiktokShowId
+       AND i.importId     = s.importId
+       AND i.shipmentId   = s.shipmentId
+  )
+`;
+
 // TikTok fee constants (referral 6% + payment processing 2.9% + $0.30/shipment)
 const TIKTOK_COMMISSION_RATE    = 0.06;
 const TIKTOK_PROCESSING_RATE    = 0.029;
@@ -112,26 +176,37 @@ router.get("/fulfillment-overview", auth, checkPermission("tiktokAnalytics", "vi
   const showId = req.query.showId ? Number(req.query.showId) : null;
 
   try {
-    const [[completedRow], [pendingRow], [reviewRow], [giveawayRow]] = await Promise.all([
-      // Completed (fulfilled via scans)
+    const [[completedRow], [discountRow], [pendingRow], [reviewRow], [giveawayRow]] = await Promise.all([
+      // Completed (fulfilled via scans) — drive from scans to avoid fan-out
       sequelize.query(`
         SELECT
           COUNT(*)                                                          AS completedShipments,
           COUNT(DISTINCT tss.productSku)                                    AS uniqueSkusSold,
           COUNT(DISTINCT CONCAT(tss.tiktokShowId,':',tss.importId,':',tss.shipmentId)) AS uniqueShipments,
           COUNT(DISTINCT tss.tiktokShowId)                                  AS uniqueShows,
-          COALESCE(SUM(COALESCE(tss.soldPrice,0)),0)                        AS revenue,
-          COALESCE(AVG(NULLIF(tss.soldPrice,0)),0)                          AS avgSoldPrice,
-          COALESCE(SUM(COALESCE(tsi.totalDiscount,0)),0)                    AS totalDiscounts
+          COALESCE(SUM(COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END),0)         AS revenue,
+          COALESCE(AVG(CASE WHEN sc.tsi_count >= sc.scan_count THEN NULLIF(tss.soldPrice,0) END),0)                               AS avgSoldPrice
         FROM ${TABLES.shipmentScans} tss
-        JOIN ${TABLES.shipmentItems} tsi
-          ON tsi.tiktokShowId = tss.tiktokShowId
-         AND tsi.importId     = tss.importId
-         AND tsi.shipmentId   = tss.shipmentId
+        JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
         WHERE ${fulfilledSaleCondition("tss")}
-          AND tsi.placedAt >= :from
-          AND tsi.placedAt  < :to
+          AND ${tsiExistsDateFilter("tss")}
           AND (:showId IS NULL OR tss.tiktokShowId = :showId)
+      `, { replacements: { from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
+
+      // Total discounts — drive from items (tsi has totalDiscount), use EXISTS for scan filter
+      sequelize.query(`
+        SELECT COALESCE(SUM(COALESCE(tsi.totalDiscount,0)),0) AS totalDiscounts
+        FROM ${TABLES.shipmentItems} tsi
+        WHERE tsi.placedAt >= :from
+          AND tsi.placedAt  < :to
+          AND (:showId IS NULL OR tsi.tiktokShowId = :showId)
+          AND EXISTS (
+            SELECT 1 FROM ${TABLES.shipmentScans} _tss
+            WHERE _tss.tiktokShowId = tsi.tiktokShowId
+              AND _tss.importId     = tsi.importId
+              AND _tss.shipmentId   = tsi.shipmentId
+              AND ${fulfilledSaleCondition("_tss")}
+          )
       `, { replacements: { from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
 
       // Pending (not closed, not review, not terminal)
@@ -178,7 +253,7 @@ router.get("/fulfillment-overview", auth, checkPermission("tiktokAnalytics", "vi
       completedShipments:       Number(completedRow?.completedShipments    || 0),
       uniqueSkusSold:           Number(completedRow?.uniqueSkusSold        || 0),
       uniqueShows:              Number(completedRow?.uniqueShows           || 0),
-      totalDiscounts:           Number(completedRow?.totalDiscounts        || 0),
+      totalDiscounts:           Number(discountRow?.totalDiscounts         || 0),
       pendingShipments:         Number(pendingRow?.pendingShipments        || 0),
       pendingRevenue:           Number(pendingRow?.pendingRevenue          || 0),
       reviewShipments:          Number(reviewRow?.reviewShipments          || 0),
@@ -212,13 +287,14 @@ router.get("/fulfillment-trend", auth, checkPermission("tiktokAnalytics", "view"
       SELECT
         ${bucketExpr} AS bucket,
         COUNT(*) AS unitsSold,
-        COALESCE(SUM(COALESCE(tss.soldPrice,0)),0) AS revenue,
+        COALESCE(SUM(COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END),0) AS revenue,
         COUNT(DISTINCT CONCAT(tss.tiktokShowId,':',tss.importId,':',tss.shipmentId)) AS completedShipments
       FROM ${TABLES.shipmentScans} tss
-      JOIN ${TABLES.shipmentItems} tsi
+      JOIN ${TSI_ONE_PER_SHIPMENT} tsi
         ON tsi.tiktokShowId = tss.tiktokShowId
        AND tsi.importId     = tss.importId
        AND tsi.shipmentId   = tss.shipmentId
+      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
       WHERE ${fulfilledSaleCondition("tss")}
         AND tsi.placedAt >= :from
         AND tsi.placedAt  < :to
@@ -271,18 +347,14 @@ router.get("/fulfillment-by-show", auth, checkPermission("tiktokAnalytics", "vie
         tss.tiktokShowId                                                           AS showId,
         MAX(ts.name)                                                               AS showName,
         COUNT(*)                                                                   AS unitsSold,
-        COALESCE(SUM(COALESCE(tss.soldPrice,0)),0)                                 AS revenue,
+        COALESCE(SUM(COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END),0)                AS revenue,
         COALESCE(AVG(NULLIF(tss.soldPrice,0)),0)                                   AS avgSoldPrice,
         COUNT(DISTINCT CONCAT(tss.tiktokShowId,':',tss.importId,':',tss.shipmentId)) AS completedShipments
       FROM ${TABLES.shipmentScans} tss
       JOIN ${TABLES.shows} ts  ON ts.id = tss.tiktokShowId
-      JOIN ${TABLES.shipmentItems} tsi
-        ON tsi.tiktokShowId = tss.tiktokShowId
-       AND tsi.importId     = tss.importId
-       AND tsi.shipmentId   = tss.shipmentId
+      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
       WHERE ${fulfilledSaleCondition("tss")}
-        AND tsi.placedAt >= :from
-        AND tsi.placedAt  < :to
+        AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
       GROUP BY tss.tiktokShowId
       ORDER BY revenue DESC
@@ -318,20 +390,16 @@ router.get("/fulfillment-top-products", auth, checkPermission("tiktokAnalytics",
         MAX(p.brand)                                      AS brand,
         MAX(p.itemName)                                   AS itemName,
         COUNT(*)                                          AS unitsSold,
-        COALESCE(SUM(COALESCE(tss.soldPrice,0)),0)        AS revenue,
-        COALESCE(AVG(NULLIF(tss.soldPrice,0)),0)          AS avgSoldPrice,
-        COALESCE(MIN(tss.soldPrice),0)                    AS lowestSoldPrice,
-        COALESCE(MAX(tss.soldPrice),0)                    AS highestSoldPrice
+        COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue,
+        COALESCE(AVG(CASE WHEN sc.tsi_count >= sc.scan_count THEN NULLIF(tss.soldPrice,0) END),0)          AS avgSoldPrice,
+        COALESCE(MIN(CASE WHEN sc.tsi_count >= sc.scan_count THEN tss.soldPrice END),0)                    AS lowestSoldPrice,
+        COALESCE(MAX(CASE WHEN sc.tsi_count >= sc.scan_count THEN tss.soldPrice END),0)                    AS highestSoldPrice
       FROM ${TABLES.shipmentScans} tss
       LEFT JOIN ${TABLES.products} p
         ON ${skuJoinCondition("p.sku", "tss.productSku")}
-      JOIN ${TABLES.shipmentItems} tsi
-        ON tsi.tiktokShowId = tss.tiktokShowId
-       AND tsi.importId     = tss.importId
-       AND tsi.shipmentId   = tss.shipmentId
+      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
       WHERE ${fulfilledSaleCondition("tss")}
-        AND tsi.placedAt >= :from
-        AND tsi.placedAt  < :to
+        AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
       GROUP BY tss.productSku
       ORDER BY revenue DESC
@@ -366,17 +434,13 @@ router.get("/fulfillment-brand-mix", auth, checkPermission("tiktokAnalytics", "v
       SELECT
         COALESCE(p.brand, 'Unknown') AS brand,
         COUNT(*)                      AS unitsSold,
-        COALESCE(SUM(COALESCE(tss.soldPrice,0)),0) AS revenue
+        COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue
       FROM ${TABLES.shipmentScans} tss
       LEFT JOIN ${TABLES.products} p
         ON ${skuJoinCondition("p.sku", "tss.productSku")}
-      JOIN ${TABLES.shipmentItems} tsi
-        ON tsi.tiktokShowId = tss.tiktokShowId
-       AND tsi.importId     = tss.importId
-       AND tsi.shipmentId   = tss.shipmentId
+      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
       WHERE ${fulfilledSaleCondition("tss")}
-        AND tsi.placedAt >= :from
-        AND tsi.placedAt  < :to
+        AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
       GROUP BY COALESCE(p.brand,'Unknown')
       ORDER BY revenue DESC
@@ -407,12 +471,13 @@ router.get("/fulfillment-sales-mix", auth, checkPermission("tiktokAnalytics", "v
       SELECT
         COALESCE(tsi.itemCategory,'others') AS contextType,
         COUNT(*)                             AS unitsSold,
-        COALESCE(SUM(COALESCE(tss.soldPrice,0)),0) AS revenue
+        COALESCE(SUM(COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END),0) AS revenue
       FROM ${TABLES.shipmentScans} tss
-      JOIN ${TABLES.shipmentItems} tsi
+      JOIN ${TSI_ONE_PER_SHIPMENT} tsi
         ON tsi.tiktokShowId = tss.tiktokShowId
        AND tsi.importId     = tss.importId
        AND tsi.shipmentId   = tss.shipmentId
+      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
       WHERE ${fulfilledSaleCondition("tss")}
         AND tsi.placedAt >= :from
         AND tsi.placedAt  < :to
@@ -444,14 +509,14 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
     const [rows] = await sequelize.query(`
       SELECT
         COUNT(*)                                                            AS totalUnitsSold,
-        COALESCE(SUM(COALESCE(tss.soldPrice,0)),0)                          AS totalRevenue,
+        COALESCE(SUM(COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END),0)         AS totalRevenue,
 
         -- Known-cost units (have a vendor price on file)
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS knownCostRevenue,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END ELSE 0 END),0) AS knownCostRevenue,
         COUNT(CASE WHEN vc.avgVendorCost IS NOT NULL THEN 1 END)            AS knownCostUnits,
 
         -- Unknown-cost units
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NULL THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0)  AS unknownCostRevenue,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NULL THEN COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END ELSE 0 END),0)  AS unknownCostRevenue,
         COUNT(CASE WHEN vc.avgVendorCost IS NULL THEN 1 END)                AS unknownCostUnits,
 
         -- Estimated vendor cost
@@ -460,7 +525,7 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
         -- Gross margin (revenue - cost on known units)
         COALESCE(
           SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
-            THEN COALESCE(tss.soldPrice,0) - vc.avgVendorCost
+            THEN COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END - vc.avgVendorCost
             ELSE 0 END),
           0
         ) AS grossMargin,
@@ -468,8 +533,8 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
         -- TikTok fees (commission + processing) on known-cost revenue
         COALESCE(
           SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
-            THEN (COALESCE(tss.soldPrice,0) * ${TIKTOK_COMMISSION_RATE})
-               + (COALESCE(tss.soldPrice,0) * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED})
+            THEN (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_COMMISSION_RATE})
+               + (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END)
             ELSE 0 END),
           0
         ) AS tiktokFees,
@@ -477,39 +542,35 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
         -- Net margin after fees
         COALESCE(
           SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
-            THEN COALESCE(tss.soldPrice,0) - vc.avgVendorCost
-               - (COALESCE(tss.soldPrice,0) * ${TIKTOK_COMMISSION_RATE})
-               - (COALESCE(tss.soldPrice,0) * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED})
+            THEN COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END - vc.avgVendorCost
+               - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_COMMISSION_RATE})
+               - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END)
             ELSE 0 END),
           0
         ) AS netMarginAfterFees,
 
         -- Negative-margin units
         COUNT(CASE WHEN vc.avgVendorCost IS NOT NULL
-          AND (COALESCE(tss.soldPrice,0) - vc.avgVendorCost
-               - (COALESCE(tss.soldPrice,0) * ${TIKTOK_COMMISSION_RATE})
-               - (COALESCE(tss.soldPrice,0) * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED})
+          AND (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END - vc.avgVendorCost
+               - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_COMMISSION_RATE})
+               - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END)
               ) < 0
           THEN 1 END) AS negativeMarginUnits,
 
         -- Low-margin units (≥0 but <10%)
         COUNT(CASE WHEN vc.avgVendorCost IS NOT NULL
-          AND COALESCE(tss.soldPrice,0) > 0
-          AND (COALESCE(tss.soldPrice,0) - vc.avgVendorCost
-               - (COALESCE(tss.soldPrice,0) * ${TIKTOK_COMMISSION_RATE})
-               - (COALESCE(tss.soldPrice,0) * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED})
-              ) / COALESCE(tss.soldPrice,0) BETWEEN 0 AND 0.10
+          AND COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END > 0
+          AND (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END - vc.avgVendorCost
+               - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_COMMISSION_RATE})
+               - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END)
+              ) / (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END) BETWEEN 0 AND 0.10
           THEN 1 END) AS lowMarginUnits
       FROM ${TABLES.shipmentScans} tss
       LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc
         ON ${skuJoinCondition("vc.sku", "tss.productSku")}
-      JOIN ${TABLES.shipmentItems} tsi
-        ON tsi.tiktokShowId = tss.tiktokShowId
-       AND tsi.importId     = tss.importId
-       AND tsi.shipmentId   = tss.shipmentId
+      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
       WHERE ${fulfilledSaleCondition("tss")}
-        AND tsi.placedAt >= :from
-        AND tsi.placedAt  < :to
+        AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
     `, { replacements: { from: range.from, to: range.to, showId } });
 
@@ -557,27 +618,25 @@ router.get("/fulfillment-profitability-shows", auth, checkPermission("tiktokAnal
         tss.tiktokShowId AS showId,
         MAX(ts.name)     AS showName,
         COUNT(*)         AS unitsSold,
-        COALESCE(SUM(COALESCE(tss.soldPrice,0)),0) AS revenue,
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS knownCostRevenue,
+        COALESCE(SUM(COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END),0) AS revenue,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END ELSE 0 END),0) AS knownCostRevenue,
         COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN vc.avgVendorCost ELSE 0 END),0) AS estimatedCost,
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
         COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
-          THEN (COALESCE(tss.soldPrice,0) * ${TIKTOK_COMMISSION_RATE})
-             + (COALESCE(tss.soldPrice,0) * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED})
+          THEN (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_COMMISSION_RATE})
+             + (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END)
           ELSE 0 END),0) AS tiktokFees,
         COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
-          THEN COALESCE(tss.soldPrice,0) - vc.avgVendorCost
-             - (COALESCE(tss.soldPrice,0) * ${TIKTOK_COMMISSION_RATE})
-             - (COALESCE(tss.soldPrice,0) * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED})
+          THEN COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END - vc.avgVendorCost
+             - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_COMMISSION_RATE})
+             - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END)
           ELSE 0 END),0) AS netMarginAfterFees
       FROM ${TABLES.shipmentScans} tss
       JOIN ${TABLES.shows} ts ON ts.id = tss.tiktokShowId
       LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku","tss.productSku")}
-      JOIN ${TABLES.shipmentItems} tsi
-        ON tsi.tiktokShowId = tss.tiktokShowId
-       AND tsi.importId = tss.importId AND tsi.shipmentId = tss.shipmentId
+      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
       WHERE ${fulfilledSaleCondition("tss")}
-        AND tsi.placedAt >= :from AND tsi.placedAt < :to
+        AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
       GROUP BY tss.tiktokShowId
       ORDER BY revenue DESC
@@ -619,18 +678,17 @@ router.get("/fulfillment-brand-profitability", auth, checkPermission("tiktokAnal
       SELECT
         COALESCE(p.brand,'Unknown') AS brand,
         COUNT(*) AS unitsSold,
-        COALESCE(SUM(COALESCE(tss.soldPrice,0)),0) AS revenue,
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS knownCostRevenue,
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN vc.avgVendorCost ELSE 0 END),0) AS estimatedCost,
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
+        COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL AND sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS knownCostRevenue,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL AND sc.tsi_count >= sc.scan_count THEN vc.avgVendorCost ELSE 0 END),0) AS estimatedCost,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL AND sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
         COUNT(CASE WHEN vc.avgVendorCost IS NULL THEN 1 END) AS unknownCostUnits
       FROM ${TABLES.shipmentScans} tss
       LEFT JOIN ${TABLES.products} p ON ${skuJoinCondition("p.sku","tss.productSku")}
       LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku","tss.productSku")}
-      JOIN ${TABLES.shipmentItems} tsi
-        ON tsi.tiktokShowId = tss.tiktokShowId AND tsi.importId = tss.importId AND tsi.shipmentId = tss.shipmentId
+      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
       WHERE ${fulfilledSaleCondition("tss")}
-        AND tsi.placedAt >= :from AND tsi.placedAt < :to
+        AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
       GROUP BY COALESCE(p.brand,'Unknown')
       ORDER BY revenue DESC
@@ -755,8 +813,8 @@ router.get("/fulfillment-inventory-exposure", auth, checkPermission("tiktokAnaly
           WHEN ROUND(COUNT(*) / GREATEST(DATEDIFF(:to,:from),1), 2) = 0 THEN NULL
           ELSE ROUND(MAX(COALESCE(p.quantity,0)) / (COUNT(*) / GREATEST(DATEDIFF(:to,:from),1)))
         END AS daysOfCover,
-        -- Gross margin on known-cost units
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
+        -- Gross margin on known-cost units (bundles excluded — price can't be attributed per SKU)
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL AND sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
         COUNT(CASE WHEN vc.avgVendorCost IS NULL THEN 1 END) AS unknownCostUnits,
         CASE
           WHEN MAX(COALESCE(p.quantity,0)) = 0 THEN 'critical'
@@ -769,10 +827,9 @@ router.get("/fulfillment-inventory-exposure", auth, checkPermission("tiktokAnaly
       FROM ${TABLES.shipmentScans} tss
       LEFT JOIN ${TABLES.products} p    ON ${skuJoinCondition("p.sku","tss.productSku")}
       LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku","tss.productSku")}
-      JOIN ${TABLES.shipmentItems} tsi
-        ON tsi.tiktokShowId = tss.tiktokShowId AND tsi.importId = tss.importId AND tsi.shipmentId = tss.shipmentId
+      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
       WHERE ${fulfilledSaleCondition("tss")}
-        AND tsi.placedAt >= :from AND tsi.placedAt < :to
+        AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
       GROUP BY tss.productSku
       ORDER BY FIELD(riskBand,'critical','high','medium','low','no_signal'), unitsSold DESC
@@ -1134,7 +1191,7 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
   const showId = req.query.showId ? Number(req.query.showId) : null;
 
   try {
-    const [productRows, summaryRows, byShowRows, byDayRows, hourRows, dayOfWeekRows, recentRows] = await Promise.all([
+    const [productRows, summaryRows, skuDiscountRows, byShowRows, byDayRows, hourRows, dayOfWeekRows, recentRows] = await Promise.all([
       // Product info + current stock + vendor cost
       sequelize.query(`
         SELECT p.sku, p.brand, p.itemName, p.strength, p.sizeOz, p.sizeMl, pd.tester, p.condition,
@@ -1146,51 +1203,65 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
         LIMIT 1
       `, { replacements: { sku }, type: sequelize.QueryTypes.SELECT }),
 
-      // Summary stats
+      // Summary stats — drive from scans to avoid tsi fan-out
       sequelize.query(`
         SELECT
           COUNT(*) AS unitsSold,
-          COALESCE(SUM(COALESCE(tss.soldPrice,0)),0) AS revenue,
-          COALESCE(AVG(NULLIF(tss.soldPrice,0)),0)   AS avgSoldPrice,
-          COALESCE(MIN(tss.soldPrice),0)             AS lowestSoldPrice,
-          COALESCE(MAX(tss.soldPrice),0)             AS highestSoldPrice,
+          COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue,
+          COALESCE(AVG(CASE WHEN sc.tsi_count >= sc.scan_count THEN NULLIF(tss.soldPrice,0) END),0)          AS avgSoldPrice,
+          COALESCE(MIN(CASE WHEN sc.tsi_count >= sc.scan_count THEN tss.soldPrice END),0)                    AS lowestSoldPrice,
+          COALESCE(MAX(CASE WHEN sc.tsi_count >= sc.scan_count THEN tss.soldPrice END),0)                    AS highestSoldPrice,
           COUNT(DISTINCT tss.tiktokShowId)           AS uniqueShows,
           COUNT(DISTINCT CONCAT(tss.tiktokShowId,':',tss.importId,':',tss.shipmentId)) AS uniqueShipments,
-          COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0)-vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
-          COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NULL THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS unknownCostRevenue,
-          COALESCE(SUM(COALESCE(tsi.totalDiscount,0)),0) AS totalDiscounts
+          COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL AND sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
+          COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NULL AND sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS unknownCostRevenue
         FROM ${TABLES.shipmentScans} tss
         LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku","tss.productSku")}
-        JOIN ${TABLES.shipmentItems} tsi
-          ON tsi.tiktokShowId = tss.tiktokShowId AND tsi.importId = tss.importId AND tsi.shipmentId = tss.shipmentId
+        JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
         WHERE ${fulfilledSaleCondition("tss")}
           AND ${skuJoinCondition("tss.productSku",":sku")}
-          AND tsi.placedAt >= :from AND tsi.placedAt < :to
+          AND ${tsiExistsDateFilter("tss")}
           AND (:showId IS NULL OR tss.tiktokShowId = :showId)
+      `, { replacements: { sku, from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
+
+      // Total discounts for this SKU — drive from items to avoid tss fan-out
+      sequelize.query(`
+        SELECT COALESCE(SUM(COALESCE(tsi.totalDiscount,0)),0) AS totalDiscounts
+        FROM ${TABLES.shipmentItems} tsi
+        WHERE tsi.placedAt >= :from AND tsi.placedAt < :to
+          AND (:showId IS NULL OR tsi.tiktokShowId = :showId)
+          AND EXISTS (
+            SELECT 1 FROM ${TABLES.shipmentScans} _tss
+            WHERE _tss.tiktokShowId = tsi.tiktokShowId
+              AND _tss.importId     = tsi.importId
+              AND _tss.shipmentId   = tsi.shipmentId
+              AND ${fulfilledSaleCondition("_tss")}
+              AND ${skuJoinCondition("_tss.productSku",":sku")}
+          )
       `, { replacements: { sku, from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
 
       // By show
       sequelize.query(`
         SELECT MAX(ts.name) AS showName, COUNT(*) AS unitsSold,
-          COALESCE(SUM(COALESCE(tss.soldPrice,0)),0) AS revenue
+          COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue
         FROM ${TABLES.shipmentScans} tss
         JOIN ${TABLES.shows} ts ON ts.id = tss.tiktokShowId
-        JOIN ${TABLES.shipmentItems} tsi
-          ON tsi.tiktokShowId = tss.tiktokShowId AND tsi.importId = tss.importId AND tsi.shipmentId = tss.shipmentId
+        JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
         WHERE ${fulfilledSaleCondition("tss")}
           AND ${skuJoinCondition("tss.productSku",":sku")}
-          AND tsi.placedAt >= :from AND tsi.placedAt < :to
+          AND ${tsiExistsDateFilter("tss")}
           AND (:showId IS NULL OR tss.tiktokShowId = :showId)
         GROUP BY tss.tiktokShowId ORDER BY revenue DESC LIMIT 10
       `, { replacements: { sku, from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
 
-      // By day (recent trend)
+      // By day (recent trend) — use aggregated tsi subquery for placedAt bucketing
       sequelize.query(`
         SELECT DATE_FORMAT(tsi.placedAt,'%Y-%m-%d') AS bucket, COUNT(*) AS unitsSold,
-          COALESCE(SUM(COALESCE(tss.soldPrice,0)),0) AS revenue
+          COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue
         FROM ${TABLES.shipmentScans} tss
-        JOIN ${TABLES.shipmentItems} tsi
+        JOIN ${TSI_ONE_PER_SHIPMENT} tsi
           ON tsi.tiktokShowId = tss.tiktokShowId AND tsi.importId = tss.importId AND tsi.shipmentId = tss.shipmentId
+        JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
         WHERE ${fulfilledSaleCondition("tss")}
           AND ${skuJoinCondition("tss.productSku",":sku")}
           AND tsi.placedAt >= :from AND tsi.placedAt < :to
@@ -1201,10 +1272,11 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
       // Hour of day
       sequelize.query(`
         SELECT HOUR(tsi.placedAt) AS hourOfDay, COUNT(*) AS unitsSold,
-          COALESCE(SUM(COALESCE(tss.soldPrice,0)),0) AS revenue
+          COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue
         FROM ${TABLES.shipmentScans} tss
-        JOIN ${TABLES.shipmentItems} tsi
+        JOIN ${TSI_ONE_PER_SHIPMENT} tsi
           ON tsi.tiktokShowId = tss.tiktokShowId AND tsi.importId = tss.importId AND tsi.shipmentId = tss.shipmentId
+        JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
         WHERE ${fulfilledSaleCondition("tss")}
           AND ${skuJoinCondition("tss.productSku",":sku")}
           AND tsi.placedAt >= :from AND tsi.placedAt < :to AND tsi.placedAt IS NOT NULL
@@ -1215,10 +1287,11 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
       // Day of week
       sequelize.query(`
         SELECT DAYNAME(tsi.placedAt) AS dayName, DAYOFWEEK(tsi.placedAt) AS dayNum,
-          COUNT(*) AS unitsSold, COALESCE(SUM(COALESCE(tss.soldPrice,0)),0) AS revenue
+          COUNT(*) AS unitsSold, COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue
         FROM ${TABLES.shipmentScans} tss
-        JOIN ${TABLES.shipmentItems} tsi
+        JOIN ${TSI_ONE_PER_SHIPMENT} tsi
           ON tsi.tiktokShowId = tss.tiktokShowId AND tsi.importId = tss.importId AND tsi.shipmentId = tss.shipmentId
+        JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
         WHERE ${fulfilledSaleCondition("tss")}
           AND ${skuJoinCondition("tss.productSku",":sku")}
           AND tsi.placedAt >= :from AND tsi.placedAt < :to AND tsi.placedAt IS NOT NULL
@@ -1226,20 +1299,24 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
         GROUP BY DAYNAME(tsi.placedAt), DAYOFWEEK(tsi.placedAt) ORDER BY dayNum ASC
       `, { replacements: { sku, from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
 
-      // Recent sales
+      // Recent sales — aggregated tsi subquery picks one row per shipment (state/city/paymentMethod)
       sequelize.query(`
         SELECT tss.id, MAX(ts.name) AS showName, tss.shipmentId,
           tss.soldPrice, tss.tracking, tss.auctionStickerNumber, tss.userId,
           tsi.placedAt AS createdAt, tsi.state, tsi.city, tsi.paymentMethod
         FROM ${TABLES.shipmentScans} tss
         JOIN ${TABLES.shows} ts ON ts.id = tss.tiktokShowId
-        JOIN ${TABLES.shipmentItems} tsi
-          ON tsi.tiktokShowId = tss.tiktokShowId AND tsi.importId = tss.importId AND tsi.shipmentId = tss.shipmentId
+        JOIN (
+          SELECT tiktokShowId, importId, shipmentId,
+            MIN(placedAt) AS placedAt, MAX(state) AS state,
+            MAX(city) AS city, MAX(paymentMethod) AS paymentMethod
+          FROM ${TABLES.shipmentItems}
+          GROUP BY tiktokShowId, importId, shipmentId
+        ) tsi ON tsi.tiktokShowId = tss.tiktokShowId AND tsi.importId = tss.importId AND tsi.shipmentId = tss.shipmentId
         WHERE ${fulfilledSaleCondition("tss")}
           AND ${skuJoinCondition("tss.productSku",":sku")}
           AND tsi.placedAt >= :from AND tsi.placedAt < :to
           AND (:showId IS NULL OR tss.tiktokShowId = :showId)
-        GROUP BY tss.id, tss.shipmentId, tss.soldPrice, tss.tracking, tss.auctionStickerNumber, tss.userId, tsi.placedAt, tsi.state, tsi.city, tsi.paymentMethod
         ORDER BY tsi.placedAt DESC LIMIT 20
       `, { replacements: { sku, from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
     ]);
@@ -1259,7 +1336,7 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
         uniqueShipments:   Number(s.uniqueShipments    || 0),
         grossMargin:       Number(Number(s.grossMargin || 0).toFixed(2)),
         unknownCostRevenue:Number(Number(s.unknownCostRevenue || 0).toFixed(2)),
-        totalDiscounts:    Number(Number(s.totalDiscounts    || 0).toFixed(2)),
+        totalDiscounts:    Number(Number((skuDiscountRows[0]?.totalDiscounts) || 0).toFixed(2)),
       },
       byShow:    byShowRows.map(r => ({ ...r, unitsSold: Number(r.unitsSold || 0), revenue: Number(Number(r.revenue || 0).toFixed(2)) })),
       byDay:     byDayRows.map(r => ({ ...r, unitsSold: Number(r.unitsSold || 0), revenue: Number(Number(r.revenue || 0).toFixed(2)) })),

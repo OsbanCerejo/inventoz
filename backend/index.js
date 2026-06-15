@@ -162,6 +162,9 @@ app.use("/hba-analytics", hbaAnalyticsRouter);
 const customerServiceRouter = require("./routes/CustomerService");
 app.use("/customer-service", customerServiceRouter);
 
+const operationsCostRouter = require("./routes/OperationsCost");
+app.use("/operations-cost", operationsCostRouter);
+
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.static(path.join(__dirname, 'public', 'hba-site')));
