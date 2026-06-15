@@ -630,6 +630,7 @@ function Product() {
             <Typography sx={panelTitleSx}>Product Details</Typography>
           </Box>
           <Box sx={{ p: 2.5, flex: 1 }}>
+            <KVRow label="SKU" value={productObject.sku} />
             <KVRow label="Brand" value={productObject.brand} />
             <KVRow label="Item Name" value={productObject.itemName} />
             <KVRow label="Category" value={productObject.category} />

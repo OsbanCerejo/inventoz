@@ -1415,9 +1415,33 @@ router.get('/salesSummary/:sku', auth, async (req, res) => {
     });
 
     // ── Avg sold price per platform (direct query — fast single-pass per platform)
+    // TikTok: exclude bundle scans (one lot price spread across N scan rows).
+    // Bundle detection: tsi_count < scan_count means one order line produced N scans.
     const [[tiktokAvgRow]] = await sequelize.query(
-      `SELECT AVG(tss.soldPrice) AS avg
+      `SELECT AVG(CASE WHEN sc.tsi_count >= sc.scan_count THEN tss.soldPrice END) AS avg
        FROM \`tiktokShipmentScans\` tss
+       JOIN (
+         SELECT s.tiktokShowId, s.importId, s.shipmentId,
+           s.scan_count, COALESCE(i.tsi_count, 1) AS tsi_count
+         FROM (
+           SELECT tiktokShowId, importId, shipmentId, COUNT(*) AS scan_count
+           FROM \`tiktokShipmentScans\`
+           WHERE result = 'matched'
+             AND productSku IS NOT NULL AND productSku <> ''
+             AND previousQuantity IS NOT NULL
+             AND newQuantity = previousQuantity - 1
+           GROUP BY tiktokShowId, importId, shipmentId
+         ) s
+         LEFT JOIN (
+           SELECT tiktokShowId, importId, shipmentId, COUNT(*) AS tsi_count
+           FROM \`tiktokShipmentItems\`
+           GROUP BY tiktokShowId, importId, shipmentId
+         ) i ON i.tiktokShowId = s.tiktokShowId
+            AND i.importId     = s.importId
+            AND i.shipmentId   = s.shipmentId
+       ) sc ON sc.tiktokShowId = tss.tiktokShowId
+           AND sc.importId     = tss.importId
+           AND sc.shipmentId   = tss.shipmentId
        WHERE tss.result = 'matched'
          AND tss.productSku = :sku
          AND tss.soldPrice IS NOT NULL
