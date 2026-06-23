@@ -80,6 +80,14 @@ const MODULE_CONFIG: Record<string, ModuleConfig> = {
           edit: { label: 'Edit', description: 'Toggle and configure Track Quantity settings' },
         },
       },
+      {
+        label: 'Data Entry',
+        resources: ['products'],
+        actions: {
+          dataEntry: { label: 'Data Entry', description: 'Access the Data Entry page to fill in configured product fields' },
+        },
+        menuLabel: 'Show Data Entry in menu',
+      },
     ],
   },
   inbound: {

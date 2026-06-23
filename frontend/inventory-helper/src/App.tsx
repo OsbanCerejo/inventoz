@@ -41,6 +41,7 @@ import InvoiceTracker from "./pages/InvoiceTracker";
 import Login from "./pages/Login";
 import LowStock from "./pages/LowStock";
 import Brands from "./pages/Brands";
+import Settings from "./pages/Settings";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleBasedHome from "./components/RoleBasedHome";
@@ -198,7 +199,7 @@ function AppContent() {
             <Route
               path="/editProduct"
               element={
-                <ProtectedRoute resource="products" action="edit" menuItem="products">
+                <ProtectedRoute>
                   <EditProduct />
                 </ProtectedRoute>
               }
@@ -449,6 +450,14 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="brands" action="view" menuItem="brands">
                   <Brands />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute menuItem="settings">
+                  <Settings />
                 </ProtectedRoute>
               }
             />

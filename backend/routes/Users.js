@@ -269,7 +269,7 @@ router.post('/', auth, checkPermission('users', 'create'), async (req, res) => {
     }
 
     // Validate role
-    const validRoles = ['admin', 'listing', 'packing', 'warehouse_l1', 'warehouse_l2', 'accounts'];
+    const validRoles = ['admin', 'listing', 'packing', 'warehouse_l1', 'warehouse_l2', 'accounts', 'data_entry'];
     if (role && !validRoles.includes(role)) {
       return res.status(400).json({ 
         error: 'Invalid role. Must be one of: ' + validRoles.join(', ') 
@@ -335,7 +335,7 @@ router.put('/:id', auth, checkPermission('users', 'edit'), async (req, res) => {
     }
 
     // Validate role if provided
-    const validRoles = ['admin', 'listing', 'packing', 'warehouse_l1', 'warehouse_l2', 'accounts'];
+    const validRoles = ['admin', 'listing', 'packing', 'warehouse_l1', 'warehouse_l2', 'accounts', 'data_entry'];
     if (role && !validRoles.includes(role)) {
       return res.status(400).json({ 
         error: 'Invalid role. Must be one of: ' + validRoles.join(', ') 

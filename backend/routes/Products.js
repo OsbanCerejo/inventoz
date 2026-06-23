@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { Products, ProductDetails, ProductHistory, StockUpdateHistory, Logs, HbaOrder, HbaOrderItem, SkuSalesSummary, sequelize } = require("../models");
+const { Products, ProductDetails, ProductHistory, StockUpdateHistory, Logs, HbaOrder, HbaOrderItem, SkuSalesSummary, Settings, sequelize } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 const StockUpdateService = require("../Services/StockUpdateService");
@@ -1389,7 +1389,7 @@ router.post("/test-email", auth, checkPermission('lowStock', 'view'), async (req
 });
 
 // ── Sales Summary — last 6 months per platform for a SKU ──────────────────
-router.get('/salesSummary/:sku', auth, async (req, res) => {
+router.get('/salesSummary/:sku', auth, checkPermission('products', 'view'), async (req, res) => {
   try {
     const { sku } = req.params;
     const now = new Date();
@@ -1492,6 +1492,82 @@ router.get('/salesSummary/:sku', auth, async (req, res) => {
   } catch (err) {
     console.error('Error fetching sales summary:', err);
     res.status(500).json({ error: 'Failed to fetch sales summary' });
+  }
+});
+
+// ── Data Entry Config (admin only) ───────────────────────────────────────────
+
+const DATA_ENTRY_ELIGIBLE_FIELDS = [
+  'image', 'brand', 'itemName', 'alternativeSku', 'upc',
+  'location', 'sizeOz', 'sizeMl', 'strength', 'shade',
+  'category', 'type', 'formulation', 'batch', 'verified', 'listed',
+];
+
+router.get('/data-entry/config', auth, async (req, res) => {
+  try {
+    const settings = await Settings.findOne({ where: { id: 1 } });
+    const enabledFields = settings?.data_entry_fields || [];
+    const payload = { enabledFields };
+    // Only admins see the full eligible field list (used by Settings page)
+    if (req.user.role === 'admin') {
+      payload.eligibleFields = DATA_ENTRY_ELIGIBLE_FIELDS;
+    }
+    res.json(payload);
+  } catch (err) {
+    console.error('Error fetching data entry config:', err);
+    res.status(500).json({ error: 'Failed to fetch data entry config' });
+  }
+});
+
+router.put('/data-entry/config', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin only' });
+    }
+    const { enabledFields } = req.body;
+    if (!Array.isArray(enabledFields)) {
+      return res.status(400).json({ error: 'enabledFields must be an array' });
+    }
+    const sanitized = enabledFields.filter(f => DATA_ENTRY_ELIGIBLE_FIELDS.includes(f));
+    await Settings.update({ data_entry_fields: sanitized }, { where: { id: 1 } });
+    res.json({ enabledFields: sanitized });
+  } catch (err) {
+    console.error('Error updating data entry config:', err);
+    res.status(500).json({ error: 'Failed to update data entry config' });
+  }
+});
+
+// ── Data Entry — save allowed fields for a SKU ────────────────────────────────
+
+router.put('/data-entry', auth, checkPermission('products', 'dataEntry'), async (req, res) => {
+  try {
+    const { sku, ...incoming } = req.body;
+    if (!sku) return res.status(400).json({ error: 'sku is required' });
+
+    const settings = await Settings.findOne({ where: { id: 1 } });
+    const enabledFields = settings?.data_entry_fields || [];
+    if (enabledFields.length === 0) {
+      return res.status(400).json({ error: 'No fields are configured for data entry' });
+    }
+
+    const updatePayload = {};
+    for (const field of enabledFields) {
+      if (incoming[field] !== undefined) {
+        updatePayload[field] = incoming[field];
+      }
+    }
+
+    if (Object.keys(updatePayload).length === 0) {
+      return res.status(400).json({ error: 'No valid fields provided' });
+    }
+
+    const [count] = await Products.update(updatePayload, { where: { sku } });
+    if (count === 0) return res.status(404).json({ error: 'Product not found' });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error in data entry save:', err);
+    res.status(500).json({ error: 'Failed to save data entry' });
   }
 });
 

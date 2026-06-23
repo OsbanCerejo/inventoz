@@ -36,24 +36,18 @@ const UserForm: React.FC<UserFormProps> = ({ user, onSubmit, onCancel }) => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const roles: User['role'][] = ['admin', 'listing', 'packing', 'warehouse_l1', 'warehouse_l2', 'accounts'];
+  const roles: User['role'][] = ['admin', 'listing', 'packing', 'warehouse_l1', 'warehouse_l2', 'accounts', 'data_entry'];
 
   const getRoleDisplayName = (role: User['role']) => {
     switch (role) {
-      case 'admin':
-        return 'Admin';
-      case 'listing':
-        return 'Listing';
-      case 'packing':
-        return 'Packing';
-      case 'warehouse_l1':
-        return 'Warehouse L1';
-      case 'warehouse_l2':
-        return 'Warehouse L2';
-      case 'accounts':
-        return 'Accounts';
-      default:
-        return role;
+      case 'admin':       return 'Admin';
+      case 'listing':     return 'Listing';
+      case 'packing':     return 'Packing';
+      case 'warehouse_l1': return 'Warehouse L1';
+      case 'warehouse_l2': return 'Warehouse L2';
+      case 'accounts':    return 'Accounts';
+      case 'data_entry':  return 'Data Entry';
+      default:            return role;
     }
   };
 

@@ -18,7 +18,12 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       allowNull: false,
       defaultValue: '1234'
-    }
+    },
+    data_entry_fields: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: null,
+    },
   }, {
     sequelize,
     modelName: 'Settings',

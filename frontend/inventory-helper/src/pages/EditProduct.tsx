@@ -122,11 +122,40 @@ interface ListingsObject {
   [key: string]: string | number;
 }
 
+const DATA_ENTRY_FIELD_LABELS: Record<string, string> = {
+  image: 'Image URL', brand: 'Brand', itemName: 'Item Name',
+  alternativeSku: 'Alternative SKU', upc: 'UPC Code', location: 'Location',
+  sizeOz: 'Size (oz)', sizeMl: 'Size (ml)', strength: 'Strength',
+  shade: 'Shade', category: 'Category', type: 'Type',
+  formulation: 'Formulation', batch: 'Batch', verified: 'Verified', listed: 'Listed',
+};
+const DATA_ENTRY_BOOLEAN_FIELDS = new Set(['verified', 'listed']);
+
 function EditProduct() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, hasPermission, isLoading: authLoading } = useAuth();
   const [showMoreDetails, setShowMoreDetails] = useState(false);
+
+  // Data Entry mode — users with dataEntry but not full edit
+  const isDataEntryMode = !authLoading && hasPermission('products', 'dataEntry') && user?.role !== 'admin';
+  const [dataEntryFields, setDataEntryFields] = useState<string[]>([]);
+  const [dataEntryValues, setDataEntryValues] = useState<Record<string, any>>({});
+  const [dataEntrySaving, setDataEntrySaving] = useState(false);
+  const [dataEntryConfigLoaded, setDataEntryConfigLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!isDataEntryMode) return;
+    axios.get(getApiUrl('products/data-entry/config')).then(res => {
+      const fields: string[] = res.data.enabledFields || [];
+      setDataEntryFields(fields);
+      const initial: Record<string, any> = {};
+      fields.forEach(f => { initial[f] = (location.state?.productObject?.[f] ?? ''); });
+      setDataEntryValues(initial);
+      setDataEntryConfigLoaded(true);
+    }).catch(() => setDataEntryConfigLoaded(true));
+  }, [isDataEntryMode]);
+
   const [brands, setBrands] = useState<BrandRecord[]>([]);
   const [brandsLoading, setBrandsLoading] = useState(false);
   const productObject = location.state.productObject;
@@ -437,6 +466,149 @@ function EditProduct() {
       );
     }
   }, [formikInitialValues.warehouseLocations]);
+
+  // ── Data Entry mode early return (all hooks above are already called) ────────
+  if (isDataEntryMode) {
+    if (!dataEntryConfigLoaded) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
+          <Typography>Loading...</Typography>
+        </Box>
+      );
+    }
+    if (dataEntryFields.length === 0) {
+      return (
+        <Box sx={{ maxWidth: 600, mx: 'auto', mt: 6, px: 2 }}>
+          <Typography color="warning.main">No fields have been configured for data entry. Please contact an admin.</Typography>
+        </Box>
+      );
+    }
+    const handleDataEntrySubmit = async () => {
+      setDataEntrySaving(true);
+      try {
+        await axios.put(getApiUrl('products/data-entry'), { sku: productObject.sku, ...dataEntryValues });
+        navigate(`/products/${productObject.sku}`);
+      } catch {
+        console.error('Data entry save failed');
+      } finally {
+        setDataEntrySaving(false);
+      }
+    };
+
+    const deKV = ({ label, value }: { label: string; value?: any }) =>
+      value == null || value === '' || value === 'undefined' || value === 'null' ? null : (
+        <Box display="flex" alignItems="baseline" py={0.75} gap={1} sx={{ borderBottom: '1px solid #f8fafc', '&:last-child': { borderBottom: 'none' } }}>
+          <Typography sx={{ fontSize: 13, color: '#64748b', fontWeight: 600, flexShrink: 0, width: 140 }}>{label}</Typography>
+          <Typography sx={{ fontSize: 13, color: '#0f172a', wordBreak: 'break-word' }}>{String(value)}</Typography>
+        </Box>
+      );
+
+    return (
+      <Box sx={{ maxWidth: 1100, mx: 'auto', mt: 4, px: 2, pb: 6 }}>
+        {/* Header */}
+        <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: '#0f172a' }}>Edit Product</Typography>
+            <Typography sx={{ fontFamily: 'Consolas, monospace', fontSize: 13, color: '#64748b', mt: 0.25 }}>{productObject.sku}</Typography>
+          </Box>
+        </Box>
+
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3, alignItems: 'start' }}>
+          {/* Left — read-only product details */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* Image */}
+            {productObject.image && (
+              <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+                <Box sx={{ px: 2.5, py: 1.5, borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+                  <Typography sx={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#374151' }}>Image</Typography>
+                </Box>
+                <Box sx={{ p: 2, display: 'flex', justifyContent: 'center' }}>
+                  <img src={productObject.image} alt="" style={{ maxWidth: '100%', maxHeight: 220, objectFit: 'contain', borderRadius: 8 }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                </Box>
+              </Paper>
+            )}
+
+            {/* Product Details */}
+            <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+              <Box sx={{ px: 2.5, py: 1.5, borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#374151' }}>Product Details</Typography>
+              </Box>
+              <Box sx={{ px: 2.5, py: 1.5 }}>
+                {deKV({ label: 'SKU', value: productObject.sku })}
+                {deKV({ label: 'Condition', value: productObject.condition })}
+                {deKV({ label: 'Brand', value: productObject.brand })}
+                {deKV({ label: 'Item Name', value: productObject.itemName })}
+                {deKV({ label: 'Category', value: productObject.category })}
+                {deKV({ label: 'Type', value: productObject.type })}
+                {deKV({ label: 'Strength', value: productObject.strength })}
+                {deKV({ label: 'Shade', value: productObject.shade })}
+                {deKV({ label: 'Formulation', value: productObject.formulation })}
+                {deKV({ label: 'Size (oz)', value: productObject.sizeOz })}
+                {deKV({ label: 'Size (ml)', value: productObject.sizeMl })}
+                {deKV({ label: 'UPC', value: productObject.upc })}
+                {deKV({ label: 'Alt SKU', value: productObject.alternativeSku })}
+                {deKV({ label: 'Location', value: productObject.location })}
+                {deKV({ label: 'Batch', value: productObject.batch })}
+                {deKV({ label: 'Quantity', value: productObject.quantity })}
+                {deKV({ label: 'Verified', value: productObject.verified ? 'Yes' : 'No' })}
+                {deKV({ label: 'Listed', value: productObject.listed ? 'Yes' : 'No' })}
+              </Box>
+            </Paper>
+          </Box>
+
+          {/* Right — editable data entry fields */}
+          <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+            <Box sx={{ px: 2.5, py: 1.5, borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+              <Typography sx={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#374151' }}>Fields to Fill</Typography>
+            </Box>
+            <Box sx={{ p: 2.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {dataEntryFields.map(field => {
+                if (DATA_ENTRY_BOOLEAN_FIELDS.has(field)) {
+                  return (
+                    <Box key={field} sx={{ display: 'flex', alignItems: 'center' }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={Boolean(dataEntryValues[field])}
+                            onChange={e => setDataEntryValues(prev => ({ ...prev, [field]: e.target.checked }))}
+                          />
+                        }
+                        label={DATA_ENTRY_FIELD_LABELS[field] ?? field}
+                      />
+                    </Box>
+                  );
+                }
+                return (
+                  <Box key={field}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label={DATA_ENTRY_FIELD_LABELS[field] ?? field}
+                      value={dataEntryValues[field] ?? ''}
+                      onChange={e => setDataEntryValues(prev => ({ ...prev, [field]: e.target.value }))}
+                      InputProps={field === 'image' && dataEntryValues.image ? {
+                        endAdornment: (
+                          <Box sx={{ width: 32, height: 32, flexShrink: 0, ml: 0.5 }}>
+                            <img src={dataEntryValues.image} alt="" style={{ width: 32, height: 32, objectFit: 'contain', borderRadius: 4 }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                          </Box>
+                        ),
+                      } : undefined}
+                    />
+                  </Box>
+                );
+              })}
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, mt: 1 }}>
+                <Button variant="outlined" onClick={() => navigate(-1)} sx={{ textTransform: 'none' }}>Cancel</Button>
+                <Button variant="contained" onClick={handleDataEntrySubmit} disabled={dataEntrySaving} sx={{ textTransform: 'none', fontWeight: 600 }}>
+                  {dataEntrySaving ? 'Saving...' : 'Save'}
+                </Button>
+              </Box>
+            </Box>
+          </Paper>
+        </Box>
+      </Box>
+    );
+  }
 
   const handleAddLocation = () => {
     if (currentInput.trim() !== "" && !tags.includes(currentInput.trim())) {

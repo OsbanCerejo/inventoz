@@ -3,7 +3,7 @@ export interface User {
   name?: string;
   username: string;
   email: string;
-  role: 'admin' | 'listing' | 'packing' | 'warehouse_l1' | 'warehouse_l2' | 'accounts';
+  role: 'admin' | 'listing' | 'packing' | 'warehouse_l1' | 'warehouse_l2' | 'accounts' | 'data_entry';
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;

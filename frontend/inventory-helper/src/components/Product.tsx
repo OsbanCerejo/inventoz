@@ -151,7 +151,7 @@ function Product() {
   // ── Permissions
   const isAdmin = user?.role === "admin";
   const canViewInboundHistory = isAdmin || hasPermission("inbound", "view");
-  const canEditProducts = isAdmin || hasPermission("products", "edit");
+  const canEditProducts = isAdmin || hasPermission("products", "edit") || hasPermission("products", "dataEntry");
   const canAddProduct =
     (isAdmin || hasPermission("addProduct", "create")) && hasMenuAccess("addProduct");
   const canViewHbaListing =
