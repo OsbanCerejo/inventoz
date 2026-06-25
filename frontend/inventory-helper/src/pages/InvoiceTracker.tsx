@@ -1897,6 +1897,14 @@ function InvoiceTracker() {
                         helperText={`Cannot exceed invoice total of $${invoiceGrandTotal.toFixed(2)}`}
                         disabled={isReadOnly}
                       />
+                      {Number(form.partialPaymentAmount) > 0 && Number(form.partialPaymentAmount) <= invoiceGrandTotal && (
+                        <Box sx={{ mt: 1, display: 'inline-flex', alignItems: 'center', gap: 0.75, background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 1.5, px: 1.5, py: 0.75 }}>
+                          <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#92400e' }}>Remaining due:</Typography>
+                          <Typography sx={{ fontSize: 13, fontWeight: 800, color: '#b45309' }}>
+                            ${(invoiceGrandTotal - Number(form.partialPaymentAmount)).toFixed(2)}
+                          </Typography>
+                        </Box>
+                      )}
                     </Grid>
                   )}
                   {form.paymentStatus === "paid" && (
