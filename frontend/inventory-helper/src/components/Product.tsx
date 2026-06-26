@@ -169,6 +169,7 @@ function Product() {
   const [vendorPrices, setVendorPrices] = useState<any[]>([]);
   const [averagePrice, setAveragePrice] = useState<number | null>(null);
   const [inboundHistory, setInboundHistory] = useState<any[]>([]);
+  const [fragranceNotes, setFragranceNotes] = useState<{ top: {id:number;name:string}[]; middle: {id:number;name:string}[]; base: {id:number;name:string}[] } | null>(null);
 
   // ── Sales summary
   const [salesSummary, setSalesSummary] = useState<{
@@ -268,6 +269,15 @@ function Product() {
       productObject.minimumQuantity == null ? "" : String(productObject.minimumQuantity)
     );
   }, [productObject]);
+
+  // ── Fetch fragrance notes
+  useEffect(() => {
+    const sku = productObject.sku;
+    if (!sku || productObject.category !== 'Fragrance') { setFragranceNotes(null); return; }
+    axios.get(getApiUrl(`fragrance-notes/product/${sku}`))
+      .then(({ data }) => setFragranceNotes(data))
+      .catch(() => setFragranceNotes(null));
+  }, [productObject.sku, productObject.category]);
 
   // ── Fetch vendor prices + inbound history
   useEffect(() => {
@@ -716,35 +726,73 @@ function Product() {
               </Box>
             )}
 
-            {/* Product Image */}
-            <Box mt={1.5}>
-              <Typography sx={{ fontSize: 13, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.06em", mb: 1 }}>
-                Product Image
-              </Typography>
-              <Box
-                sx={{
-                  width: 160, height: 160,
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 2,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  overflow: "hidden",
-                }}
-              >
-                {productObject.image ? (
-                  <img
-                    src={productObject.image}
-                    alt={productObject.itemName}
-                    style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
-                  />
-                ) : (
-                  <Typography sx={{ fontSize: 12, color: "#94a3b8", textAlign: "center", px: 2 }}>
-                    No image
-                  </Typography>
-                )}
+            {/* Product Image + Fragrance Notes */}
+            <Box mt={1.5} display="flex" gap={2} alignItems="flex-start">
+              <Box>
+                <Typography sx={{ fontSize: 13, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.06em", mb: 1 }}>
+                  Product Image
+                </Typography>
+                <Box
+                  sx={{
+                    width: 160, height: 160,
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 2,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                    flexShrink: 0,
+                  }}
+                >
+                  {productObject.image ? (
+                    <img
+                      src={productObject.image}
+                      alt={productObject.itemName}
+                      style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+                    />
+                  ) : (
+                    <Typography sx={{ fontSize: 12, color: "#94a3b8", textAlign: "center", px: 2 }}>
+                      No image
+                    </Typography>
+                  )}
+                </Box>
               </Box>
+
+              {/* Fragrance Notes */}
+              {fragranceNotes && (fragranceNotes.top.length > 0 || fragranceNotes.middle.length > 0 || fragranceNotes.base.length > 0) && (
+                <Box flex={1}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.06em", mb: 1 }}>
+                    Fragrance Notes
+                  </Typography>
+                  <Box display="flex" flexDirection="column" gap={1}>
+                    {([
+                      { key: 'top',    label: 'Top',    color: '#92400e', bg: '#fef3c7', border: '#fde68a', dot: '#f59e0b' },
+                      { key: 'middle', label: 'Middle', color: '#065f46', bg: '#d1fae5', border: '#a7f3d0', dot: '#10b981' },
+                      { key: 'base',   label: 'Base',   color: '#4c1d95', bg: '#ede9fe', border: '#ddd6fe', dot: '#6366f1' },
+                    ] as const).map(({ key, label, color, bg, border, dot }) =>
+                      fragranceNotes[key].length > 0 && (
+                        <Box key={key}>
+                          <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
+                            <Box sx={{ width: 7, height: 7, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+                            <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>{label}</Typography>
+                          </Box>
+                          <Box display="flex" flexWrap="wrap" gap={0.5}>
+                            {fragranceNotes[key].map(n => (
+                              <Chip
+                                key={n.name}
+                                label={n.name}
+                                size="small"
+                                sx={{ background: bg, border: `1px solid ${border}`, color, fontSize: 11, height: 22 }}
+                              />
+                            ))}
+                          </Box>
+                        </Box>
+                      )
+                    )}
+                  </Box>
+                </Box>
+              )}
             </Box>
           </Box>
         </Box>

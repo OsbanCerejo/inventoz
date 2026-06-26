@@ -1501,6 +1501,7 @@ const DATA_ENTRY_ELIGIBLE_FIELDS = [
   'image', 'brand', 'itemName', 'alternativeSku', 'upc',
   'location', 'sizeOz', 'sizeMl', 'strength', 'shade',
   'category', 'type', 'formulation', 'batch', 'verified', 'listed',
+  'fragranceNotes',
 ];
 
 router.get('/data-entry/config', auth, async (req, res) => {
@@ -1550,19 +1551,17 @@ router.put('/data-entry', auth, checkPermission('products', 'dataEntry'), async 
       return res.status(400).json({ error: 'No fields are configured for data entry' });
     }
 
+    const SPECIAL_FIELDS = new Set(['fragranceNotes']);
     const updatePayload = {};
     for (const field of enabledFields) {
-      if (incoming[field] !== undefined) {
+      if (!SPECIAL_FIELDS.has(field) && incoming[field] !== undefined) {
         updatePayload[field] = incoming[field];
       }
     }
 
-    if (Object.keys(updatePayload).length === 0) {
-      return res.status(400).json({ error: 'No valid fields provided' });
+    if (Object.keys(updatePayload).length > 0) {
+      await Products.update(updatePayload, { where: { sku } });
     }
-
-    const [count] = await Products.update(updatePayload, { where: { sku } });
-    if (count === 0) return res.status(404).json({ error: 'Product not found' });
 
     res.json({ success: true });
   } catch (err) {

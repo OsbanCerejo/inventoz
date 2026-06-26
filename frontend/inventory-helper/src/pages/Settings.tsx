@@ -24,6 +24,7 @@ const FIELD_LABELS: Record<string, string> = {
   batch:        'Batch',
   verified:     'Verified',
   listed:       'Listed',
+  fragranceNotes: 'Fragrance Notes',
 };
 
 export default function Settings() {

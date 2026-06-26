@@ -15,10 +15,6 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      scentNotes: {
-        type: DataTypes.TEXT,
-        allowNull: true,
-      },
       sizeType: {
         type: DataTypes.STRING,
         allowNull: true,

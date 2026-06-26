@@ -25,7 +25,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs from "dayjs";
 import skuData from "../data/skuData.json";
 import { toast } from "react-toastify";
@@ -40,6 +40,7 @@ import { useLocation } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { invalidateProductsCache } from "../utils/productCache";
+import FragranceNotesEditor from "../components/Products/FragranceNotesEditor";
 
 type BrandRecord = {
   id: number;
@@ -55,6 +56,7 @@ function AddProduct() {
   const { user } = useAuth();
   const { productObject, productDetails } = location.state || {};
   const [generatedSku, setGeneratedSku] = useState("");
+  const fragranceNotesRef = useRef<{ top: {id:number;name:string}[]; middle: {id:number;name:string}[]; base: {id:number;name:string}[] }>({ top: [], middle: [], base: [] });
   const today = new Date();
   const [newDate, setNewDate] = useState(dayjs(today.toLocaleString()));
   const [showMoreDetails, setShowMoreDetails] = useState(false);
@@ -104,7 +106,6 @@ function AddProduct() {
     vendor: productObject?.vendor || "",
     description: productDetails?.description || "",
     setOf: productDetails?.setOf || "",
-    scentNotes: productDetails?.scentNotes || "",
     sizeType: productDetails?.sizeType || "",
     activeIngredients: productDetails?.activeIngredients || "",
     pao: productDetails?.pao || "",
@@ -157,7 +158,6 @@ function AddProduct() {
     // Product Details Fields
     description: Yup.string(),
     setOf: Yup.string(),
-    scentNotes: Yup.string(),
     sizeType: Yup.string(),
     activeIngredients: Yup.string(),
     pao: Yup.string(),
@@ -232,6 +232,16 @@ function AddProduct() {
             getApiUrl('productDetails/addProductDetails'),
             data
           );
+
+          // Save fragrance notes if Fragrance category
+          if (data.category === 'Fragrance') {
+            const fn = fragranceNotesRef.current;
+            await axios.put(getApiUrl(`fragrance-notes/product/${data.sku}`), {
+              top: fn.top.map((n: any) => n.name),
+              middle: fn.middle.map((n: any) => n.name),
+              base: fn.base.map((n: any) => n.name),
+            }).catch(() => {});
+          }
           // console.log("Product Details Response : ", addProductDetailsresponse);
 
           // Log product details creation
@@ -540,6 +550,14 @@ function AddProduct() {
                   </Grid>
                 </Grid>
               </Paper>
+              {formik.values.category === "Fragrance" && (
+                <Paper variant="outlined" sx={{ my: 1, p: 2 }}>
+                  <FragranceNotesEditor
+                    sku={generatedSku || null}
+                    onChange={(notes) => { fragranceNotesRef.current = notes; }}
+                  />
+                </Paper>
+              )}
             </Container>
           </Grid>
           <Grid item xs={6}>
@@ -983,23 +1001,6 @@ function AddProduct() {
                                 error={
                                   formik.touched.setOf &&
                                   Boolean(formik.errors.setOf)
-                                }
-                              />
-                            </Box>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Box m={2}>
-                              <TextField
-                                fullWidth
-                                id="scentNotes"
-                                name="scentNotes"
-                                label="Scent Notes"
-                                value={formik.values.scentNotes}
-                                onChange={formik.handleChange}
-                                onBlur={formik.handleBlur}
-                                error={
-                                  formik.touched.scentNotes &&
-                                  Boolean(formik.errors.scentNotes)
                                 }
                               />
                             </Box>

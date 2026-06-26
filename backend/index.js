@@ -165,6 +165,9 @@ app.use("/customer-service", customerServiceRouter);
 const operationsCostRouter = require("./routes/OperationsCost");
 app.use("/operations-cost", operationsCostRouter);
 
+const fragranceNotesRouter = require("./routes/FragranceNotes");
+app.use("/fragrance-notes", fragranceNotesRouter);
+
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.static(path.join(__dirname, 'public', 'hba-site')));

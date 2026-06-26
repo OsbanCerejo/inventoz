@@ -27,7 +27,7 @@ import * as Yup from "yup";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
 import skuData from "../data/skuData.json";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import EditIcon from "@mui/icons-material/Edit";
@@ -38,6 +38,8 @@ import { useAuth } from "../context/AuthContext";
 import PermissionGuard from "../components/PermissionGuard";
 import { getApiUrl } from "../config/api";
 import { invalidateProductsCache } from "../utils/productCache";
+import FragranceNotesEditor from "../components/Products/FragranceNotesEditor";
+import { toast } from "react-toastify";
 
 type BrandRecord = {
   id: number;
@@ -74,7 +76,6 @@ const formikValidationSchema = Yup.object().shape({
   // Product Details Fields
   description: Yup.string(),
   setOf: Yup.string(),
-  scentNotes: Yup.string(),
   sizeType: Yup.string(),
   activeIngredients: Yup.string(),
   pao: Yup.string(),
@@ -128,6 +129,7 @@ const DATA_ENTRY_FIELD_LABELS: Record<string, string> = {
   sizeOz: 'Size (oz)', sizeMl: 'Size (ml)', strength: 'Strength',
   shade: 'Shade', category: 'Category', type: 'Type',
   formulation: 'Formulation', batch: 'Batch', verified: 'Verified', listed: 'Listed',
+  fragranceNotes: 'Fragrance Notes',
 };
 const DATA_ENTRY_BOOLEAN_FIELDS = new Set(['verified', 'listed']);
 
@@ -136,6 +138,7 @@ function EditProduct() {
   const navigate = useNavigate();
   const { user, hasPermission, isLoading: authLoading } = useAuth();
   const [showMoreDetails, setShowMoreDetails] = useState(false);
+  const fragranceNotesRef = useRef<{ top: {id:number;name:string}[]; middle: {id:number;name:string}[]; base: {id:number;name:string}[] }>({ top: [], middle: [], base: [] });
 
   // Data Entry mode — users with dataEntry but not full edit
   const isDataEntryMode = !authLoading && hasPermission('products', 'dataEntry') && user?.role !== 'admin';
@@ -150,7 +153,7 @@ function EditProduct() {
       const fields: string[] = res.data.enabledFields || [];
       setDataEntryFields(fields);
       const initial: Record<string, any> = {};
-      fields.forEach(f => { initial[f] = (location.state?.productObject?.[f] ?? ''); });
+      fields.forEach(f => { if (f !== 'fragranceNotes') initial[f] = (location.state?.productObject?.[f] ?? ''); });
       setDataEntryValues(initial);
       setDataEntryConfigLoaded(true);
     }).catch(() => setDataEntryConfigLoaded(true));
@@ -213,7 +216,6 @@ function EditProduct() {
       // New fields from ProductDetails
       description: productDetails.description || "",
       setOf: productDetails.setOf || "",
-      scentNotes: productDetails.scentNotes || "",
       sizeType: productDetails.sizeType || "",
       activeIngredients: productDetails.activeIngredients || "",
       pao: productDetails.pao || "",
@@ -339,6 +341,16 @@ function EditProduct() {
         ebayOneLifeLuxuries4: data.onelifeluxuries === "" ? 0 : Number(data.onelifeluxuries),
         walmartOneLifeLuxuries: data.walmart === "" ? 0 : Number(data.walmart),
       };
+
+      // Save fragrance notes if Fragrance category
+      if (data.category === 'Fragrance') {
+        const fn = fragranceNotesRef.current;
+        axios.put(getApiUrl(`fragrance-notes/product/${data.sku}`), {
+          top: fn.top.map(n => n.name),
+          middle: fn.middle.map(n => n.name),
+          base: fn.base.map(n => n.name),
+        }).catch(() => {});
+      }
 
       axios
         .all([
@@ -487,8 +499,18 @@ function EditProduct() {
       setDataEntrySaving(true);
       try {
         await axios.put(getApiUrl('products/data-entry'), { sku: productObject.sku, ...dataEntryValues });
+        if (productObject.category === 'Fragrance') {
+          const fn = fragranceNotesRef.current;
+          await axios.put(getApiUrl(`fragrance-notes/product/${productObject.sku}`), {
+            top: fn.top.map(n => n.name),
+            middle: fn.middle.map(n => n.name),
+            base: fn.base.map(n => n.name),
+          }).catch(() => {});
+        }
+        toast.success('Saved successfully');
         navigate(`/products/${productObject.sku}`);
       } catch {
+        toast.error('Save failed. Please try again.');
         console.error('Data entry save failed');
       } finally {
         setDataEntrySaving(false);
@@ -563,6 +585,17 @@ function EditProduct() {
             </Box>
             <Box sx={{ p: 2.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
               {dataEntryFields.map(field => {
+                if (field === 'fragranceNotes') {
+                  if (productObject.category !== 'Fragrance') return null;
+                  return (
+                    <Box key={field}>
+                      <FragranceNotesEditor
+                        sku={productObject.sku}
+                        onChange={(notes) => { fragranceNotesRef.current = notes; }}
+                      />
+                    </Box>
+                  );
+                }
                 if (DATA_ENTRY_BOOLEAN_FIELDS.has(field)) {
                   return (
                     <Box key={field} sx={{ display: 'flex', alignItems: 'center' }}>
@@ -1247,23 +1280,16 @@ function EditProduct() {
                               />
                             </Box>
                           </Grid>
+                          {formik.values.category === "Fragrance" && (
                           <Grid item xs={12}>
                             <Box m={2}>
-                              <TextField
-                                fullWidth
-                                id="scentNotes"
-                                name="scentNotes"
-                                label="Scent Notes"
-                                value={formik.values.scentNotes}
-                                onChange={formik.handleChange}
-                                onBlur={formik.handleBlur}
-                                error={
-                                  formik.touched.scentNotes &&
-                                  Boolean(formik.errors.scentNotes)
-                                }
+                              <FragranceNotesEditor
+                                sku={productObject.sku}
+                                onChange={(notes) => { fragranceNotesRef.current = notes; }}
                               />
                             </Box>
                           </Grid>
+                          )}
                           <Grid item xs={12}>
                             <Box m={2}>
                               <FormControl
