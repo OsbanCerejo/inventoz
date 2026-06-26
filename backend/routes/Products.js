@@ -712,6 +712,23 @@ router.post("/hba/submit-order", async (req, res) => {
   }
 });
 
+// GET distinct brands and categories (used by admin to configure data entry scope)
+router.get('/filter-options', auth, async (req, res) => {
+  try {
+    const [brands, categories] = await Promise.all([
+      Products.findAll({ attributes: [[Sequelize.fn('DISTINCT', Sequelize.col('brand')), 'brand']], where: { brand: { [Op.not]: null } }, order: [['brand', 'ASC']], raw: true }),
+      Products.findAll({ attributes: [[Sequelize.fn('DISTINCT', Sequelize.col('category')), 'category']], where: { category: { [Op.not]: null } }, order: [['category', 'ASC']], raw: true }),
+    ]);
+    res.json({
+      brands: brands.map(r => r.brand).filter(Boolean),
+      categories: categories.map(r => r.category).filter(Boolean),
+    });
+  } catch (err) {
+    console.error('Error fetching filter options:', err);
+    res.status(500).json({ error: 'Failed to fetch filter options' });
+  }
+});
+
 router.get("/list", auth, checkPermission('products', 'view'), async (req, res) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
@@ -731,6 +748,7 @@ router.get("/list", auth, checkPermission('products', 'view'), async (req, res) 
       location: req.query.location,
       categories: req.query.categories, // comma-separated list; absent = no filter (show all)
       types: req.query.types,           // comma-separated: Sealed|Unsealed|Unboxed|Tester
+      brands: req.query.brands,         // comma-separated exact brand names; absent = no filter
     };
 
     // Parse category filter:
@@ -781,7 +799,17 @@ router.get("/list", auth, checkPermission('products', 'view'), async (req, res) 
       categoryFilter && categoryFilter.length > 0
         ? { category: { [Op.in]: categoryFilter } }
         : null,
+      filters.brands
+        ? { brand: { [Op.in]: filters.brands.split(',').map(b => b.trim()).filter(Boolean) } }
+        : null,
       typeWhereClause,
+      // Server-enforced data entry scope — always applied regardless of frontend params
+      req.user.data_entry_brands?.length > 0
+        ? { brand: { [Op.in]: req.user.data_entry_brands } }
+        : null,
+      req.user.data_entry_categories?.length > 0
+        ? { category: { [Op.in]: req.user.data_entry_categories } }
+        : null,
     ].filter(Boolean);
 
     const where = whereClauses.length ? { [Op.and]: whereClauses } : {};
@@ -1513,6 +1541,9 @@ router.get('/data-entry/config', auth, async (req, res) => {
     if (req.user.role === 'admin') {
       payload.eligibleFields = DATA_ENTRY_ELIGIBLE_FIELDS;
     }
+    // Include this user's data entry scope (brand/category restrictions)
+    payload.allowedBrands = req.user.data_entry_brands || [];
+    payload.allowedCategories = req.user.data_entry_categories || [];
     res.json(payload);
   } catch (err) {
     console.error('Error fetching data entry config:', err);
@@ -1544,6 +1575,20 @@ router.put('/data-entry', auth, checkPermission('products', 'dataEntry'), async 
   try {
     const { sku, ...incoming } = req.body;
     if (!sku) return res.status(400).json({ error: 'sku is required' });
+
+    // Enforce data entry scope server-side
+    const scopeBrands = req.user.data_entry_brands;
+    const scopeCategories = req.user.data_entry_categories;
+    if (scopeBrands?.length > 0 || scopeCategories?.length > 0) {
+      const product = await Products.findOne({ where: { sku }, attributes: ['brand', 'category'] });
+      if (!product) return res.status(404).json({ error: 'Product not found' });
+      if (scopeBrands?.length > 0 && !scopeBrands.includes(product.brand)) {
+        return res.status(403).json({ error: 'Product is outside your allowed brands' });
+      }
+      if (scopeCategories?.length > 0 && !scopeCategories.includes(product.category)) {
+        return res.status(403).json({ error: 'Product is outside your allowed categories' });
+      }
+    }
 
     const settings = await Settings.findOne({ where: { id: 1 } });
     const enabledFields = settings?.data_entry_fields || [];

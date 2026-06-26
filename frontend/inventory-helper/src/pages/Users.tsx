@@ -373,6 +373,12 @@ const Users: React.FC = () => {
   const [permissionsLoading, setPermissionsLoading] = useState(false);
   const [permissionsSaving, setPermissionsSaving] = useState(false);
 
+  // Data entry scope
+  const [scopeAllowedBrands, setScopeAllowedBrands] = useState<string[]>([]);
+  const [scopeAllowedCategories, setScopeAllowedCategories] = useState<string[]>([]);
+  const [filterOptions, setFilterOptions] = useState<{ brands: string[]; categories: string[] }>({ brands: [], categories: [] });
+  const [scopeSaving, setScopeSaving] = useState(false);
+
   const [csNotifDialogOpen, setCsNotifDialogOpen] = useState(false);
   const [csNotifTargetUser, setCsNotifTargetUser] = useState<User | null>(null);
   const [csNotifEmail, setCsNotifEmail] = useState('');
@@ -573,10 +579,21 @@ const Users: React.FC = () => {
       setPermissionsLoading(true);
       setPermissionsDialogOpen(true);
       setPermissionsTargetUser(user);
-      const response = await axios.get(getApiUrl(`api/users/${user.id}/permissions`), {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setPermissionRows(response.data?.permissions || []);
+      setScopeAllowedBrands([]);
+      setScopeAllowedCategories([]);
+
+      const [permResponse, scopeResponse, optionsResponse] = await Promise.all([
+        axios.get(getApiUrl(`api/users/${user.id}/permissions`), { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(getApiUrl(`api/users/${user.id}/data-entry-scope`), { headers: { Authorization: `Bearer ${token}` } }),
+        filterOptions.brands.length === 0
+          ? axios.get(getApiUrl('products/filter-options'), { headers: { Authorization: `Bearer ${token}` } })
+          : Promise.resolve(null),
+      ]);
+
+      setPermissionRows(permResponse.data?.permissions || []);
+      setScopeAllowedBrands(scopeResponse.data?.allowedBrands || []);
+      setScopeAllowedCategories(scopeResponse.data?.allowedCategories || []);
+      if (optionsResponse) setFilterOptions(optionsResponse.data);
     } catch (error: any) {
       console.error('Error loading user permissions:', error);
       toast.error(error.response?.data?.error || 'Failed to load user permissions');
@@ -591,18 +608,18 @@ const Users: React.FC = () => {
     if (!permissionsTargetUser) return;
     try {
       setPermissionsSaving(true);
-      await axios.put(
-        getApiUrl(`api/users/${permissionsTargetUser.id}/permissions`),
-        {
-          permissions: permissionRows.map((row) => ({
-            permissionId: row.id,
-            allowed: row.allowed,
-          })),
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      await Promise.all([
+        axios.put(
+          getApiUrl(`api/users/${permissionsTargetUser.id}/permissions`),
+          { permissions: permissionRows.map((row) => ({ permissionId: row.id, allowed: row.allowed })) },
+          { headers: { Authorization: `Bearer ${token}` } }
+        ),
+        axios.put(
+          getApiUrl(`api/users/${permissionsTargetUser.id}/data-entry-scope`),
+          { allowedBrands: scopeAllowedBrands, allowedCategories: scopeAllowedCategories },
+          { headers: { Authorization: `Bearer ${token}` } }
+        ),
+      ]);
       toast.success('Permissions updated successfully');
       setPermissionsDialogOpen(false);
       setPermissionsTargetUser(null);
@@ -1148,6 +1165,72 @@ const Users: React.FC = () => {
                   {idx < moduleSections.length - 1 && <Divider sx={{ mt: 2 }} />}
                 </Box>
               ))}
+
+              {permissionRows.some(r => r.key === 'products.dataEntry' && r.allowed) && <>
+              <Divider sx={{ mt: 2, mb: 2 }} />
+
+              {/* Data Entry Scope */}
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>Data Entry Scope</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Restrict which products this user sees on the Data Entry page. Leave empty to allow all.
+                </Typography>
+
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Allowed Brands</Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1 }}>
+                  {filterOptions.brands.map(brand => {
+                    const selected = scopeAllowedBrands.includes(brand);
+                    return (
+                      <Chip
+                        key={brand}
+                        label={brand}
+                        size="small"
+                        onClick={() => setScopeAllowedBrands(prev => selected ? prev.filter(b => b !== brand) : [...prev, brand])}
+                        sx={{
+                          cursor: 'pointer',
+                          background: selected ? '#dbeafe' : '#f1f5f9',
+                          color: selected ? '#1d4ed8' : '#374151',
+                          border: selected ? '1px solid #93c5fd' : '1px solid #e2e8f0',
+                          fontWeight: selected ? 600 : 400,
+                        }}
+                      />
+                    );
+                  })}
+                </Box>
+                {scopeAllowedBrands.length > 0 && (
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+                    {scopeAllowedBrands.length} brand{scopeAllowedBrands.length !== 1 ? 's' : ''} selected
+                  </Typography>
+                )}
+
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, mt: 1.5 }}>Allowed Categories</Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                  {filterOptions.categories.map(cat => {
+                    const selected = scopeAllowedCategories.includes(cat);
+                    return (
+                      <Chip
+                        key={cat}
+                        label={cat}
+                        size="small"
+                        onClick={() => setScopeAllowedCategories(prev => selected ? prev.filter(c => c !== cat) : [...prev, cat])}
+                        sx={{
+                          cursor: 'pointer',
+                          background: selected ? '#d1fae5' : '#f1f5f9',
+                          color: selected ? '#065f46' : '#374151',
+                          border: selected ? '1px solid #6ee7b7' : '1px solid #e2e8f0',
+                          fontWeight: selected ? 600 : 400,
+                        }}
+                      />
+                    );
+                  })}
+                </Box>
+                {scopeAllowedCategories.length > 0 && (
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                    {scopeAllowedCategories.length} categor{scopeAllowedCategories.length !== 1 ? 'ies' : 'y'} selected
+                  </Typography>
+                )}
+              </Box>
+            </>}
             </Box>
           )}
         </DialogContent>

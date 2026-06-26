@@ -20,6 +20,23 @@ function Products() {
   const navigate = useNavigate();
   const hasHydratedFromStorageRef = useRef(false);
 
+  // Data entry scope — loaded once, stored in refs so fetchProducts always reads latest
+  const scopeBrandsRef = useRef<string[]>([]);
+  const scopeCategoriesRef = useRef<string[]>([]);
+  const isDataEntryUser = hasPermission('products', 'dataEntry');
+  const [scopeReady, setScopeReady] = useState(!isDataEntryUser);
+
+  useEffect(() => {
+    if (!isDataEntryUser) return;
+    axios.get(getApiUrl('products/data-entry/config'))
+      .then(res => {
+        scopeBrandsRef.current = res.data.allowedBrands || [];
+        scopeCategoriesRef.current = res.data.allowedCategories || [];
+      })
+      .catch(() => {})
+      .finally(() => setScopeReady(true));
+  }, []);
+
   const [sortConfig, setSortConfig] = useState<{
     key: string | null;
     direction: string;
@@ -50,13 +67,22 @@ function Products() {
           sortDirection: sortConfig.direction || "asc",
         };
 
+        // Apply data entry scope restrictions (brands + categories)
+        if (scopeBrandsRef.current.length > 0) {
+          params.brands = scopeBrandsRef.current.join(",");
+        }
+
         // All selected → omit param (backend shows everything)
         // None selected → send "__none__" so backend returns empty
         // Subset selected → send comma-separated list
-        if (selectedCategories.length === 0) {
+        const effectiveCategories = scopeCategoriesRef.current.length > 0
+          ? selectedCategories.filter(c => scopeCategoriesRef.current.includes(c))
+          : selectedCategories;
+
+        if (effectiveCategories.length === 0) {
           params.categories = "__none__";
-        } else if (selectedCategories.length < ALL_CATEGORIES.length) {
-          params.categories = selectedCategories.join(",");
+        } else if (effectiveCategories.length < ALL_CATEGORIES.length) {
+          params.categories = effectiveCategories.join(",");
         }
 
         if (selectedTypes.length === 0) {
@@ -161,11 +187,11 @@ function Products() {
   }, [location.state, navigate, location.pathname]);
 
   useEffect(() => {
-    if (!isHydrated) return;
+    if (!isHydrated || !scopeReady) return;
     const controller = new AbortController();
     fetchProducts({ signal: controller.signal });
     return () => controller.abort();
-  }, [fetchProducts, isHydrated]);
+  }, [fetchProducts, isHydrated, scopeReady]);
 
   const handleSort = (columnKey: string) => {
     let direction = "asc";

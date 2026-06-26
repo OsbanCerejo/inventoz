@@ -465,6 +465,50 @@ router.patch('/:id/toggle-status', auth, checkPermission('users', 'edit'), async
   }
 });
 
+// Admin-only: get data entry scope (allowed brands/categories) for a user
+router.get('/:id/data-entry-scope', auth, checkPermission('users', 'view'), async (req, res) => {
+  try {
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId) || userId <= 0) return res.status(400).json({ error: 'Invalid user id' });
+    const user = await User.findByPk(userId, {
+      attributes: ['id', 'data_entry_brands', 'data_entry_categories'],
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({
+      allowedBrands: user.data_entry_brands || [],
+      allowedCategories: user.data_entry_categories || [],
+    });
+  } catch (err) {
+    console.error('Data entry scope get error:', err);
+    res.status(500).json({ error: 'Failed to retrieve data entry scope' });
+  }
+});
+
+// Admin-only: update data entry scope for a user
+router.put('/:id/data-entry-scope', auth, async (req, res) => {
+  try {
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId) || userId <= 0) return res.status(400).json({ error: 'Invalid user id' });
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const { allowedBrands, allowedCategories } = req.body;
+    await user.update({
+      data_entry_brands: Array.isArray(allowedBrands) ? allowedBrands : null,
+      data_entry_categories: Array.isArray(allowedCategories) ? allowedCategories : null,
+    });
+    res.json({
+      allowedBrands: user.data_entry_brands || [],
+      allowedCategories: user.data_entry_categories || [],
+    });
+  } catch (err) {
+    console.error('Data entry scope update error:', err);
+    res.status(500).json({ error: 'Failed to update data entry scope' });
+  }
+});
+
 // Admin-only: get CS notification settings for a user
 router.get('/:id/cs-notification-settings', auth, checkPermission('users', 'view'), async (req, res) => {
   try {

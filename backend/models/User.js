@@ -56,6 +56,16 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: true,
     },
+    data_entry_brands: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: null,
+    },
+    data_entry_categories: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: null,
+    },
   }, {
     hooks: {
       beforeCreate: async (user) => {

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import {
@@ -41,6 +41,8 @@ type RowState = {
 
 export default function DataEntry() {
   const [enabledFields, setEnabledFields] = useState<string[]>([]);
+  const [allowedBrands, setAllowedBrands] = useState<string[]>([]);
+  const [allowedCategories, setAllowedCategories] = useState<string[]>([]);
   const [configLoading, setConfigLoading] = useState(true);
   const [configError, setConfigError] = useState('');
 
@@ -51,35 +53,26 @@ export default function DataEntry() {
 
   const [rows, setRows] = useState<Record<string, RowState>>({});
 
-  // Load config once
-  useEffect(() => {
-    axios.get(getApiUrl('products/data-entry/config'))
-      .then(res => {
-        setEnabledFields(res.data.enabledFields || []);
-        if ((res.data.enabledFields || []).length === 0) {
-          setConfigError('No fields have been configured for data entry. An admin must set this up in Settings.');
-        }
-      })
-      .catch(() => setConfigError('Failed to load configuration.'))
-      .finally(() => setConfigLoading(false));
-  }, []);
+  // Refs so loadProducts always reads the latest values regardless of when it was created
+  const enabledFieldsRef = useRef<string[]>([]);
+  const allowedBrandsRef = useRef<string[]>([]);
+  const allowedCategoriesRef = useRef<string[]>([]);
 
-  // Load products page
   const loadProducts = useCallback(async (pageNum: number) => {
     setProductsLoading(true);
     try {
-      const res = await axios.get(getApiUrl('products/list'), {
-        params: { page: pageNum, pageSize: PAGE_SIZE, sortKey: 'sku', sortDirection: 'asc' },
-      });
+      const params: Record<string, any> = { page: pageNum, pageSize: PAGE_SIZE, sortKey: 'sku', sortDirection: 'asc' };
+      if (allowedBrandsRef.current.length > 0) params.brands = allowedBrandsRef.current.join(',');
+      if (allowedCategoriesRef.current.length > 0) params.categories = allowedCategoriesRef.current.join(',');
+      const res = await axios.get(getApiUrl('products/list'), { params });
       const fetched: Product[] = res.data?.rows || [];
       setProducts(fetched);
       setTotal(res.data?.total || 0);
 
-      // Initialise row state from fetched data
       const initial: Record<string, RowState> = {};
       fetched.forEach(p => {
         const values: Record<string, any> = {};
-        enabledFields.forEach(f => { values[f] = p[f] ?? ''; });
+        enabledFieldsRef.current.forEach(f => { values[f] = p[f] ?? ''; });
         initial[p.sku] = { values, dirty: false, saving: false, saved: false };
       });
       setRows(initial);
@@ -88,13 +81,37 @@ export default function DataEntry() {
     } finally {
       setProductsLoading(false);
     }
-  }, [enabledFields]);
+  }, []);
+
+  // Load config once, then trigger initial product load
+  useEffect(() => {
+    axios.get(getApiUrl('products/data-entry/config'))
+      .then(res => {
+        const fields = res.data.enabledFields || [];
+        const brands = res.data.allowedBrands || [];
+        const categories = res.data.allowedCategories || [];
+        enabledFieldsRef.current = fields;
+        allowedBrandsRef.current = brands;
+        allowedCategoriesRef.current = categories;
+        console.log('[DataEntry] scope loaded', { brands, categories });
+        setEnabledFields(fields);
+        setAllowedBrands(brands);
+        setAllowedCategories(categories);
+        if (fields.length === 0) {
+          setConfigError('No fields have been configured for data entry. An admin must set this up in Settings.');
+        } else {
+          loadProducts(1);
+        }
+      })
+      .catch(() => setConfigError('Failed to load configuration.'))
+      .finally(() => setConfigLoading(false));
+  }, []);
 
   useEffect(() => {
     if (enabledFields.length > 0) {
       loadProducts(page);
     }
-  }, [page, enabledFields]);
+  }, [page]);
 
   const handleChange = (sku: string, field: string, value: any) => {
     setRows(prev => ({
