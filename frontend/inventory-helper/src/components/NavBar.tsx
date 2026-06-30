@@ -97,6 +97,7 @@ function NavBar() {
     { key: 'label-generator-tool', permissionKey: 'labelGenerator', label: 'Label Generator', path: '/label-generator' },
     { key: 'brands-tool', permissionKey: 'brands', label: 'Brands', path: '/brands' },
     { key: 'settings-tool', permissionKey: 'settings', label: 'Settings', path: '/settings' },
+    { key: 'sku-merge-tool', permissionKey: 'skuMerge', label: 'SKU Merge', path: '/sku-merge' },
     { key: 'packing-tool', permissionKey: 'packing', label: 'Packing', path: '/orders/packingMode' },
     { key: 'pricelist-tool', permissionKey: 'pricelist', label: 'PriceList', path: '/price-list' },
     { key: 'lowstock-tool', permissionKey: 'lowStock', label: 'Low Stock', path: '/low-stock' },

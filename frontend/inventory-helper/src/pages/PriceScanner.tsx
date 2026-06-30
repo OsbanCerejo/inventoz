@@ -44,6 +44,12 @@ type PriceScanResponse = {
   matches: PriceScanProduct[];
 };
 
+type FragranceNotes = {
+  top: { id: number; name: string }[];
+  middle: { id: number; name: string }[];
+  base: { id: number; name: string }[];
+};
+
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -74,6 +80,7 @@ function PriceScanner() {
   const [error, setError] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<PriceScanResponse | null>(null);
   const [selectedSku, setSelectedSku] = useState<string | null>(null);
+  const [fragranceNotes, setFragranceNotes] = useState<FragranceNotes | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const selectedProduct = useMemo(() => {
@@ -90,6 +97,17 @@ function PriceScanner() {
       setSelectedSku(scanResult.matches[0].sku);
     }
   }, [scanResult]);
+
+  useEffect(() => {
+    if (!selectedProduct) { setFragranceNotes(null); return; }
+    setFragranceNotes(null);
+    axios.get<FragranceNotes>(getApiUrl(`fragrance-notes/product/${encodeURIComponent(selectedProduct.sku)}`))
+      .then(res => {
+        const n = res.data;
+        if (n.top.length || n.middle.length || n.base.length) setFragranceNotes(n);
+      })
+      .catch(() => {});
+  }, [selectedProduct?.sku]);
 
   const resetForNextScan = () => {
     setBarcode("");
@@ -366,6 +384,37 @@ function PriceScanner() {
               </Stack>
             </Grid>
           </Grid>
+
+          {fragranceNotes && (
+            <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: '0.12em', fontWeight: 700 }}>
+                Fragrance Notes
+              </Typography>
+              <Stack spacing={2} sx={{ mt: 1.5 }}>
+                {(['top', 'middle', 'base'] as const).map((tier) => {
+                  const colors = {
+                    top:    { label: '#6d28d9', bg: '#ede9fe', text: '#4c1d95' },
+                    middle: { label: '#0369a1', bg: '#e0f2fe', text: '#0c4a6e' },
+                    base:   { label: '#92400e', bg: '#fef3c7', text: '#78350f' },
+                  }[tier];
+                  return fragranceNotes[tier].length > 0 && (
+                    <Box key={tier}>
+                      <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: colors.label, mb: 0.75, display: 'block' }}>
+                        {tier}
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        {fragranceNotes[tier].map(n => (
+                          <Box key={n.id} sx={{ px: 2, py: 0.75, borderRadius: 99, bgcolor: colors.bg, color: colors.text, fontWeight: 700, fontSize: 18, lineHeight: 1.4, border: '1.5px solid', borderColor: colors.label + '44' }}>
+                            {n.name}
+                          </Box>
+                        ))}
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Stack>
+            </Box>
+          )}
         </Paper>
       )}
     </Box>

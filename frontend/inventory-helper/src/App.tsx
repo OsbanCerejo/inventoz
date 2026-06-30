@@ -42,6 +42,7 @@ import Login from "./pages/Login";
 import LowStock from "./pages/LowStock";
 import Brands from "./pages/Brands";
 import Settings from "./pages/Settings";
+import SkuMerge from "./pages/SkuMerge";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleBasedHome from "./components/RoleBasedHome";
@@ -458,6 +459,14 @@ function AppContent() {
               element={
                 <ProtectedRoute menuItem="settings">
                   <Settings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/sku-merge"
+              element={
+                <ProtectedRoute menuItem="skuMerge">
+                  <SkuMerge />
                 </ProtectedRoute>
               }
             />

@@ -168,6 +168,9 @@ app.use("/operations-cost", operationsCostRouter);
 const fragranceNotesRouter = require("./routes/FragranceNotes");
 app.use("/fragrance-notes", fragranceNotesRouter);
 
+const skuMergeRouter = require("./routes/SkuMerge");
+app.use("/sku-merge", skuMergeRouter);
+
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.static(path.join(__dirname, 'public', 'hba-site')));
