@@ -98,6 +98,7 @@ function NavBar() {
     { key: 'brands-tool', permissionKey: 'brands', label: 'Brands', path: '/brands' },
     { key: 'settings-tool', permissionKey: 'settings', label: 'Settings', path: '/settings' },
     { key: 'sku-merge-tool', permissionKey: 'skuMerge', label: 'SKU Merge', path: '/sku-merge' },
+    { key: 'audit-log-tool', permissionKey: 'auditLog', label: 'Audit Log', path: '/audit-log', adminOnly: true },
     { key: 'packing-tool', permissionKey: 'packing', label: 'Packing', path: '/orders/packingMode' },
     { key: 'pricelist-tool', permissionKey: 'pricelist', label: 'PriceList', path: '/price-list' },
     { key: 'lowstock-tool', permissionKey: 'lowStock', label: 'Low Stock', path: '/low-stock' },
@@ -107,9 +108,10 @@ function NavBar() {
   const walmartItems: { key: string; label: string; path: string }[] = [];
 
   const visibleAnalyticsItems = analyticsItems.filter((item) => hasMenuAccess(item.key));
-  const visibleToolsItems = toolsItems.filter((item) =>
-    hasMenuAccess((item as { permissionKey?: string }).permissionKey || item.key)
-  );
+  const visibleToolsItems = toolsItems.filter((item) => {
+    if ((item as any).adminOnly) return user?.role === 'admin';
+    return hasMenuAccess((item as { permissionKey?: string }).permissionKey || item.key);
+  });
   const visibleWalmartItems = walmartItems.filter((item) => hasMenuAccess(item.key));
   const isPathActive = (path: string) =>
     location.pathname === path ||

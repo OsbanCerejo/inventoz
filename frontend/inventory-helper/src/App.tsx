@@ -43,6 +43,7 @@ import LowStock from "./pages/LowStock";
 import Brands from "./pages/Brands";
 import Settings from "./pages/Settings";
 import SkuMerge from "./pages/SkuMerge";
+import AuditLog from "./pages/AuditLog";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleBasedHome from "./components/RoleBasedHome";
@@ -467,6 +468,14 @@ function AppContent() {
               element={
                 <ProtectedRoute menuItem="skuMerge">
                   <SkuMerge />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/audit-log"
+              element={
+                <ProtectedRoute requireAdmin>
+                  <AuditLog />
                 </ProtectedRoute>
               }
             />
