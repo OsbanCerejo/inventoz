@@ -650,6 +650,18 @@ function Product() {
             <KVRow label="Shade / Variant" value={productObject.shade} />
             <KVRow label="Condition" value={productObject.condition} />
             <KVRow label="UPC" value={productObject.upc} />
+            {productObject.retailPrice != null && (
+              <KVRow label="Retail Price" value={
+                <Typography sx={{ fontSize: 15, fontWeight: 700, color: "#16a34a" }}>
+                  ${Number(productObject.retailPrice).toFixed(2)}
+                </Typography>
+              } />
+            )}
+            {productDetails.dupeOf && (
+              <KVRow label="Dupe / Clone Of" value={
+                <Typography sx={{ fontSize: 14, color: "#7c3aed", fontWeight: 600 }}>{productDetails.dupeOf}</Typography>
+              } />
+            )}
             {productDetails.description && (
               <KVRow label="Description" value={
                 <Typography sx={{ fontSize: 12, color: "#64748b" }}>{productDetails.description}</Typography>

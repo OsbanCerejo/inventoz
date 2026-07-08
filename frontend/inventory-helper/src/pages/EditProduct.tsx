@@ -568,6 +568,8 @@ function EditProduct() {
                 {deKV({ label: 'Quantity', value: productObject.quantity })}
                 {deKV({ label: 'Verified', value: productObject.verified ? 'Yes' : 'No' })}
                 {deKV({ label: 'Listed', value: productObject.listed ? 'Yes' : 'No' })}
+                {productObject.retailPrice != null && deKV({ label: 'Retail Price', value: `$${Number(productObject.retailPrice).toFixed(2)}` })}
+                {productDetails.dupeOf && deKV({ label: 'Dupe / Clone Of', value: productDetails.dupeOf })}
               </Box>
             </Paper>
           </Box>
