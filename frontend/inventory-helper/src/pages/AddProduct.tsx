@@ -7,13 +7,11 @@ import {
   Box,
   Checkbox,
   Chip,
-  Collapse,
   Container,
   Divider,
   FormControl,
   FormControlLabel,
   Grid,
-  IconButton,
   InputLabel,
   MenuItem,
   OutlinedInput,
@@ -33,8 +31,6 @@ import "react-toastify/dist/ReactToastify.css";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import countriesData from "../data/countries.json";
 import { useLocation } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
@@ -59,15 +55,11 @@ function AddProduct() {
   const fragranceNotesRef = useRef<{ top: {id:number;name:string}[]; middle: {id:number;name:string}[]; base: {id:number;name:string}[] }>({ top: [], middle: [], base: [] });
   const today = new Date();
   const [newDate, setNewDate] = useState(dayjs(today.toLocaleString()));
-  const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [currentInput, setCurrentInput] = useState<string>("");
   const [brands, setBrands] = useState<BrandRecord[]>([]);
   const [brandsLoading, setBrandsLoading] = useState(false);
 
-  const toggleMoreDetails = () => {
-    setShowMoreDetails(!showMoreDetails);
-  };
   const [skuArray] = useState([
     "*",
     "*",
@@ -106,6 +98,7 @@ function AddProduct() {
     vendor: productObject?.vendor || "",
     description: productDetails?.description || "",
     setOf: productDetails?.setOf || "",
+    dupeOf: productDetails?.dupeOf || "",
     sizeType: productDetails?.sizeType || "",
     activeIngredients: productDetails?.activeIngredients || "",
     pao: productDetails?.pao || "",
@@ -158,6 +151,7 @@ function AddProduct() {
     // Product Details Fields
     description: Yup.string(),
     setOf: Yup.string(),
+    dupeOf: Yup.string(),
     sizeType: Yup.string(),
     activeIngredients: Yup.string(),
     pao: Yup.string(),
@@ -836,28 +830,7 @@ function AddProduct() {
 
                 <Grid container spacing={0} justifyContent="center">
                   <Grid item xs={12}>
-                    <Box m={1}>
-                      <Typography
-                        onClick={toggleMoreDetails}
-                        variant="h6"
-                        component="div"
-                        sx={{ cursor: "pointer" }}
-                      >
-                        <IconButton size="small">
-                          {showMoreDetails ? (
-                            <ExpandLessIcon />
-                          ) : (
-                            <ExpandMoreIcon />
-                          )}
-                        </IconButton>
-                        More Details
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12}>
-                    {showMoreDetails && (
-                      <Collapse in={showMoreDetails}>
-                        <Grid container spacing={0}>
+                    <Grid container spacing={0}>
                           <Grid item xs={12}>
                             <Box m={2}>
                               <TextField
@@ -937,40 +910,6 @@ function AddProduct() {
                             <Box m={2}>
                               <TextField
                                 fullWidth
-                                id="type"
-                                name="type"
-                                label="Type"
-                                value={formik.values.type}
-                                onChange={formik.handleChange}
-                                onBlur={formik.handleBlur}
-                                error={
-                                  formik.touched.type &&
-                                  Boolean(formik.errors.type)
-                                }
-                              />
-                            </Box>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Box m={2}>
-                              <TextField
-                                fullWidth
-                                id="formulation"
-                                name="formulation"
-                                label="Formulation"
-                                value={formik.values.formulation}
-                                onChange={formik.handleChange}
-                                onBlur={formik.handleBlur}
-                                error={
-                                  formik.touched.formulation &&
-                                  Boolean(formik.errors.formulation)
-                                }
-                              />
-                            </Box>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Box m={2}>
-                              <TextField
-                                fullWidth
                                 id="description"
                                 name="description"
                                 label="Description"
@@ -988,23 +927,25 @@ function AddProduct() {
                               />
                             </Box>
                           </Grid>
+                          {formik.values.category === "Fragrance" && (
                           <Grid item xs={12}>
                             <Box m={2}>
                               <TextField
                                 fullWidth
-                                id="setOf"
-                                name="setOf"
-                                label="Set Of / Lot of"
-                                value={formik.values.setOf}
+                                id="dupeOf"
+                                name="dupeOf"
+                                label="Dupe / Clone Of (Smells Like)"
+                                placeholder="e.g. Armani Code, Chanel No.5"
+                                value={formik.values.dupeOf}
                                 onChange={formik.handleChange}
                                 onBlur={formik.handleBlur}
-                                error={
-                                  formik.touched.setOf &&
-                                  Boolean(formik.errors.setOf)
-                                }
+                                multiline
+                                rows={2}
+                                variant="outlined"
                               />
                             </Box>
                           </Grid>
+                          )}
                           <Grid item xs={12}>
                             <Box m={2}>
                               <FormControl
@@ -1042,91 +983,6 @@ function AddProduct() {
                                   )}
                                 </Select>
                               </FormControl>
-                            </Box>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Box m={2}>
-                              <TextField
-                                fullWidth
-                                id="activeIngredients"
-                                name="activeIngredients"
-                                label="Active Ingredients"
-                                value={formik.values.activeIngredients}
-                                onChange={formik.handleChange}
-                                onBlur={formik.handleBlur}
-                                error={
-                                  formik.touched.activeIngredients &&
-                                  Boolean(formik.errors.activeIngredients)
-                                }
-                              />
-                            </Box>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Box m={2}>
-                              <TextField
-                                fullWidth
-                                id="pao"
-                                name="pao"
-                                label="Period After Opening (PAO)"
-                                value={formik.values.pao}
-                                onChange={formik.handleChange}
-                                onBlur={formik.handleBlur}
-                                error={
-                                  formik.touched.pao &&
-                                  Boolean(formik.errors.pao)
-                                }
-                              />
-                            </Box>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Box m={2}>
-                              <TextField
-                                fullWidth
-                                id="skinType"
-                                name="skinType"
-                                label="Skin Type"
-                                value={formik.values.skinType}
-                                onChange={formik.handleChange}
-                                onBlur={formik.handleBlur}
-                                error={
-                                  formik.touched.skinType &&
-                                  Boolean(formik.errors.skinType)
-                                }
-                              />
-                            </Box>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Box m={2}>
-                              <TextField
-                                fullWidth
-                                id="mainPurpose"
-                                name="mainPurpose"
-                                label="Main Purpose / Suggested Usage"
-                                value={formik.values.mainPurpose}
-                                onChange={formik.handleChange}
-                                onBlur={formik.handleBlur}
-                                error={
-                                  formik.touched.mainPurpose &&
-                                  Boolean(formik.errors.mainPurpose)
-                                }
-                              />
-                            </Box>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Box m={2}>
-                              <TextField
-                                fullWidth
-                                id="bodyArea"
-                                name="bodyArea"
-                                label="Body Area"
-                                value={formik.values.bodyArea}
-                                onChange={formik.handleChange}
-                                onBlur={formik.handleBlur}
-                                error={
-                                  formik.touched.bodyArea &&
-                                  Boolean(formik.errors.bodyArea)
-                                }
-                              />
                             </Box>
                           </Grid>
                           <Grid item xs={12}>
@@ -1250,8 +1106,6 @@ function AddProduct() {
                             </Box>
                           </Grid>
                         </Grid>
-                      </Collapse>
-                    )}
                   </Grid>
                 </Grid>
                 <Divider sx={{ borderColor: "gray", borderWidth: 1 }}></Divider>

@@ -142,6 +142,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: false,
       },
+      retailPrice: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        defaultValue: null,
+      },
       lastPriceUpdate: {
         type: DataTypes.DATE,
         allowNull: true,

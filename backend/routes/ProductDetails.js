@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const { ProductDetails } = require("../models");
+const { auth } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 
 // Get all product details
 router.get("/", async (req, res) => {
@@ -30,7 +32,7 @@ router.get("/bySku", async (req, res) => {
 });
 
 // Add product details
-router.post("/addProductDetails", async (req, res) => {
+router.post("/addProductDetails", auth, checkPermission('products', 'create'), async (req, res) => {
   const product = req.body;
   try {
     const [found, created] = await ProductDetails.findOrCreate({
@@ -45,7 +47,7 @@ router.post("/addProductDetails", async (req, res) => {
 });
 
 // Update product details
-router.put("/", async (req, res) => {
+router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
   const productDetails = req.body;
   try {
     const [productDetailsResponse, created] = await ProductDetails.findOrCreate(

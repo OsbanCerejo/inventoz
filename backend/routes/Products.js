@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { Products, ProductDetails, ProductHistory, StockUpdateHistory, Logs, HbaOrder, HbaOrderItem, SkuSalesSummary, Settings, sequelize } = require("../models");
+const { Products, ProductDetails, ProductHistory, StockUpdateHistory, Logs, HbaOrder, HbaOrderItem, SkuSalesSummary, Settings, sequelize, FragranceNote, ProductFragranceNote } = require("../models");
 const Sequelize = require("sequelize");
 const Op = Sequelize.Op;
 const StockUpdateService = require("../Services/StockUpdateService");
@@ -920,12 +920,13 @@ router.get("/price-scanner/:barcode", auth, checkPermission('priceScanner', 'vie
         "condition",
         "upc",
         "image",
+        "retailPrice",
       ],
       include: [
         {
           model: ProductDetails,
           required: false,
-          attributes: ["tester", "discontinued", "sizeType"],
+          attributes: ["tester", "discontinued", "sizeType", "dupeOf"],
         },
       ],
       where: {
@@ -966,9 +967,11 @@ router.get("/price-scanner/:barcode", auth, checkPermission('priceScanner', 'vie
           condition: product.condition,
           image: product.image,
           expectedPrice: pricing.expectedPrice,
+          retailPrice: product.retailPrice != null ? Number(product.retailPrice) : null,
           tester: Boolean(details?.tester),
           discontinued: Boolean(details?.discontinued),
           sizeType: details?.sizeType || "",
+          dupeOf: details?.dupeOf || null,
         };
       });
 
@@ -1529,7 +1532,7 @@ const DATA_ENTRY_ELIGIBLE_FIELDS = [
   'image', 'brand', 'itemName', 'alternativeSku', 'upc',
   'location', 'sizeOz', 'sizeMl', 'strength', 'shade',
   'category', 'type', 'formulation', 'batch', 'verified', 'listed',
-  'fragranceNotes',
+  'fragranceNotes', 'retailPrice', 'dupeOf',
 ];
 
 router.get('/data-entry/config', auth, async (req, res) => {
@@ -1548,6 +1551,143 @@ router.get('/data-entry/config', auth, async (req, res) => {
   } catch (err) {
     console.error('Error fetching data entry config:', err);
     res.status(500).json({ error: 'Failed to fetch data entry config' });
+  }
+});
+
+// Escape MySQL LIKE special characters so user input is treated as a literal string
+const escapeLike = (s) => s.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+
+// ── Search by fragrance notes (AND logic — product must have ALL notes) ────────
+router.get('/search/by-notes', auth, checkPermission('priceScanner', 'view'), async (req, res) => {
+  try {
+    const raw = String(req.query.notes || '');
+    if (raw.length > 500) return res.status(400).json({ error: 'Query too long' });
+    const noteNames = raw.split(',').map(n => n.trim()).filter(Boolean);
+    if (!noteNames.length) return res.json([]);
+
+    // Find noteIds for each requested name (case-insensitive, escaped LIKE)
+    const foundNotes = await FragranceNote.findAll({
+      where: { name: { [Op.in]: noteNames } },
+      attributes: ['id', 'name'],
+    });
+    const likeNotes = await FragranceNote.findAll({
+      where: {
+        [Op.or]: noteNames.map(n => ({ name: { [Op.like]: `%${escapeLike(n)}%` } })),
+      },
+      attributes: ['id', 'name'],
+    });
+
+    const allCandidates = [...foundNotes, ...likeNotes];
+    if (!allCandidates.length) return res.json([]);
+
+    // Build per-note-name buckets of matching noteIds (in JS, no extra DB calls)
+    const bucketIds = noteNames.map(noteName => {
+      const ids = allCandidates
+        .filter(n => n.name.toLowerCase().includes(noteName.toLowerCase()))
+        .map(n => n.id);
+      return ids;
+    });
+    if (bucketIds.some(ids => ids.length === 0)) return res.json([]);
+
+    // Single batch query: fetch all (noteId, productSku) pairs for all candidate noteIds
+    const allNoteIds = [...new Set(bucketIds.flat())];
+    const pfnCandidates = await ProductFragranceNote.findAll({
+      where: { noteId: { [Op.in]: allNoteIds } },
+      attributes: ['productSku', 'noteId'],
+    });
+
+    // Build SKU → Set<noteId> map, then intersect per bucket
+    const skuNoteIds = {};
+    for (const row of pfnCandidates) {
+      if (!skuNoteIds[row.productSku]) skuNoteIds[row.productSku] = new Set();
+      skuNoteIds[row.productSku].add(row.noteId);
+    }
+
+    // A SKU qualifies if it has at least one noteId from every bucket
+    const qualifyingSkus = Object.entries(skuNoteIds)
+      .filter(([, noteSet]) => bucketIds.every(ids => ids.some(id => noteSet.has(id))))
+      .map(([sku]) => sku);
+
+    if (!qualifyingSkus.length) return res.json([]);
+    const skuList = qualifyingSkus;
+
+    const [products, pfnRows] = await Promise.all([
+      Products.findAll({
+        where: { sku: { [Op.in]: skuList } },
+        attributes: ['sku', 'brand', 'itemName', 'quantity', 'location', 'sizeOz', 'sizeMl', 'strength', 'shade', 'image', 'retailPrice'],
+        include: [{ model: ProductDetails, required: false, attributes: ['tester', 'discontinued', 'dupeOf'] }],
+        order: [['quantity', 'DESC']],
+      }),
+      ProductFragranceNote.findAll({
+        where: { productSku: { [Op.in]: skuList } },
+        include: [{ model: FragranceNote, as: 'note', attributes: ['id', 'name'] }],
+      }),
+    ]);
+
+    // Build per-SKU note map grouped by tier
+    const noteMap = {};
+    for (const row of pfnRows) {
+      if (!noteMap[row.productSku]) noteMap[row.productSku] = { top: [], middle: [], base: [] };
+      if (row.note) noteMap[row.productSku][row.tier].push({ id: row.note.id, name: row.note.name });
+    }
+
+    res.json(products.map(p => {
+      const details = p.ProductDetails || p.ProductDetail || null;
+      return {
+        sku: p.sku, brand: p.brand, itemName: p.itemName,
+        quantity: p.quantity, location: p.location,
+        sizeOz: p.sizeOz, sizeMl: p.sizeMl, strength: p.strength, shade: p.shade,
+        image: p.image,
+        retailPrice: p.retailPrice != null ? Number(p.retailPrice) : null,
+        tester: Boolean(details?.tester),
+        discontinued: Boolean(details?.discontinued),
+        dupeOf: details?.dupeOf || null,
+        fragranceNotes: noteMap[p.sku] || { top: [], middle: [], base: [] },
+      };
+    }));
+  } catch (err) {
+    console.error('Search by notes error:', err);
+    res.status(500).json({ error: 'Failed to search by notes' });
+  }
+});
+
+// ── Search by dupe/clone of ────────────────────────────────────────────────────
+router.get('/search/by-dupe', auth, checkPermission('priceScanner', 'view'), async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (!q) return res.json([]);
+    if (q.length > 200) return res.status(400).json({ error: 'Query too long' });
+
+    const details = await ProductDetails.findAll({
+      where: { dupeOf: { [Op.like]: `%${escapeLike(q)}%` } },
+      attributes: ['sku', 'dupeOf', 'tester', 'discontinued'],
+    });
+    if (!details.length) return res.json([]);
+
+    const skus = details.map(d => d.sku);
+    const products = await Products.findAll({
+      where: { sku: { [Op.in]: skus } },
+      attributes: ['sku', 'brand', 'itemName', 'quantity', 'location', 'sizeOz', 'sizeMl', 'strength', 'shade', 'image', 'retailPrice'],
+      order: [['quantity', 'DESC']],
+    });
+
+    const detailMap = Object.fromEntries(details.map(d => [d.sku, d]));
+    res.json(products.map(p => {
+      const d = detailMap[p.sku];
+      return {
+        sku: p.sku, brand: p.brand, itemName: p.itemName,
+        quantity: p.quantity, location: p.location,
+        sizeOz: p.sizeOz, sizeMl: p.sizeMl, strength: p.strength, shade: p.shade,
+        image: p.image,
+        retailPrice: p.retailPrice != null ? Number(p.retailPrice) : null,
+        tester: Boolean(d?.tester),
+        discontinued: Boolean(d?.discontinued),
+        dupeOf: d?.dupeOf || null,
+      };
+    }));
+  } catch (err) {
+    console.error('Search by dupe error:', err);
+    res.status(500).json({ error: 'Failed to search by dupe' });
   }
 });
 
@@ -1596,16 +1736,32 @@ router.put('/data-entry', auth, checkPermission('products', 'dataEntry'), async 
       return res.status(400).json({ error: 'No fields are configured for data entry' });
     }
 
-    const SPECIAL_FIELDS = new Set(['fragranceNotes']);
+    const SPECIAL_FIELDS = new Set(['fragranceNotes', 'dupeOf']);
+    const DETAILS_FIELDS = new Set(['dupeOf']);
     const updatePayload = {};
+    const detailsPayload = {};
+
     for (const field of enabledFields) {
-      if (!SPECIAL_FIELDS.has(field) && incoming[field] !== undefined) {
+      if (SPECIAL_FIELDS.has(field)) {
+        if (DETAILS_FIELDS.has(field) && incoming[field] !== undefined) {
+          detailsPayload[field] = incoming[field];
+        }
+        continue;
+      }
+      if (incoming[field] !== undefined) {
         updatePayload[field] = incoming[field];
       }
     }
 
     if (Object.keys(updatePayload).length > 0) {
       await Products.update(updatePayload, { where: { sku } });
+    }
+
+    if (Object.keys(detailsPayload).length > 0) {
+      const [count] = await ProductDetails.update(detailsPayload, { where: { sku } });
+      if (count === 0) {
+        await ProductDetails.create({ sku, ...detailsPayload });
+      }
     }
 
     res.json({ success: true });

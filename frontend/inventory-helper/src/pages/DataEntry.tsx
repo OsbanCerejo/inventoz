@@ -25,9 +25,13 @@ const FIELD_LABELS: Record<string, string> = {
   batch:          'Batch',
   verified:       'Verified',
   listed:         'Listed',
+  retailPrice:    'Retail Price',
+  dupeOf:         'Dupe / Clone Of',
 };
 
 const BOOLEAN_FIELDS = new Set(['verified', 'listed']);
+const NUMBER_FIELDS = new Set(['retailPrice']);
+const WIDE_FIELDS = new Set(['image', 'itemName', 'alternativeSku', 'dupeOf']);
 const PAGE_SIZE = 20;
 
 type Product = Record<string, any>;
@@ -248,16 +252,18 @@ export default function DataEntry() {
                       }
 
                       const isImageField = field === 'image';
-                      const isWide = field === 'image' || field === 'itemName' || field === 'alternativeSku';
+                      const isWide = WIDE_FIELDS.has(field);
+                      const isNumber = NUMBER_FIELDS.has(field);
 
                       return (
                         <Box key={field} sx={{ flex: isWide ? '1 1 340px' : '1 1 160px', minWidth: isWide ? 260 : 140 }}>
                           <TextField
                             fullWidth
                             size="small"
+                            type={isNumber ? 'number' : 'text'}
                             label={FIELD_LABELS[field] ?? field}
                             value={row.values[field] ?? ''}
-                            onChange={e => handleChange(product.sku, field, e.target.value)}
+                            onChange={e => handleChange(product.sku, field, isNumber ? e.target.value : e.target.value)}
                             InputProps={isImageField && row.values.image ? {
                               endAdornment: (
                                 <Box sx={{ width: 28, height: 28, flexShrink: 0, ml: 0.5 }}>
@@ -270,6 +276,7 @@ export default function DataEntry() {
                                 </Box>
                               ),
                             } : undefined}
+                            inputProps={isNumber ? { step: '0.01', min: '0' } : undefined}
                             sx={{ '& .MuiInputBase-input': { fontSize: 13 }, '& .MuiInputLabel-root': { fontSize: 13 } }}
                           />
                         </Box>

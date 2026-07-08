@@ -25,6 +25,8 @@ const FIELD_LABELS: Record<string, string> = {
   verified:     'Verified',
   listed:       'Listed',
   fragranceNotes: 'Fragrance Notes',
+  retailPrice: 'Retail Price',
+  dupeOf: 'Dupe / Clone Of',
 };
 
 export default function Settings() {
