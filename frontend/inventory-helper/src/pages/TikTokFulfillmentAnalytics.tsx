@@ -61,6 +61,7 @@ import {
   Line,
   PieChart,
   Pie,
+  ReferenceArea,
   ResponsiveContainer,
   Scatter,
   ScatterChart,
@@ -275,6 +276,20 @@ interface FulfillmentSkuSearchOption {
   tester: boolean | null;
 }
 
+interface HourlyCombinedRow {
+  hour: number;
+  orders: number;
+  revenue: number;
+}
+
+interface HourlyShowRow {
+  hour: number;
+  showId: number;
+  showName: string;
+  orders: number;
+  revenue: number;
+}
+
 interface FulfillmentSkuDetailResponse {
   product: {
     sku: string;
@@ -348,7 +363,17 @@ const riskColorMap: Record<FulfillmentInventoryExposureRow["riskBand"], string> 
   no_signal:"#607d8b",
 };
 
-const TAB_LABELS = ["Overview", "Sales", "Profitability", "Operations", "Fulfillment Velocity", "Geography", "Inventory", "Item Lookup"];
+const TAB_LABELS = ["Overview", "Sales", "Profitability", "Operations", "Fulfillment Velocity", "Geography", "Inventory", "Item Lookup", "Hourly Sales"];
+
+const SHOW_COLORS = ["#e91e63","#9c27b0","#3f51b5","#03a9f4","#009688","#8bc34a","#ff9800","#f44336"];
+
+const isShowHour = (h: number) => h >= 18 || h <= 4;
+
+// Fill all 24 hours so the chart has no gaps
+const fillAllHours = (rows: HourlyCombinedRow[]): HourlyCombinedRow[] => {
+  const map = new Map(rows.map(r => [r.hour, r]));
+  return Array.from({ length: 24 }, (_, h) => map.get(h) ?? { hour: h, orders: 0, revenue: 0 });
+};
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -450,6 +475,13 @@ function TikTokFulfillmentAnalytics() {
   const [byCity, setByCity]             = useState<FulfillmentCityRow[]>([]);
   const [discountImpact, setDiscountImpact] = useState<FulfillmentDiscountRow[]>([]);
   const [inventoryExposure, setInventoryExposure] = useState<FulfillmentInventoryExposureRow[]>([]);
+
+  // Hourly sales
+  const [hourlySelectedShows, setHourlySelectedShows] = useState<TikTokShow[]>([]);
+  const [hourlyBreakdown, setHourlyBreakdown]         = useState<"combined" | "byShow">("combined");
+  const [hourlyCombined, setHourlyCombined]           = useState<HourlyCombinedRow[]>([]);
+  const [hourlyByShow, setHourlyByShow]               = useState<HourlyShowRow[]>([]);
+  const [hourlyLoading, setHourlyLoading]             = useState(false);
 
   // SKU lookup
   const [skuSearchInput, setSkuSearchInput] = useState("");
@@ -585,6 +617,27 @@ function TikTokFulfillmentAnalytics() {
       .then(r => { setSkuDetail(r.data); setSkuDetailLoading(false); })
       .catch(() => { setSkuDetailError("Failed to load SKU detail."); setSkuDetailLoading(false); });
   }, [selectedSku, fromDate, toDate, selectedShowId]);
+
+  // Hourly data — only fetches when tab is active
+  useEffect(() => {
+    if (activeTab !== 8) return;
+    setHourlyLoading(true);
+    const showIds = hourlySelectedShows.map(s => s.id).join(",");
+    const baseParams = showIds
+      ? { showIds, breakdown: hourlyBreakdown }
+      : { from: fromDate, to: toDate, breakdown: hourlyBreakdown };
+
+    Promise.all([
+      axios.get(getApiUrl("tiktok/analytics/fulfillment-hourly"), { params: { ...baseParams, breakdown: "combined" } }),
+      axios.get(getApiUrl("tiktok/analytics/fulfillment-hourly"), { params: { ...baseParams, breakdown: "byShow" } }),
+    ])
+      .then(([combinedR, byShowR]) => {
+        setHourlyCombined(combinedR.data || []);
+        setHourlyByShow(byShowR.data || []);
+      })
+      .catch(() => { setHourlyCombined([]); setHourlyByShow([]); })
+      .finally(() => setHourlyLoading(false));
+  }, [activeTab, hourlySelectedShows, hourlyBreakdown, fromDate, toDate]);
 
   // ─── Derived/memoised data ──────────────────────────────────────────────────
 
@@ -1536,6 +1589,184 @@ function TikTokFulfillmentAnalytics() {
     </Stack>
   );
 
+  const renderHourlySalesTab = () => {
+    const filledCombined = fillAllHours(hourlyCombined);
+    const totalRevenue   = filledCombined.reduce((s, r) => s + r.revenue, 0);
+    const totalOrders    = filledCombined.reduce((s, r) => s + r.orders,  0);
+    const peakRow        = filledCombined.reduce((best, r) => r.revenue > best.revenue ? r : best, filledCombined[0] ?? { hour: 0, revenue: 0, orders: 0 });
+    const showRevenue    = filledCombined.filter(r => isShowHour(r.hour)).reduce((s, r) => s + r.revenue, 0);
+    const showPct        = totalRevenue > 0 ? Math.round(showRevenue / totalRevenue * 100) : 0;
+
+    // Unique show names for grouped bar chart (cap at 8)
+    const showNames = Array.from(new Set(hourlyByShow.map(r => r.showName))).slice(0, 8);
+
+    // Pivot byShow data into {hour, [showName]: revenue, ...}
+    const byShowPivoted = Array.from({ length: 24 }, (_, h) => {
+      const base: Record<string, number | string> = { hour: h };
+      showNames.forEach(name => { base[name] = 0; });
+      hourlyByShow.filter(r => r.hour === h).forEach(r => {
+        if (showNames.includes(r.showName)) base[r.showName] = r.revenue;
+      });
+      return base;
+    });
+
+    const chartData = hourlyBreakdown === "combined" ? filledCombined : byShowPivoted;
+
+    return (
+      <Stack spacing={3}>
+        {/* Controls */}
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ sm: "center" }} flexWrap="wrap">
+            <Autocomplete
+              multiple
+              options={shows}
+              getOptionLabel={s => s.name}
+              value={hourlySelectedShows}
+              onChange={(_, v) => setHourlySelectedShows(v)}
+              renderInput={p => <TextField {...p} label="Filter by show(s) — leave empty to use date range" size="small" />}
+              sx={{ minWidth: 360, flex: 1 }}
+              limitTags={3}
+            />
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <InputLabel>View</InputLabel>
+              <Select value={hourlyBreakdown} label="View" onChange={e => setHourlyBreakdown(e.target.value as "combined" | "byShow")}>
+                <MenuItem value="combined">Combined</MenuItem>
+                <MenuItem value="byShow">By Show</MenuItem>
+              </Select>
+            </FormControl>
+            {hourlyLoading && <CircularProgress size={20} sx={{ color: "#e91e63" }} />}
+          </Stack>
+        </Paper>
+
+        {/* KPI tiles */}
+        <Grid container spacing={2}>
+          {[
+            { label: "Total Revenue",      value: formatCurrency(totalRevenue),         icon: <AttachMoneyIcon />,  color: "#e91e63" },
+            { label: "Total Orders",       value: formatNumber(totalOrders),             icon: <ReceiptIcon />,      color: "#9c27b0" },
+            { label: "Peak Hour (EDT)",    value: hourLabel(peakRow.hour),               icon: <ScheduleIcon />,     color: "#f57c00", subtext: formatCurrency(peakRow.revenue) },
+            { label: "Show Window Rev",    value: formatCurrency(showRevenue),           icon: <ShowChartIcon />,    color: "#1565c0", subtext: `${showPct}% of total (6:30 PM – 4 AM)` },
+          ].map((kpi, i) => (
+            <Grid item xs={12} sm={6} md={3} key={i}>
+              <KpiCard {...kpi} />
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Chart */}
+        <SectionCard
+          title={hourlyBreakdown === "combined" ? "Revenue & Orders by Hour (EDT)" : "Revenue by Hour per Show (EDT)"}
+          icon={<ScheduleIcon />}
+          minHeight={320}
+        >
+          {hourlyBreakdown === "combined" ? (
+            <ResponsiveContainer width="100%" height={320}>
+              <ComposedChart data={chartData as HourlyCombinedRow[]} margin={{ top: 8, right: 24, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                {/* Show-window shading: midnight→4 AM and 6:30 PM→midnight */}
+                <ReferenceArea x1={0}  x2={4}  fill="#e3f2fd" fillOpacity={0.5} />
+                <ReferenceArea x1={18} x2={23} fill="#e3f2fd" fillOpacity={0.5} />
+                <XAxis dataKey="hour" tickFormatter={h => hourLabel(Number(h))} tick={{ fontSize: 10 }} />
+                <YAxis yAxisId="rev" tickFormatter={kFormatter} tick={{ fontSize: 10 }} />
+                <YAxis yAxisId="ord" orientation="right" tick={{ fontSize: 10 }} />
+                <RechartsTooltip
+                  formatter={((v: number, name: string) =>
+                    name === "Revenue" ? [formatCurrency(v), name] : [formatNumber(v), name]
+                  ) as any}
+                  labelFormatter={(h: number) => `${hourLabel(h)} EDT${isShowHour(h) ? " ▶ show window" : ""}`}
+                />
+                <Legend />
+                <Bar yAxisId="rev" dataKey="revenue" name="Revenue" radius={[3, 3, 0, 0]}>
+                  {filledCombined.map((r, i) => (
+                    <Cell key={i} fill={r.hour === peakRow.hour ? "#f59e0b" : isShowHour(r.hour) ? "#e91e63" : "#ce93d8"} />
+                  ))}
+                </Bar>
+                <Line yAxisId="ord" type="monotone" dataKey="orders" name="Orders" stroke="#1565c0" strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : (
+            <>
+              {showNames.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">No data — select show(s) or check date range.</Typography>
+              ) : (
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={byShowPivoted} margin={{ top: 8, right: 24, left: 0, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <ReferenceArea x1={0}  x2={4}  fill="#e3f2fd" fillOpacity={0.5} />
+                    <ReferenceArea x1={18} x2={23} fill="#e3f2fd" fillOpacity={0.5} />
+                    <XAxis dataKey="hour" tickFormatter={h => hourLabel(Number(h))} tick={{ fontSize: 10 }} />
+                    <YAxis tickFormatter={kFormatter} tick={{ fontSize: 10 }} />
+                    <RechartsTooltip formatter={((v: number, name: string) => [formatCurrency(v), name]) as any} labelFormatter={(h: number) => `${hourLabel(h)} EDT`} />
+                    <Legend />
+                    {showNames.map((name, i) => (
+                      <Bar key={name} dataKey={name} name={truncate(name, 20)} stackId="shows" fill={SHOW_COLORS[i % SHOW_COLORS.length]} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </>
+          )}
+
+          {/* Legend note */}
+          <Box display="flex" gap={2} mt={1.5} flexWrap="wrap">
+            <Box display="flex" alignItems="center" gap={0.5}>
+              <Box sx={{ width: 12, height: 12, borderRadius: 0.5, bgcolor: "#e3f2fd", border: "1px solid #90caf9" }} />
+              <Typography variant="caption" color="text.secondary">Show window (6:30 PM – 4 AM)</Typography>
+            </Box>
+            {hourlyBreakdown === "combined" && (
+              <>
+                <Box display="flex" alignItems="center" gap={0.5}>
+                  <Box sx={{ width: 12, height: 12, borderRadius: 0.5, bgcolor: "#f59e0b" }} />
+                  <Typography variant="caption" color="text.secondary">Peak hour</Typography>
+                </Box>
+                <Box display="flex" alignItems="center" gap={0.5}>
+                  <Box sx={{ width: 12, height: 12, borderRadius: 0.5, bgcolor: "#e91e63" }} />
+                  <Typography variant="caption" color="text.secondary">Show hours</Typography>
+                </Box>
+                <Box display="flex" alignItems="center" gap={0.5}>
+                  <Box sx={{ width: 12, height: 12, borderRadius: 0.5, bgcolor: "#ce93d8" }} />
+                  <Typography variant="caption" color="text.secondary">Off-show hours</Typography>
+                </Box>
+              </>
+            )}
+          </Box>
+        </SectionCard>
+
+        {/* Data table */}
+        <SectionCard title="Hourly Breakdown Table" icon={<ReceiptIcon />}>
+          <TableContainer sx={{ maxHeight: 360 }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700 }}>Hour (EDT)</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Window</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>Orders</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>Revenue</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>Avg Order</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filledCombined.map((r, i) => (
+                  <TableRow key={i} hover sx={{ bgcolor: r.hour === peakRow.hour ? "#fff8e1" : undefined }}>
+                    <TableCell sx={{ fontSize: "0.75rem", fontWeight: 600 }}>{hourLabel(r.hour)}</TableCell>
+                    <TableCell>
+                      {isShowHour(r.hour)
+                        ? <Chip label="Show" size="small" sx={{ bgcolor: "#fce4ec", color: "#c2185b", fontSize: "0.65rem" }} />
+                        : <Chip label="Off" size="small" variant="outlined" sx={{ fontSize: "0.65rem" }} />
+                      }
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: "0.75rem" }}>{formatNumber(r.orders)}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: "0.75rem", fontWeight: r.hour === peakRow.hour ? 700 : 400 }}>{formatCurrency(r.revenue)}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: "0.75rem" }}>{r.orders > 0 ? formatCurrency(r.revenue / r.orders) : "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </SectionCard>
+      </Stack>
+    );
+  };
+
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -1606,6 +1837,7 @@ function TikTokFulfillmentAnalytics() {
         {activeTab === 5 && renderGeographyTab()}
         {activeTab === 6 && renderInventoryTab()}
         {activeTab === 7 && renderItemLookupTab()}
+        {activeTab === 8 && renderHourlySalesTab()}
       </Box>
     </Box>
   );

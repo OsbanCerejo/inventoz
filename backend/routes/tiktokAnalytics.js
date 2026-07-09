@@ -1350,4 +1350,83 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
   }
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// ENDPOINT: Hourly sales (revenue + orders by hour of day, EDT)
+// ════════════════════════════════════════════════════════════════════════════
+router.get("/fulfillment-hourly", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
+  const { breakdown = "combined" } = req.query;
+
+  // showIds takes priority over date range; validate as positive integers
+  const showIdNums = String(req.query.showIds || "")
+    .split(",")
+    .map(Number)
+    .filter(n => Number.isInteger(n) && n > 0);
+
+  let whereClause;
+  let replacements = {};
+
+  if (showIdNums.length > 0) {
+    whereClause = `tsi.tiktokShowId IN (${showIdNums.join(",")})`;
+  } else {
+    const range = parseDateRange(req.query);
+    if (!range) return res.status(400).json({ error: "Invalid date range" });
+    whereClause = `tsi.placedAt >= :from AND tsi.placedAt < :to`;
+    replacements = { from: range.from, to: range.to };
+  }
+
+  const baseWhere = `
+    tsi.placedAt IS NOT NULL
+    AND tsi.orderAmount IS NOT NULL
+    AND tsi.itemCategory NOT IN ('cancelled_order','failed_order')
+    AND ${whereClause}
+  `;
+
+  try {
+    if (breakdown === "byShow") {
+      const rows = await sequelize.query(`
+        SELECT
+          HOUR(CONVERT_TZ(tsi.placedAt, '+00:00', '-04:00')) AS hour,
+          tsi.tiktokShowId                                    AS showId,
+          MAX(ts.name)                                        AS showName,
+          COUNT(*)                                            AS orders,
+          ROUND(SUM(COALESCE(tsi.orderAmount, 0)), 2)        AS revenue
+        FROM ${TABLES.shipmentItems} tsi
+        JOIN ${TABLES.shows} ts ON ts.id = tsi.tiktokShowId
+        WHERE ${baseWhere}
+        GROUP BY hour, tsi.tiktokShowId
+        ORDER BY hour ASC, revenue DESC
+      `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+      return res.json(rows.map(r => ({
+        hour:     Number(r.hour),
+        showId:   Number(r.showId),
+        showName: r.showName || "",
+        orders:   Number(r.orders   || 0),
+        revenue:  Number(Number(r.revenue || 0).toFixed(2)),
+      })));
+    }
+
+    // combined (default)
+    const rows = await sequelize.query(`
+      SELECT
+        HOUR(CONVERT_TZ(tsi.placedAt, '+00:00', '-04:00')) AS hour,
+        COUNT(*)                                            AS orders,
+        ROUND(SUM(COALESCE(tsi.orderAmount, 0)), 2)        AS revenue
+      FROM ${TABLES.shipmentItems} tsi
+      WHERE ${baseWhere}
+      GROUP BY hour
+      ORDER BY hour ASC
+    `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+    return res.json(rows.map(r => ({
+      hour:    Number(r.hour),
+      orders:  Number(r.orders   || 0),
+      revenue: Number(Number(r.revenue || 0).toFixed(2)),
+    })));
+  } catch (err) {
+    console.error("TikTok hourly error:", err);
+    return res.status(500).json({ error: "Failed to fetch hourly data" });
+  }
+});
+
 module.exports = router;
