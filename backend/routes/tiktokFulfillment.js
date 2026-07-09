@@ -289,12 +289,36 @@ const parseShowElapsedSeconds = (rawValue) => {
   return null;
 };
 
+// TikTok CSV exports datetimes in Pacific Time (PDT in summer UTC-7, PST in winter UTC-8).
+// Without a timezone suffix, new Date() would treat them as UTC — 7-8 hours off.
+// We parse as PST first, then shift back 1 hour if the date falls in PDT (DST active).
+const isPacificDST = (utcMs) => {
+  const d = new Date(utcMs);
+  const yr = d.getUTCFullYear();
+  // DST starts: 2nd Sunday in March at 2:00 AM PST = 10:00 UTC
+  const mar1Day = new Date(Date.UTC(yr, 2, 1)).getUTCDay();
+  const dstStart = Date.UTC(yr, 2, 1 + ((7 - mar1Day) % 7) + 7, 10);
+  // DST ends: 1st Sunday in November at 2:00 AM PDT = 09:00 UTC
+  const nov1Day = new Date(Date.UTC(yr, 10, 1)).getUTCDay();
+  const dstEnd = Date.UTC(yr, 10, 1 + ((7 - nov1Day) % 7), 9);
+  return utcMs >= dstStart && utcMs < dstEnd;
+};
+
 const parseDateTime = (rawValue) => {
   const normalized = normalizeText(rawValue);
   if (!normalized) return null;
-  const parsed = new Date(normalized);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed;
+  // If the string already has a timezone indicator, parse as-is
+  if (/[Zz]|[+-]\d{2}:?\d{2}$/.test(normalized)) {
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  // Treat as PST (UTC-8) first, then correct to PDT (UTC-7) if DST is active
+  const asPST = new Date(normalized + '-08:00');
+  if (Number.isNaN(asPST.getTime())) return null;
+  if (isPacificDST(asPST.getTime())) {
+    return new Date(asPST.getTime() - 3600000); // shift to PDT (UTC-7)
+  }
+  return asPST;
 };
 
 const isCancelledOrderRow = ({

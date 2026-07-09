@@ -96,6 +96,7 @@ function AddProduct() {
     final: false,
     image: "",
     vendor: productObject?.vendor || "",
+    retailPrice: productObject?.retailPrice ?? "",
     description: productDetails?.description || "",
     setOf: productDetails?.setOf || "",
     dupeOf: productDetails?.dupeOf || "",
@@ -149,6 +150,7 @@ function AddProduct() {
     image: Yup.string(),
     vendor: Yup.string(),
     // Product Details Fields
+    retailPrice: Yup.number().nullable(),
     description: Yup.string(),
     setOf: Yup.string(),
     dupeOf: Yup.string(),
@@ -924,6 +926,21 @@ function AddProduct() {
                                 rows={4}
                                 // maxRows={10}
                                 variant="outlined"
+                              />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
+                                id="retailPrice"
+                                name="retailPrice"
+                                label="Retail Price ($)"
+                                type="number"
+                                value={formik.values.retailPrice}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                inputProps={{ step: '0.01', min: '0' }}
                               />
                             </Box>
                           </Grid>

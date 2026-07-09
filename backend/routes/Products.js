@@ -1158,6 +1158,7 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
         final: product.final,
         image: product.image,
         alternativeSku: product.alternativeSku,
+        retailPrice: product.retailPrice !== undefined && product.retailPrice !== '' ? Number(product.retailPrice) : null,
         trackQuantity: product.trackQuantity !== undefined ? product.trackQuantity : currentProduct.trackQuantity,
         minimumQuantity:
           product.minimumQuantity !== undefined

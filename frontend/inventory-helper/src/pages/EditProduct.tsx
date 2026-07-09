@@ -69,6 +69,7 @@ const formikValidationSchema = Yup.object().shape({
   listed: Yup.boolean(),
   final: Yup.boolean(),
   image: Yup.string(),
+  retailPrice: Yup.number().nullable(),
   vendor: Yup.string(),
   // Product Details Fields
   description: Yup.string(),
@@ -209,6 +210,7 @@ function EditProduct() {
       listed: productObject.listed,
       final: productObject.final,
       image: "" + productObject.image,
+      retailPrice: productObject.retailPrice ?? "",
       vendor: "",
       // New fields from ProductDetails
       description: productDetails.description || "",
@@ -1202,6 +1204,21 @@ function EditProduct() {
                                 rows={4}
                                 // maxRows={10}
                                 variant="outlined"
+                              />
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box m={2}>
+                              <TextField
+                                fullWidth
+                                id="retailPrice"
+                                name="retailPrice"
+                                label="Retail Price ($)"
+                                type="number"
+                                value={formik.values.retailPrice}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                                inputProps={{ step: '0.01', min: '0' }}
                               />
                             </Box>
                           </Grid>
