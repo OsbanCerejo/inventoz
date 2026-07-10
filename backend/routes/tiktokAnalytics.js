@@ -512,12 +512,12 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
           0
         ) AS grossMargin,
 
-        -- TikTok fees (commission + processing) on known-cost revenue
+        -- TikTok fees (commission + processing) on all revenue
         COALESCE(
-          SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
-            THEN (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
-               + (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
-            ELSE 0 END),
+          SUM(
+            (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
+            + (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
+          ),
           0
         ) AS tiktokFees,
 
@@ -604,10 +604,10 @@ router.get("/fulfillment-profitability-shows", auth, checkPermission("tiktokAnal
         COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count ELSE 0 END),0) AS knownCostRevenue,
         COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN vc.avgVendorCost ELSE 0 END),0) AS estimatedCost,
         COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
-          THEN (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
-             + (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
-          ELSE 0 END),0) AS tiktokFees,
+        COALESCE(SUM(
+          (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
+          + (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
+        ),0) AS tiktokFees,
         COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
           THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost
              - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})

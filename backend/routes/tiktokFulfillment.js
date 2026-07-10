@@ -316,7 +316,7 @@ const parseDateTime = (rawValue) => {
   const asEST = new Date(normalized + '-05:00');
   if (Number.isNaN(asEST.getTime())) return null;
   if (isEasternDST(asEST.getTime())) {
-    return new Date(asEST.getTime() + 3600000); // shift to EDT (UTC-4)
+    return new Date(asEST.getTime() - 3600000); // correct EST→EDT: subtract 1h (UTC-5 → UTC-4)
   }
   return asEST;
 };
