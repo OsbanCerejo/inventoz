@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 const { auth } = require("../middleware/auth");
 const { checkPermission } = require("../middleware/permissions");
@@ -14,7 +14,7 @@ const {
   User,
 } = require("../models");
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const toTableName = (model) => {
   const table = model.getTableName();
@@ -45,8 +45,8 @@ const fulfilledSaleCondition = (alias = "tss") => `
 `;
 
 // EXISTS filter replacing the fan-out-causing JOIN to tsi for date range filtering.
-// One tsi (shipmentItems) row per (showId,importId,shipmentId) is NOT guaranteed —
-// there may be multiple items per shipment — so a direct JOIN multiplies scan rows.
+// One tsi (shipmentItems) row per (showId,importId,shipmentId) is NOT guaranteed â€”
+// there may be multiple items per shipment â€” so a direct JOIN multiplies scan rows.
 const tsiExistsDateFilter = (tssAlias = "tss") => `
   EXISTS (
     SELECT 1 FROM ${TABLES.shipmentItems} _tsi
@@ -58,7 +58,7 @@ const tsiExistsDateFilter = (tssAlias = "tss") => `
   )
 `;
 
-// Aggregated tsi subquery — one row per (showId,importId,shipmentId), safe to JOIN.
+// Aggregated tsi subquery â€” one row per (showId,importId,shipmentId), safe to JOIN.
 // Used when we need tsi columns (like placedAt, itemCategory) for bucketing/grouping.
 const TSI_ONE_PER_SHIPMENT = `
   (
@@ -73,38 +73,20 @@ const TSI_ONE_PER_SHIPMENT = `
   )
 `;
 
-// Scan count per shipment — used to pro-rate bundle revenue across individual scans.
-// A bundle (one tracking number, many SKUs) has one soldPrice but N scan rows.
-// Dividing soldPrice by scan_count then summing gives the correct total: N × (price/N) = price.
-// For single-item shipments, scan_count=1 so nothing changes.
-// scan_count = fulfilled scans per shipment
-// tsi_count  = TikTok order lines per shipment (from shipmentItems)
-// Bundle detection: tsi_count < scan_count means one order line produced N scans (a lot/bundle).
-//   → divide soldPrice by scan_count so the lot price is counted once.
-// Regular multi-item shipment: tsi_count = scan_count (one order line per scan).
-//   → each scan has its own price, no division needed.
-const TSS_SCAN_COUNT_PER_SHIPMENT = `
+// Scan count per sticker within a shipment — used to pro-rate bundle revenue.
+// A bundle = one sticker (e.g. AUC1-95) sold as a set of N physical items, all recording the same set price.
+// Dividing soldPrice by sticker_scan_count gives correct per-item revenue contribution.
+// Different stickers in the same shipment are separate auction wins — each has sticker_scan_count=1.
+const TSS_STICKER_SCAN_COUNT = `
   (
-    SELECT
-      s.tiktokShowId, s.importId, s.shipmentId,
-      s.scan_count,
-      COALESCE(i.tsi_count, 1) AS tsi_count
-    FROM (
-      SELECT tiktokShowId, importId, shipmentId, COUNT(*) AS scan_count
-      FROM ${TABLES.shipmentScans}
-      WHERE result = 'matched'
-        AND productSku IS NOT NULL AND productSku <> ''
-        AND previousQuantity IS NOT NULL
-        AND newQuantity = previousQuantity - 1
-      GROUP BY tiktokShowId, importId, shipmentId
-    ) s
-    LEFT JOIN (
-      SELECT tiktokShowId, importId, shipmentId, COUNT(*) AS tsi_count
-      FROM ${TABLES.shipmentItems}
-      GROUP BY tiktokShowId, importId, shipmentId
-    ) i ON i.tiktokShowId = s.tiktokShowId
-       AND i.importId     = s.importId
-       AND i.shipmentId   = s.shipmentId
+    SELECT tiktokShowId, importId, shipmentId, auctionStickerNumber,
+           COUNT(*) AS sticker_scan_count
+    FROM ${TABLES.shipmentScans}
+    WHERE result = ‘matched’
+      AND productSku IS NOT NULL AND productSku <> ‘’
+      AND previousQuantity IS NOT NULL
+      AND newQuantity = previousQuantity - 1
+    GROUP BY tiktokShowId, importId, shipmentId, auctionStickerNumber
   )
 `;
 
@@ -113,7 +95,7 @@ const TIKTOK_COMMISSION_RATE    = 0.06;
 const TIKTOK_PROCESSING_RATE    = 0.029;
 const TIKTOK_PROCESSING_FIXED   = 0.30;
 
-// ─── Subqueries ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Subqueries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // Per-shipment close summary (mirrors Whatnot pattern)
 const SHIPMENT_CLOSE_SUMMARY_SUBQUERY = `
@@ -147,7 +129,7 @@ const ACTIVE_VENDOR_COST_SUBQUERY = `
   )
 `;
 
-// ─── Date-range parser ───────────────────────────────────────────────────────
+// â”€â”€â”€ Date-range parser â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const isDateOnly = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
 
@@ -167,9 +149,9 @@ const parseDateRange = (query) => {
   return { from: from.toISOString(), to: to.toISOString() };
 };
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Overview KPIs
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-overview", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -177,23 +159,23 @@ router.get("/fulfillment-overview", auth, checkPermission("tiktokAnalytics", "vi
 
   try {
     const [[completedRow], [discountRow], [pendingRow], [reviewRow], [giveawayRow]] = await Promise.all([
-      // Completed (fulfilled via scans) — drive from scans to avoid fan-out
+      // Completed (fulfilled via scans) â€” drive from scans to avoid fan-out
       sequelize.query(`
         SELECT
           COUNT(*)                                                          AS completedShipments,
           COUNT(DISTINCT tss.productSku)                                    AS uniqueSkusSold,
           COUNT(DISTINCT CONCAT(tss.tiktokShowId,':',tss.importId,':',tss.shipmentId)) AS uniqueShipments,
           COUNT(DISTINCT tss.tiktokShowId)                                  AS uniqueShows,
-          COALESCE(SUM(COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END),0)         AS revenue,
-          COALESCE(AVG(CASE WHEN sc.tsi_count >= sc.scan_count THEN NULLIF(tss.soldPrice,0) END),0)                               AS avgSoldPrice
+          COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0)         AS revenue,
+          COALESCE(AVG(NULLIF(tss.soldPrice,0) / sc.sticker_scan_count),0)                               AS avgSoldPrice
         FROM ${TABLES.shipmentScans} tss
-        JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
+        JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
         WHERE ${fulfilledSaleCondition("tss")}
           AND ${tsiExistsDateFilter("tss")}
           AND (:showId IS NULL OR tss.tiktokShowId = :showId)
       `, { replacements: { from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
 
-      // Total discounts — drive from items (tsi has totalDiscount), use EXISTS for scan filter
+      // Total discounts â€” drive from items (tsi has totalDiscount), use EXISTS for scan filter
       sequelize.query(`
         SELECT COALESCE(SUM(COALESCE(tsi.totalDiscount,0)),0) AS totalDiscounts
         FROM ${TABLES.shipmentItems} tsi
@@ -267,9 +249,9 @@ router.get("/fulfillment-overview", auth, checkPermission("tiktokAnalytics", "vi
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Revenue Trend (by placedAt)
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-trend", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -287,14 +269,14 @@ router.get("/fulfillment-trend", auth, checkPermission("tiktokAnalytics", "view"
       SELECT
         ${bucketExpr} AS bucket,
         COUNT(*) AS unitsSold,
-        COALESCE(SUM(COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END),0) AS revenue,
+        COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue,
         COUNT(DISTINCT CONCAT(tss.tiktokShowId,':',tss.importId,':',tss.shipmentId)) AS completedShipments
       FROM ${TABLES.shipmentScans} tss
       JOIN ${TSI_ONE_PER_SHIPMENT} tsi
         ON tsi.tiktokShowId = tss.tiktokShowId
        AND tsi.importId     = tss.importId
        AND tsi.shipmentId   = tss.shipmentId
-      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
+      JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
       WHERE ${fulfilledSaleCondition("tss")}
         AND tsi.placedAt >= :from
         AND tsi.placedAt  < :to
@@ -315,9 +297,9 @@ router.get("/fulfillment-trend", auth, checkPermission("tiktokAnalytics", "view"
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Shows list (for filter dropdown)
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-shows", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   try {
     const shows = await TikTokShow.findAll({
@@ -332,9 +314,9 @@ router.get("/fulfillment-shows", auth, checkPermission("tiktokAnalytics", "view"
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Revenue / units by show
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-by-show", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -347,12 +329,12 @@ router.get("/fulfillment-by-show", auth, checkPermission("tiktokAnalytics", "vie
         tss.tiktokShowId                                                           AS showId,
         MAX(ts.name)                                                               AS showName,
         COUNT(*)                                                                   AS unitsSold,
-        COALESCE(SUM(COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END),0)                AS revenue,
+        COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0)                AS revenue,
         COALESCE(AVG(NULLIF(tss.soldPrice,0)),0)                                   AS avgSoldPrice,
         COUNT(DISTINCT CONCAT(tss.tiktokShowId,':',tss.importId,':',tss.shipmentId)) AS completedShipments
       FROM ${TABLES.shipmentScans} tss
       JOIN ${TABLES.shows} ts  ON ts.id = tss.tiktokShowId
-      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
+      JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
       WHERE ${fulfilledSaleCondition("tss")}
         AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
@@ -374,9 +356,9 @@ router.get("/fulfillment-by-show", auth, checkPermission("tiktokAnalytics", "vie
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Top products by revenue
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-top-products", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -390,14 +372,14 @@ router.get("/fulfillment-top-products", auth, checkPermission("tiktokAnalytics",
         MAX(p.brand)                                      AS brand,
         MAX(p.itemName)                                   AS itemName,
         COUNT(*)                                          AS unitsSold,
-        COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue,
-        COALESCE(AVG(CASE WHEN sc.tsi_count >= sc.scan_count THEN NULLIF(tss.soldPrice,0) END),0)          AS avgSoldPrice,
-        COALESCE(MIN(CASE WHEN sc.tsi_count >= sc.scan_count THEN tss.soldPrice END),0)                    AS lowestSoldPrice,
-        COALESCE(MAX(CASE WHEN sc.tsi_count >= sc.scan_count THEN tss.soldPrice END),0)                    AS highestSoldPrice
+        COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue,
+        COALESCE(AVG(NULLIF(tss.soldPrice,0) / sc.sticker_scan_count),0)          AS avgSoldPrice,
+        COALESCE(MIN(tss.soldPrice / sc.sticker_scan_count),0)                    AS lowestSoldPrice,
+        COALESCE(MAX(tss.soldPrice / sc.sticker_scan_count),0)                    AS highestSoldPrice
       FROM ${TABLES.shipmentScans} tss
       LEFT JOIN ${TABLES.products} p
         ON ${skuJoinCondition("p.sku", "tss.productSku")}
-      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
+      JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
       WHERE ${fulfilledSaleCondition("tss")}
         AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
@@ -420,9 +402,9 @@ router.get("/fulfillment-top-products", auth, checkPermission("tiktokAnalytics",
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Brand revenue mix
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-brand-mix", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -434,11 +416,11 @@ router.get("/fulfillment-brand-mix", auth, checkPermission("tiktokAnalytics", "v
       SELECT
         COALESCE(p.brand, 'Unknown') AS brand,
         COUNT(*)                      AS unitsSold,
-        COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue
+        COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue
       FROM ${TABLES.shipmentScans} tss
       LEFT JOIN ${TABLES.products} p
         ON ${skuJoinCondition("p.sku", "tss.productSku")}
-      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
+      JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
       WHERE ${fulfilledSaleCondition("tss")}
         AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
@@ -458,9 +440,9 @@ router.get("/fulfillment-brand-mix", auth, checkPermission("tiktokAnalytics", "v
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Sales mix by item category
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-sales-mix", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -471,13 +453,13 @@ router.get("/fulfillment-sales-mix", auth, checkPermission("tiktokAnalytics", "v
       SELECT
         COALESCE(tsi.itemCategory,'others') AS contextType,
         COUNT(*)                             AS unitsSold,
-        COALESCE(SUM(COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END),0) AS revenue
+        COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue
       FROM ${TABLES.shipmentScans} tss
       JOIN ${TSI_ONE_PER_SHIPMENT} tsi
         ON tsi.tiktokShowId = tss.tiktokShowId
        AND tsi.importId     = tss.importId
        AND tsi.shipmentId   = tss.shipmentId
-      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
+      JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
       WHERE ${fulfilledSaleCondition("tss")}
         AND tsi.placedAt >= :from
         AND tsi.placedAt  < :to
@@ -497,9 +479,9 @@ router.get("/fulfillment-sales-mix", auth, checkPermission("tiktokAnalytics", "v
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Profitability overview
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -509,14 +491,14 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
     const [rows] = await sequelize.query(`
       SELECT
         COUNT(*)                                                            AS totalUnitsSold,
-        COALESCE(SUM(COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END),0)         AS totalRevenue,
+        COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0)         AS totalRevenue,
 
         -- Known-cost units (have a vendor price on file)
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END ELSE 0 END),0) AS knownCostRevenue,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count ELSE 0 END),0) AS knownCostRevenue,
         COUNT(CASE WHEN vc.avgVendorCost IS NOT NULL THEN 1 END)            AS knownCostUnits,
 
         -- Unknown-cost units
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NULL THEN COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END ELSE 0 END),0)  AS unknownCostRevenue,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NULL THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count ELSE 0 END),0)  AS unknownCostRevenue,
         COUNT(CASE WHEN vc.avgVendorCost IS NULL THEN 1 END)                AS unknownCostUnits,
 
         -- Estimated vendor cost
@@ -525,7 +507,7 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
         -- Gross margin (revenue - cost on known units)
         COALESCE(
           SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
-            THEN COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END - vc.avgVendorCost
+            THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost
             ELSE 0 END),
           0
         ) AS grossMargin,
@@ -533,8 +515,8 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
         -- TikTok fees (commission + processing) on known-cost revenue
         COALESCE(
           SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
-            THEN (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_COMMISSION_RATE})
-               + (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END)
+            THEN (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
+               + (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
             ELSE 0 END),
           0
         ) AS tiktokFees,
@@ -542,33 +524,33 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
         -- Net margin after fees
         COALESCE(
           SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
-            THEN COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END - vc.avgVendorCost
-               - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_COMMISSION_RATE})
-               - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END)
+            THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost
+               - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
+               - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
             ELSE 0 END),
           0
         ) AS netMarginAfterFees,
 
         -- Negative-margin units
         COUNT(CASE WHEN vc.avgVendorCost IS NOT NULL
-          AND (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END - vc.avgVendorCost
-               - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_COMMISSION_RATE})
-               - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END)
+          AND (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost
+               - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
+               - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
               ) < 0
           THEN 1 END) AS negativeMarginUnits,
 
-        -- Low-margin units (≥0 but <10%)
+        -- Low-margin units (â‰¥0 but <10%)
         COUNT(CASE WHEN vc.avgVendorCost IS NOT NULL
-          AND COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END > 0
-          AND (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END - vc.avgVendorCost
-               - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_COMMISSION_RATE})
-               - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END)
-              ) / (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END) BETWEEN 0 AND 0.10
+          AND COALESCE(tss.soldPrice,0) / sc.sticker_scan_count > 0
+          AND (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost
+               - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
+               - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
+              ) / (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count) BETWEEN 0 AND 0.10
           THEN 1 END) AS lowMarginUnits
       FROM ${TABLES.shipmentScans} tss
       LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc
         ON ${skuJoinCondition("vc.sku", "tss.productSku")}
-      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
+      JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
       WHERE ${fulfilledSaleCondition("tss")}
         AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
@@ -603,9 +585,9 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Profitability by show
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-profitability-shows", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -618,23 +600,23 @@ router.get("/fulfillment-profitability-shows", auth, checkPermission("tiktokAnal
         tss.tiktokShowId AS showId,
         MAX(ts.name)     AS showName,
         COUNT(*)         AS unitsSold,
-        COALESCE(SUM(COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END),0) AS revenue,
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END ELSE 0 END),0) AS knownCostRevenue,
+        COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count ELSE 0 END),0) AS knownCostRevenue,
         COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN vc.avgVendorCost ELSE 0 END),0) AS estimatedCost,
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
         COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
-          THEN (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_COMMISSION_RATE})
-             + (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END)
+          THEN (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
+             + (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
           ELSE 0 END),0) AS tiktokFees,
         COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
-          THEN COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END - vc.avgVendorCost
-             - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_COMMISSION_RATE})
-             - (COALESCE(tss.soldPrice,0) / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / CASE WHEN sc.tsi_count < sc.scan_count THEN sc.scan_count ELSE 1 END)
+          THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost
+             - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
+             - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
           ELSE 0 END),0) AS netMarginAfterFees
       FROM ${TABLES.shipmentScans} tss
       JOIN ${TABLES.shows} ts ON ts.id = tss.tiktokShowId
       LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku","tss.productSku")}
-      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
+      JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
       WHERE ${fulfilledSaleCondition("tss")}
         AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
@@ -664,9 +646,9 @@ router.get("/fulfillment-profitability-shows", auth, checkPermission("tiktokAnal
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Brand profitability
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-brand-profitability", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -678,15 +660,15 @@ router.get("/fulfillment-brand-profitability", auth, checkPermission("tiktokAnal
       SELECT
         COALESCE(p.brand,'Unknown') AS brand,
         COUNT(*) AS unitsSold,
-        COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue,
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL AND sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS knownCostRevenue,
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL AND sc.tsi_count >= sc.scan_count THEN vc.avgVendorCost ELSE 0 END),0) AS estimatedCost,
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL AND sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
+        COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count ELSE 0 END),0) AS knownCostRevenue,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN vc.avgVendorCost ELSE 0 END),0) AS estimatedCost,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
         COUNT(CASE WHEN vc.avgVendorCost IS NULL THEN 1 END) AS unknownCostUnits
       FROM ${TABLES.shipmentScans} tss
       LEFT JOIN ${TABLES.products} p ON ${skuJoinCondition("p.sku","tss.productSku")}
       LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku","tss.productSku")}
-      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
+      JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
       WHERE ${fulfilledSaleCondition("tss")}
         AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
@@ -712,9 +694,9 @@ router.get("/fulfillment-brand-profitability", auth, checkPermission("tiktokAnal
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Review queue (aging + reasons + shipment list)
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-review-queue", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -789,9 +771,9 @@ router.get("/fulfillment-review-queue", auth, checkPermission("tiktokAnalytics",
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Inventory exposure
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-inventory-exposure", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -813,8 +795,8 @@ router.get("/fulfillment-inventory-exposure", auth, checkPermission("tiktokAnaly
           WHEN ROUND(COUNT(*) / GREATEST(DATEDIFF(:to,:from),1), 2) = 0 THEN NULL
           ELSE ROUND(MAX(COALESCE(p.quantity,0)) / (COUNT(*) / GREATEST(DATEDIFF(:to,:from),1)))
         END AS daysOfCover,
-        -- Gross margin on known-cost units (bundles excluded — price can't be attributed per SKU)
-        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL AND sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
+        -- Gross margin on known-cost units (bundles excluded â€” price can't be attributed per SKU)
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
         COUNT(CASE WHEN vc.avgVendorCost IS NULL THEN 1 END) AS unknownCostUnits,
         CASE
           WHEN MAX(COALESCE(p.quantity,0)) = 0 THEN 'critical'
@@ -827,7 +809,7 @@ router.get("/fulfillment-inventory-exposure", auth, checkPermission("tiktokAnaly
       FROM ${TABLES.shipmentScans} tss
       LEFT JOIN ${TABLES.products} p    ON ${skuJoinCondition("p.sku","tss.productSku")}
       LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku","tss.productSku")}
-      JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
+      JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
       WHERE ${fulfilledSaleCondition("tss")}
         AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
@@ -852,9 +834,9 @@ router.get("/fulfillment-inventory-exposure", auth, checkPermission("tiktokAnaly
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Fulfilment velocity (order lifecycle timing)
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-velocity", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -864,19 +846,19 @@ router.get("/fulfillment-velocity", auth, checkPermission("tiktokAnalytics", "vi
     const [summary] = await sequelize.query(`
       SELECT
         COUNT(*)                                                              AS totalOrders,
-        -- Avg days: placed → paid
+        -- Avg days: placed â†’ paid
         ROUND(AVG(CASE WHEN tsi.paidAt IS NOT NULL AND tsi.placedAt IS NOT NULL
           THEN TIMESTAMPDIFF(HOUR, tsi.placedAt, tsi.paidAt) / 24.0 END),1) AS avgDaysPlacedToPaid,
-        -- Avg days: placed → RTS
+        -- Avg days: placed â†’ RTS
         ROUND(AVG(CASE WHEN tsi.rtsAt IS NOT NULL AND tsi.placedAt IS NOT NULL
           THEN TIMESTAMPDIFF(HOUR, tsi.placedAt, tsi.rtsAt) / 24.0 END),1)  AS avgDaysPlacedToRts,
-        -- Avg days: placed → shipped
+        -- Avg days: placed â†’ shipped
         ROUND(AVG(CASE WHEN tsi.shippedAt IS NOT NULL AND tsi.placedAt IS NOT NULL
           THEN TIMESTAMPDIFF(HOUR, tsi.placedAt, tsi.shippedAt) / 24.0 END),1) AS avgDaysPlacedToShipped,
-        -- Avg days: placed → delivered
+        -- Avg days: placed â†’ delivered
         ROUND(AVG(CASE WHEN tsi.deliveredAt IS NOT NULL AND tsi.placedAt IS NOT NULL
           THEN TIMESTAMPDIFF(HOUR, tsi.placedAt, tsi.deliveredAt) / 24.0 END),1) AS avgDaysPlacedToDelivered,
-        -- Avg days: shipped → delivered (transit time)
+        -- Avg days: shipped â†’ delivered (transit time)
         ROUND(AVG(CASE WHEN tsi.deliveredAt IS NOT NULL AND tsi.shippedAt IS NOT NULL
           THEN TIMESTAMPDIFF(HOUR, tsi.shippedAt, tsi.deliveredAt) / 24.0 END),1) AS avgTransitDays,
         -- Cancelled count
@@ -927,9 +909,9 @@ router.get("/fulfillment-velocity", auth, checkPermission("tiktokAnalytics", "vi
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Shipping providers
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-shipping-providers", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -961,9 +943,9 @@ router.get("/fulfillment-shipping-providers", auth, checkPermission("tiktokAnaly
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Delivery options
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-delivery-options", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -995,9 +977,9 @@ router.get("/fulfillment-delivery-options", auth, checkPermission("tiktokAnalyti
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Payment methods
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-payment-methods", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -1029,9 +1011,9 @@ router.get("/fulfillment-payment-methods", auth, checkPermission("tiktokAnalytic
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Revenue by state
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-by-state", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -1065,9 +1047,9 @@ router.get("/fulfillment-by-state", auth, checkPermission("tiktokAnalytics", "vi
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Revenue by city
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-by-city", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -1100,9 +1082,9 @@ router.get("/fulfillment-by-city", auth, checkPermission("tiktokAnalytics", "vie
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Discount impact by show
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-discount-impact", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
@@ -1150,9 +1132,9 @@ router.get("/fulfillment-discount-impact", auth, checkPermission("tiktokAnalytic
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: SKU search (item lookup autocomplete)
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-sku-search", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const q = String(req.query.q || "").trim();
   if (q.length < 2) return res.json([]);
@@ -1180,9 +1162,9 @@ router.get("/fulfillment-sku-search", auth, checkPermission("tiktokAnalytics", "
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: SKU detail (item lookup full data)
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const { sku } = req.query;
   if (!sku) return res.status(400).json({ error: "sku is required" });
@@ -1203,28 +1185,28 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
         LIMIT 1
       `, { replacements: { sku }, type: sequelize.QueryTypes.SELECT }),
 
-      // Summary stats — drive from scans to avoid tsi fan-out
+      // Summary stats â€” drive from scans to avoid tsi fan-out
       sequelize.query(`
         SELECT
           COUNT(*) AS unitsSold,
-          COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue,
-          COALESCE(AVG(CASE WHEN sc.tsi_count >= sc.scan_count THEN NULLIF(tss.soldPrice,0) END),0)          AS avgSoldPrice,
-          COALESCE(MIN(CASE WHEN sc.tsi_count >= sc.scan_count THEN tss.soldPrice END),0)                    AS lowestSoldPrice,
-          COALESCE(MAX(CASE WHEN sc.tsi_count >= sc.scan_count THEN tss.soldPrice END),0)                    AS highestSoldPrice,
+          COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue,
+          COALESCE(AVG(NULLIF(tss.soldPrice,0) / sc.sticker_scan_count),0)          AS avgSoldPrice,
+          COALESCE(MIN(tss.soldPrice / sc.sticker_scan_count),0)                    AS lowestSoldPrice,
+          COALESCE(MAX(tss.soldPrice / sc.sticker_scan_count),0)                    AS highestSoldPrice,
           COUNT(DISTINCT tss.tiktokShowId)           AS uniqueShows,
           COUNT(DISTINCT CONCAT(tss.tiktokShowId,':',tss.importId,':',tss.shipmentId)) AS uniqueShipments,
-          COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL AND sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
-          COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NULL AND sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS unknownCostRevenue
+          COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
+          COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NULL THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count ELSE 0 END),0) AS unknownCostRevenue
         FROM ${TABLES.shipmentScans} tss
         LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku","tss.productSku")}
-        JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
+        JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
         WHERE ${fulfilledSaleCondition("tss")}
           AND ${skuJoinCondition("tss.productSku",":sku")}
           AND ${tsiExistsDateFilter("tss")}
           AND (:showId IS NULL OR tss.tiktokShowId = :showId)
       `, { replacements: { sku, from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
 
-      // Total discounts for this SKU — drive from items to avoid tss fan-out
+      // Total discounts for this SKU â€” drive from items to avoid tss fan-out
       sequelize.query(`
         SELECT COALESCE(SUM(COALESCE(tsi.totalDiscount,0)),0) AS totalDiscounts
         FROM ${TABLES.shipmentItems} tsi
@@ -1243,10 +1225,10 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
       // By show
       sequelize.query(`
         SELECT MAX(ts.name) AS showName, COUNT(*) AS unitsSold,
-          COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue
+          COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue
         FROM ${TABLES.shipmentScans} tss
         JOIN ${TABLES.shows} ts ON ts.id = tss.tiktokShowId
-        JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
+        JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
         WHERE ${fulfilledSaleCondition("tss")}
           AND ${skuJoinCondition("tss.productSku",":sku")}
           AND ${tsiExistsDateFilter("tss")}
@@ -1254,14 +1236,14 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
         GROUP BY tss.tiktokShowId ORDER BY revenue DESC LIMIT 10
       `, { replacements: { sku, from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
 
-      // By day (recent trend) — use aggregated tsi subquery for placedAt bucketing
+      // By day (recent trend) â€” use aggregated tsi subquery for placedAt bucketing
       sequelize.query(`
         SELECT DATE_FORMAT(tsi.placedAt,'%Y-%m-%d') AS bucket, COUNT(*) AS unitsSold,
-          COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue
+          COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue
         FROM ${TABLES.shipmentScans} tss
         JOIN ${TSI_ONE_PER_SHIPMENT} tsi
           ON tsi.tiktokShowId = tss.tiktokShowId AND tsi.importId = tss.importId AND tsi.shipmentId = tss.shipmentId
-        JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
+        JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
         WHERE ${fulfilledSaleCondition("tss")}
           AND ${skuJoinCondition("tss.productSku",":sku")}
           AND tsi.placedAt >= :from AND tsi.placedAt < :to
@@ -1272,11 +1254,11 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
       // Hour of day
       sequelize.query(`
         SELECT HOUR(tsi.placedAt) AS hourOfDay, COUNT(*) AS unitsSold,
-          COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue
+          COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue
         FROM ${TABLES.shipmentScans} tss
         JOIN ${TSI_ONE_PER_SHIPMENT} tsi
           ON tsi.tiktokShowId = tss.tiktokShowId AND tsi.importId = tss.importId AND tsi.shipmentId = tss.shipmentId
-        JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
+        JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
         WHERE ${fulfilledSaleCondition("tss")}
           AND ${skuJoinCondition("tss.productSku",":sku")}
           AND tsi.placedAt >= :from AND tsi.placedAt < :to AND tsi.placedAt IS NOT NULL
@@ -1287,11 +1269,11 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
       // Day of week
       sequelize.query(`
         SELECT DAYNAME(tsi.placedAt) AS dayName, DAYOFWEEK(tsi.placedAt) AS dayNum,
-          COUNT(*) AS unitsSold, COALESCE(SUM(CASE WHEN sc.tsi_count >= sc.scan_count THEN COALESCE(tss.soldPrice,0) ELSE 0 END),0) AS revenue
+          COUNT(*) AS unitsSold, COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue
         FROM ${TABLES.shipmentScans} tss
         JOIN ${TSI_ONE_PER_SHIPMENT} tsi
           ON tsi.tiktokShowId = tss.tiktokShowId AND tsi.importId = tss.importId AND tsi.shipmentId = tss.shipmentId
-        JOIN ${TSS_SCAN_COUNT_PER_SHIPMENT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId
+        JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
         WHERE ${fulfilledSaleCondition("tss")}
           AND ${skuJoinCondition("tss.productSku",":sku")}
           AND tsi.placedAt >= :from AND tsi.placedAt < :to AND tsi.placedAt IS NOT NULL
@@ -1299,7 +1281,7 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
         GROUP BY DAYNAME(tsi.placedAt), DAYOFWEEK(tsi.placedAt) ORDER BY dayNum ASC
       `, { replacements: { sku, from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
 
-      // Recent sales — aggregated tsi subquery picks one row per shipment (state/city/paymentMethod)
+      // Recent sales â€” aggregated tsi subquery picks one row per shipment (state/city/paymentMethod)
       sequelize.query(`
         SELECT tss.id, MAX(ts.name) AS showName, tss.shipmentId,
           tss.soldPrice, tss.tracking, tss.auctionStickerNumber, tss.userId,
@@ -1350,9 +1332,9 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Hourly sales (revenue + orders by hour of day, EDT)
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get("/fulfillment-hourly", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const { breakdown = "combined" } = req.query;
 
@@ -1430,3 +1412,4 @@ router.get("/fulfillment-hourly", auth, checkPermission("tiktokAnalytics", "view
 });
 
 module.exports = router;
+
