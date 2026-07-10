@@ -1759,10 +1759,7 @@ router.put('/data-entry', auth, checkPermission('products', 'dataEntry'), async 
     }
 
     if (Object.keys(detailsPayload).length > 0) {
-      const [count] = await ProductDetails.update(detailsPayload, { where: { sku } });
-      if (count === 0) {
-        await ProductDetails.create({ sku, ...detailsPayload });
-      }
+      await ProductDetails.upsert({ sku, ...detailsPayload });
     }
 
     res.json({ success: true });
