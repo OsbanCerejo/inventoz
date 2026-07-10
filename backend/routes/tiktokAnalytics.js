@@ -82,8 +82,8 @@ const TSS_STICKER_SCAN_COUNT = `
     SELECT tiktokShowId, importId, shipmentId, auctionStickerNumber,
            COUNT(*) AS sticker_scan_count
     FROM ${TABLES.shipmentScans}
-    WHERE result = ‘matched’
-      AND productSku IS NOT NULL AND productSku <> ‘’
+    WHERE result = 'matched'
+      AND productSku IS NOT NULL AND productSku <> ''
       AND previousQuantity IS NOT NULL
       AND newQuantity = previousQuantity - 1
     GROUP BY tiktokShowId, importId, shipmentId, auctionStickerNumber
@@ -846,19 +846,19 @@ router.get("/fulfillment-velocity", auth, checkPermission("tiktokAnalytics", "vi
     const [summary] = await sequelize.query(`
       SELECT
         COUNT(*)                                                              AS totalOrders,
-        -- Avg days: placed â†’ paid
+        -- Avg days: placed â†' paid
         ROUND(AVG(CASE WHEN tsi.paidAt IS NOT NULL AND tsi.placedAt IS NOT NULL
           THEN TIMESTAMPDIFF(HOUR, tsi.placedAt, tsi.paidAt) / 24.0 END),1) AS avgDaysPlacedToPaid,
-        -- Avg days: placed â†’ RTS
+        -- Avg days: placed â†' RTS
         ROUND(AVG(CASE WHEN tsi.rtsAt IS NOT NULL AND tsi.placedAt IS NOT NULL
           THEN TIMESTAMPDIFF(HOUR, tsi.placedAt, tsi.rtsAt) / 24.0 END),1)  AS avgDaysPlacedToRts,
-        -- Avg days: placed â†’ shipped
+        -- Avg days: placed â†' shipped
         ROUND(AVG(CASE WHEN tsi.shippedAt IS NOT NULL AND tsi.placedAt IS NOT NULL
           THEN TIMESTAMPDIFF(HOUR, tsi.placedAt, tsi.shippedAt) / 24.0 END),1) AS avgDaysPlacedToShipped,
-        -- Avg days: placed â†’ delivered
+        -- Avg days: placed â†' delivered
         ROUND(AVG(CASE WHEN tsi.deliveredAt IS NOT NULL AND tsi.placedAt IS NOT NULL
           THEN TIMESTAMPDIFF(HOUR, tsi.placedAt, tsi.deliveredAt) / 24.0 END),1) AS avgDaysPlacedToDelivered,
-        -- Avg days: shipped â†’ delivered (transit time)
+        -- Avg days: shipped â†' delivered (transit time)
         ROUND(AVG(CASE WHEN tsi.deliveredAt IS NOT NULL AND tsi.shippedAt IS NOT NULL
           THEN TIMESTAMPDIFF(HOUR, tsi.shippedAt, tsi.deliveredAt) / 24.0 END),1) AS avgTransitDays,
         -- Cancelled count
