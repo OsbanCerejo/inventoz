@@ -197,6 +197,9 @@ function Product() {
   const [savingTrackQty, setSavingTrackQty] = useState(false);
   const trackQtyOpenedFresh = useRef(false);
 
+  // ── Refill Checklist
+  const [refillChecklistEnabled, setRefillChecklistEnabled] = useState(false);
+
   // ── HBA
   const [savingHba, setSavingHba] = useState(false);
   const [hbaEnabled, setHbaEnabled] = useState(false);
@@ -268,6 +271,7 @@ function Product() {
     setMinimumQuantity(
       productObject.minimumQuantity == null ? "" : String(productObject.minimumQuantity)
     );
+    setRefillChecklistEnabled(Boolean(productObject.refillChecklist));
   }, [productObject]);
 
   // ── Fetch fragrance notes
@@ -455,6 +459,24 @@ function Product() {
       setSavingTrackQty(false);
     }
   }, [productObject, trackQuantityEnabled, minimumQuantity]);
+
+  const handleRefillChecklistToggle = useCallback(async (val: boolean) => {
+    if (!productObject?.sku) return;
+    setRefillChecklistEnabled(val);
+    try {
+      const { data: updatedProduct } = await axios.put(getApiUrl("products"), {
+        ...productObject,
+        refillChecklist: val,
+      });
+      setProductObject(updatedProduct);
+      invalidateProductsCache();
+      toast.success(`Refill Checklist ${val ? "enabled" : "disabled"}.`, { position: "top-right" });
+    } catch (error) {
+      console.error("Error saving refill checklist:", error);
+      setRefillChecklistEnabled(!val);
+      toast.error("Failed to update Refill Checklist.", { position: "top-right" });
+    }
+  }, [productObject]);
 
   // ── Toggle handlers (open modal on enable, handle cancel revert)
   const handleTrackQtyToggle = (val: boolean) => {
@@ -716,6 +738,15 @@ function Product() {
                 onChange={canEditHbaListing ? handleHbaToggle : () => {}}
                 onEdit={() => { hbaOpenedFresh.current = false; setHbaDialogOpen(true); }}
                 disabled={!canEditHbaListing}
+              />
+            )}
+
+            {/* Refill Checklist toggle */}
+            {isAdmin && (
+              <ToggleRow
+                label="Refill Checklist"
+                checked={refillChecklistEnabled}
+                onChange={handleRefillChecklistToggle}
               />
             )}
 

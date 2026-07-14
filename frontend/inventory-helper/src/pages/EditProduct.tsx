@@ -98,6 +98,7 @@ const formikValidationSchema = Yup.object().shape({
   warehouseLocations: Yup.string(),
   // Low Stock Tracking
   trackQuantity: Yup.boolean(),
+  refillChecklist: Yup.boolean(),
   minimumQuantity: Yup.number().nullable(),
   hbaEnabled: Yup.boolean(),
   hbaQuantity: Yup.number().nullable(),
@@ -239,6 +240,7 @@ function EditProduct() {
       // Low Stock Tracking (Admin only)
       trackQuantity: productObject.trackQuantity || false,
       minimumQuantity: productObject.minimumQuantity || "",
+      refillChecklist: productObject.refillChecklist || false,
       hbaEnabled: productObject.hbaEnabled || false,
       hbaQuantity: productObject.hbaQuantity || "",
       hbaPrice: productObject.hbaPrice || "",
@@ -1503,6 +1505,18 @@ function EditProduct() {
                           </Box>
                         </Grid>
                       )}
+                      <Grid item xs={6}>
+                        Refill Checklist
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Switch
+                          id="refillChecklist"
+                          name="refillChecklist"
+                          checked={formik.values.refillChecklist}
+                          onChange={formik.handleChange}
+                          inputProps={{ "aria-label": "controlled" }}
+                        />
+                      </Grid>
                     </>
                   )}
                   {canViewHbaListing && (

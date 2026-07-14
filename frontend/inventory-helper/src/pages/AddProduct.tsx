@@ -123,6 +123,7 @@ function AddProduct() {
     // Low Stock Tracking (Admin only)
     trackQuantity: false,
     minimumQuantity: "",
+    refillChecklist: false,
     // Pricing (admin-only, used during inbound)
     unitCost: "",
   };
@@ -177,6 +178,7 @@ function AddProduct() {
     // Low Stock Tracking
     trackQuantity: Yup.boolean(),
     minimumQuantity: Yup.number().nullable(),
+    refillChecklist: Yup.boolean(),
     // Pricing
     unitCost: Yup.number().nullable(),
   });
@@ -1208,6 +1210,18 @@ function AddProduct() {
                           id="trackQuantity"
                           name="trackQuantity"
                           checked={formik.values.trackQuantity}
+                          onChange={formik.handleChange}
+                          inputProps={{ "aria-label": "controlled" }}
+                        />
+                      </Grid>
+                      <Grid item xs={6}>
+                        Refill Checklist
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Switch
+                          id="refillChecklist"
+                          name="refillChecklist"
+                          checked={formik.values.refillChecklist}
                           onChange={formik.handleChange}
                           inputProps={{ "aria-label": "controlled" }}
                         />

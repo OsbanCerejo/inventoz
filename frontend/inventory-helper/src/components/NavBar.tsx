@@ -102,6 +102,8 @@ function NavBar() {
     { key: 'packing-tool', permissionKey: 'packing', label: 'Packing', path: '/orders/packingMode' },
     { key: 'pricelist-tool', permissionKey: 'pricelist', label: 'PriceList', path: '/price-list' },
     { key: 'lowstock-tool', permissionKey: 'lowStock', label: 'Low Stock', path: '/low-stock' },
+    { key: 'inventory-checklist-tool', permissionKey: 'products', label: 'Inventory Checklist', path: '/inventory-checklist', adminOnly: true },
+    { key: 'daily-checklist-tool', permissionKey: 'dailyChecklist', label: 'Daily Checklist', path: '/daily-checklist' },
     { key: 'barcode-tool', permissionKey: 'barcodeScan', label: 'Barcode Scan', path: '/barcode-scan' },
   ];
 

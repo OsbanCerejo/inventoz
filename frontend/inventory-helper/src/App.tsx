@@ -40,6 +40,8 @@ import CustomerService from "./pages/CustomerService";
 import InvoiceTracker from "./pages/InvoiceTracker";
 import Login from "./pages/Login";
 import LowStock from "./pages/LowStock";
+import InventoryChecklist from "./pages/InventoryChecklist";
+import DailyChecklist from "./pages/DailyChecklist";
 import Brands from "./pages/Brands";
 import Settings from "./pages/Settings";
 import SkuMerge from "./pages/SkuMerge";
@@ -412,6 +414,22 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="lowStock" action="view" menuItem="lowStock">
                   <LowStock />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/inventory-checklist"
+              element={
+                <ProtectedRoute resource="products" action="view" menuItem="products">
+                  <InventoryChecklist />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/daily-checklist"
+              element={
+                <ProtectedRoute menuItem="dailyChecklist">
+                  <DailyChecklist />
                 </ProtectedRoute>
               }
             />

@@ -1160,6 +1160,7 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
         alternativeSku: product.alternativeSku,
         retailPrice: product.retailPrice !== undefined && product.retailPrice !== '' ? Number(product.retailPrice) : null,
         trackQuantity: product.trackQuantity !== undefined ? product.trackQuantity : currentProduct.trackQuantity,
+        refillChecklist: product.refillChecklist !== undefined ? product.refillChecklist : currentProduct.refillChecklist,
         minimumQuantity:
           product.minimumQuantity !== undefined
             ? normalizeMinimumQuantity(product.minimumQuantity)
@@ -1387,6 +1388,25 @@ router.post("/updateQuantities", auth, checkPermission('products', 'edit'), asyn
 });
 
 // Get low stock products (admin only)
+router.get("/checklist", auth, checkPermission('products', 'view'), async (req, res) => {
+  try {
+    const { Products } = require("../models");
+    const { Op } = require("sequelize");
+    const items = await Products.findAll({
+      where: { refillChecklist: true },
+      attributes: ['sku', 'brand', 'itemName', 'strength', 'sizeOz', 'sizeMl', 'condition', 'location', 'warehouseLocations', 'quantity', 'image'],
+      order: [
+        ['brand', 'ASC'],
+        ['itemName', 'ASC'],
+      ],
+    });
+    res.json(items);
+  } catch (error) {
+    console.error("Error getting checklist products:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/low-stock", auth, checkPermission('lowStock', 'view'), async (req, res) => {
   try {
     const LowStockAlertService = require("../Services/LowStockAlertService");

@@ -92,6 +92,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         defaultValue: false,
       },
+      refillChecklist: {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: false,
+      },
       minimumQuantity: {
         type: DataTypes.INTEGER,
         allowNull: true,
