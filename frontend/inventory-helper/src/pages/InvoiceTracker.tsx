@@ -86,6 +86,17 @@ type PaymentProofAttachment = {
   uploaderDisplay?: string | null;
 };
 
+type PartialPayment = {
+  id: number;
+  invoiceId: number;
+  amount: number;
+  paymentDate: string;
+  notes?: string | null;
+  createdBy?: number | null;
+  createdAt?: string | null;
+  creatorDisplay?: string | null;
+};
+
 type Invoice = {
   id: number;
   vendorId?: number | null;
@@ -105,6 +116,9 @@ type Invoice = {
   paymentProofUploadedAt?: string | null;
   paymentProofUploaderDisplay?: string | null;
   paymentProofs?: PaymentProofAttachment[];
+  partialPayments?: PartialPayment[];
+  totalPaid?: number;
+  remainingBalance?: number;
   invoiceAttachmentAvailable?: boolean;
   invoiceAttachmentOriginalName?: string | null;
   invoiceAttachmentMimeType?: string | null;
@@ -230,6 +244,9 @@ const emptyForm = {
   paymentProofUploadedAt: "",
   paymentProofUploaderDisplay: "",
   paymentProofs: [] as PaymentProofAttachment[],
+  partialPayments: [] as PartialPayment[],
+  totalPaid: 0,
+  remainingBalance: 0,
   invoiceAttachmentAvailable: false,
   invoiceAttachmentOriginalName: "",
   invoiceAttachmentMimeType: "",
@@ -291,6 +308,12 @@ function InvoiceTracker() {
   const [retroactiveItems, setRetroactiveItems] = useState<{ sku: string; itemName: string; quantity: number; unitPrice: number }[]>([{ sku: "", itemName: "", quantity: 1, unitPrice: 0 }]);
   const [retroactiveSkuLoading, setRetroactiveSkuLoading] = useState<Record<number, boolean>>({});
   const [savingRetroactive, setSavingRetroactive] = useState(false);
+  const [addPaymentOpen, setAddPaymentOpen] = useState(false);
+  const [addPaymentAmount, setAddPaymentAmount] = useState("");
+  const [addPaymentDate, setAddPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [addPaymentNotes, setAddPaymentNotes] = useState("");
+  const [addingPayment, setAddingPayment] = useState(false);
+  const [deletingPaymentId, setDeletingPaymentId] = useState<number | null>(null);
 
   const canCreate = hasPermission("invoiceTracker", "create");
   const canEdit = hasPermission("invoiceTracker", "edit");
@@ -506,6 +529,9 @@ function InvoiceTracker() {
     paymentProofUploadedAt: detail.paymentProofUploadedAt || "",
     paymentProofUploaderDisplay: detail.paymentProofUploaderDisplay || "",
     paymentProofs: Array.isArray(detail.paymentProofs) ? detail.paymentProofs : [],
+    partialPayments: Array.isArray(detail.partialPayments) ? detail.partialPayments : [],
+    totalPaid: Number(detail.totalPaid || 0),
+    remainingBalance: Number(detail.remainingBalance || 0),
     invoiceAttachmentAvailable: !!detail.invoiceAttachmentAvailable,
     invoiceAttachmentOriginalName: detail.invoiceAttachmentOriginalName || "",
     invoiceAttachmentMimeType: detail.invoiceAttachmentMimeType || "",
@@ -570,6 +596,10 @@ function InvoiceTracker() {
     setInboundRows([]);
     setInboundSummary(null);
     setSelectedInboundRowIds([]);
+    setAddPaymentOpen(false);
+    setAddPaymentAmount("");
+    setAddPaymentDate(new Date().toISOString().slice(0, 10));
+    setAddPaymentNotes("");
   };
 
   const applyInboundReviewPayload = (payload: InboundReviewResponse) => {
@@ -696,6 +726,60 @@ function InvoiceTracker() {
       toast.error(error?.response?.data?.error || "Failed to add items");
     } finally {
       setSavingRetroactive(false);
+    }
+  };
+
+  const handleAddPayment = async () => {
+    if (!token || !form.id) return;
+    const amount = Number(addPaymentAmount);
+    if (!addPaymentAmount || !Number.isFinite(amount) || amount <= 0) {
+      toast.error("Enter a valid payment amount.");
+      return;
+    }
+    if (!addPaymentDate) {
+      toast.error("Payment date is required.");
+      return;
+    }
+    try {
+      setAddingPayment(true);
+      const { data } = await axios.post<Invoice>(
+        getApiUrl(`invoice-tracker/${form.id}/partial-payments`),
+        { amount, paymentDate: addPaymentDate, notes: addPaymentNotes.trim() || null },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const normalized = normalizeInvoiceToForm(data);
+      setForm(normalized as any);
+      setSavedFormSnapshot(buildFormSnapshot(normalized as any));
+      setAddPaymentAmount("");
+      setAddPaymentDate(new Date().toISOString().slice(0, 10));
+      setAddPaymentNotes("");
+      setAddPaymentOpen(false);
+      toast.success("Payment recorded.");
+      loadInvoices();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Failed to record payment");
+    } finally {
+      setAddingPayment(false);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: number) => {
+    if (!token || !form.id) return;
+    try {
+      setDeletingPaymentId(paymentId);
+      const { data } = await axios.delete<Invoice>(
+        getApiUrl(`invoice-tracker/${form.id}/partial-payments/${paymentId}`),
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const normalized = normalizeInvoiceToForm(data);
+      setForm(normalized as any);
+      setSavedFormSnapshot(buildFormSnapshot(normalized as any));
+      toast.success("Payment removed.");
+      loadInvoices();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Failed to remove payment");
+    } finally {
+      setDeletingPaymentId(null);
     }
   };
 
@@ -1086,7 +1170,7 @@ function InvoiceTracker() {
       toast.error("Every invoice line needs a valid SKU and resolved item name");
       return;
     }
-    if (form.paymentStatus === "partial") {
+    if (form.paymentStatus === "partial" && !form.id) {
       const partialAmount = Number(form.partialPaymentAmount);
       if (!Number.isFinite(partialAmount) || partialAmount <= 0) {
         toast.error("Partial payment amount must be greater than 0");
@@ -1969,41 +2053,167 @@ function InvoiceTracker() {
                       />
                     </Grid>
                   )}
-                  {form.paymentStatus === "partial" && (
+                  {form.paymentStatus === "partial" && !form.id && (
                     <Grid item xs={12} md={3}>
                       <TextField
                         fullWidth
-                        label="Partial Payment Amount *"
+                        label="Initial Payment Amount *"
                         value={form.partialPaymentAmount}
-                        onChange={(e) =>
-                          {
-                            const nextValue = e.target.value;
-                            if (!/^\d*\.?\d{0,2}$/.test(nextValue)) {
-                              return;
-                            }
-                            setForm((prev) => ({
-                              ...prev,
-                              partialPaymentAmount: nextValue === "" ? 0 : Number(nextValue),
-                            }));
-                          }
-                        }
+                        onChange={(e) => {
+                          const nextValue = e.target.value;
+                          if (!/^\d*\.?\d{0,2}$/.test(nextValue)) return;
+                          setForm((prev) => ({
+                            ...prev,
+                            partialPaymentAmount: nextValue === "" ? 0 : Number(nextValue),
+                          }));
+                        }}
                         onKeyDown={(e) => {
-                          if (["e", "E", "+", "-"].includes(e.key)) {
-                            e.preventDefault();
-                          }
+                          if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
                         }}
                         inputProps={{ min: 0, max: invoiceGrandTotal, step: "0.01", inputMode: "decimal" }}
                         helperText={`Cannot exceed invoice total of $${invoiceGrandTotal.toFixed(2)}`}
-                        disabled={isReadOnly}
                       />
-                      {Number(form.partialPaymentAmount) > 0 && Number(form.partialPaymentAmount) <= invoiceGrandTotal && (
-                        <Box sx={{ mt: 1, display: 'inline-flex', alignItems: 'center', gap: 0.75, background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 1.5, px: 1.5, py: 0.75 }}>
-                          <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#92400e' }}>Remaining due:</Typography>
-                          <Typography sx={{ fontSize: 13, fontWeight: 800, color: '#b45309' }}>
-                            ${(invoiceGrandTotal - Number(form.partialPaymentAmount)).toFixed(2)}
+                    </Grid>
+                  )}
+                  {form.paymentStatus === "partial" && form.id && (
+                    <Grid item xs={12}>
+                      <Paper variant="outlined" sx={{ p: 2, borderLeft: "3px solid #8b5cf6", bgcolor: "#fafafa" }}>
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Typography variant="subtitle2" fontWeight={700}>Payment Log</Typography>
+                            <Box sx={{ display: "inline-flex", gap: 2, ml: 1 }}>
+                              <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+                                Paid: <strong style={{ color: "#10b981" }}>${form.totalPaid.toFixed(2)}</strong>
+                              </Typography>
+                              <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+                                Remaining: <strong style={{ color: form.remainingBalance <= 0 ? "#10b981" : "#b45309" }}>${Math.max(0, form.remainingBalance).toFixed(2)}</strong>
+                              </Typography>
+                            </Box>
+                          </Stack>
+                          {!isReadOnly && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => setAddPaymentOpen((prev) => !prev)}
+                              sx={{ fontSize: 12 }}
+                            >
+                              {addPaymentOpen ? "Cancel" : "Add Payment"}
+                            </Button>
+                          )}
+                        </Stack>
+
+                        {form.remainingBalance <= 0 && form.totalPaid > 0 && (
+                          <Box sx={{ mb: 1.5, p: 1, bgcolor: "#d1fae5", border: "1px solid #6ee7b7", borderRadius: 1 }}>
+                            <Typography sx={{ fontSize: 12, color: "#065f46", fontWeight: 600 }}>
+                              Payments cover the full invoice total — consider marking this invoice as Paid.
+                            </Typography>
+                          </Box>
+                        )}
+
+                        {addPaymentOpen && (
+                          <Box sx={{ mb: 2, p: 1.5, bgcolor: "#f5f3ff", border: "1px solid #c4b5fd", borderRadius: 1 }}>
+                            <Grid container spacing={1.5} alignItems="flex-end">
+                              <Grid item xs={12} sm={3}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Amount *"
+                                  value={addPaymentAmount}
+                                  onChange={(e) => {
+                                    if (!/^\d*\.?\d{0,2}$/.test(e.target.value)) return;
+                                    setAddPaymentAmount(e.target.value);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+                                    if (e.key === "Enter") handleAddPayment();
+                                  }}
+                                  inputProps={{ inputMode: "decimal" }}
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={3}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  type="date"
+                                  label="Payment Date *"
+                                  value={addPaymentDate}
+                                  onChange={(e) => setAddPaymentDate(e.target.value)}
+                                  InputLabelProps={{ shrink: true }}
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={4}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Notes"
+                                  value={addPaymentNotes}
+                                  onChange={(e) => setAddPaymentNotes(e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === "Enter") handleAddPayment(); }}
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={2}>
+                                <Button
+                                  fullWidth
+                                  variant="contained"
+                                  size="small"
+                                  onClick={handleAddPayment}
+                                  disabled={addingPayment}
+                                >
+                                  {addingPayment ? "Saving…" : "Save"}
+                                </Button>
+                              </Grid>
+                            </Grid>
+                          </Box>
+                        )}
+
+                        {form.partialPayments.length === 0 ? (
+                          <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                            No payments recorded yet. Use "Add Payment" to log a payment.
                           </Typography>
-                        </Box>
-                      )}
+                        ) : (
+                          <Stack spacing={0.75}>
+                            {form.partialPayments.map((p) => (
+                              <Box
+                                key={p.id}
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  px: 1.5,
+                                  py: 0.75,
+                                  bgcolor: "white",
+                                  border: "1px solid #e5e7eb",
+                                  borderRadius: 1,
+                                }}
+                              >
+                                <Box>
+                                  <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+                                    ${p.amount.toFixed(2)}
+                                    <Typography component="span" sx={{ fontSize: 12, fontWeight: 400, color: "text.secondary", ml: 1 }}>
+                                      {p.paymentDate}
+                                    </Typography>
+                                  </Typography>
+                                  {(p.notes || p.creatorDisplay) && (
+                                    <Typography sx={{ fontSize: 11, color: "text.secondary" }}>
+                                      {[p.notes, p.creatorDisplay ? `by ${p.creatorDisplay}` : null].filter(Boolean).join(" · ")}
+                                    </Typography>
+                                  )}
+                                </Box>
+                                {!isReadOnly && (
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleDeletePayment(p.id)}
+                                    disabled={deletingPaymentId === p.id}
+                                    sx={{ color: "text.secondary", "&:hover": { color: "error.main" } }}
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                )}
+                              </Box>
+                            ))}
+                          </Stack>
+                        )}
+                      </Paper>
                     </Grid>
                   )}
                   {form.paymentStatus === "paid" && (

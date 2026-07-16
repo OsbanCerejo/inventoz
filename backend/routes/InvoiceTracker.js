@@ -7,6 +7,7 @@ const {
   InvoiceTrackerInvoice,
   InvoiceTrackerInvoiceItem,
   InvoiceTrackerPaymentProof,
+  InvoiceTrackerPartialPayment,
   InvoiceTrackerVendor,
   InvoiceTrackerInboundBatch,
   InvoiceTrackerInboundRow,
@@ -211,6 +212,22 @@ const detailInvoiceIncludes = [
       },
     ],
   },
+  {
+    model: InvoiceTrackerPartialPayment,
+    as: "partialPayments",
+    required: false,
+    separate: true,
+    where: { deletedAt: null },
+    order: [["createdAt", "ASC"]],
+    include: [
+      {
+        model: User,
+        as: "creator",
+        attributes: ["id", "name", "username"],
+        required: false,
+      },
+    ],
+  },
 ];
 
 const sanitizeString = (value) => {
@@ -339,6 +356,7 @@ const serializeInvoice = (invoice) => {
   const inboundRows = Array.isArray(plain.inboundRows) ? plain.inboundRows : [];
   const inboundBatches = Array.isArray(plain.inboundBatches) ? plain.inboundBatches : [];
   const paymentProofs = Array.isArray(plain.paymentProofs) ? plain.paymentProofs : [];
+  const rawPartialPayments = Array.isArray(plain.partialPayments) ? plain.partialPayments : [];
   const miscellaneousAmount = Number(plain.miscellaneousAmount || 0);
   const shippingAmount = Number(plain.shippingAmount || 0);
   const partialPaymentAmount =
@@ -360,6 +378,22 @@ const serializeInvoice = (invoice) => {
   const itemsTotal = serializedItems.reduce((sum, item) => sum + item.lineTotal, 0);
   const totalAmount = itemsTotal + miscellaneousAmount + shippingAmount;
   const serializedInboundRows = inboundRows.map(serializeInboundRow);
+
+  const serializedPartialPayments = rawPartialPayments.map((p) => {
+    const pp = p.get ? p.get({ plain: true }) : p;
+    return {
+      id: pp.id,
+      invoiceId: pp.invoiceId,
+      amount: Number(pp.amount || 0),
+      paymentDate: pp.paymentDate || null,
+      notes: pp.notes || null,
+      createdBy: pp.createdBy || null,
+      createdAt: pp.createdAt || null,
+      creatorDisplay: getDisplayUser(pp.creator),
+    };
+  });
+  const totalPaid = Number(serializedPartialPayments.reduce((sum, p) => sum + p.amount, 0).toFixed(2));
+  const remainingBalance = Number((Number(totalAmount.toFixed(2)) - totalPaid).toFixed(2));
 
   return {
     ...plain,
@@ -387,6 +421,9 @@ const serializeInvoice = (invoice) => {
         uploaderDisplay: getDisplayUser(proofPlain.uploader),
       };
     }),
+    partialPayments: serializedPartialPayments,
+    totalPaid,
+    remainingBalance,
     invoiceAttachmentAvailable: Boolean(plain.invoiceAttachmentPath),
     invoiceAttachmentOriginalName: plain.invoiceAttachmentOriginalName || null,
     invoiceAttachmentMimeType: plain.invoiceAttachmentMimeType || null,
@@ -543,8 +580,8 @@ const validateHeaderFields = ({
   if (paymentStatus === "partial" && partialPaymentAmount === null) {
     return "Partial payment amount is required when payment status is Partial";
   }
-  if (paymentStatus === "partial" && partialPaymentAmount <= 0) {
-    return "Partial payment amount must be greater than 0";
+  if (paymentStatus === "partial" && partialPaymentAmount < 0) {
+    return "Partial payment amount cannot be negative";
   }
   if (paymentStatus === "partial" && partialPaymentAmount > invoiceGrandTotal) {
     return "Partial payment amount cannot be more than the invoice total";
@@ -566,8 +603,8 @@ const validatePaymentFields = ({ paymentStatus, paymentDueBy, paymentDate, parti
   if (paymentStatus === "partial" && partialPaymentAmount === null) {
     return "Partial payment amount is required when payment status is Partial";
   }
-  if (paymentStatus === "partial" && partialPaymentAmount <= 0) {
-    return "Partial payment amount must be greater than 0";
+  if (paymentStatus === "partial" && partialPaymentAmount < 0) {
+    return "Partial payment amount cannot be negative";
   }
   if (paymentStatus === "partial" && partialPaymentAmount > invoiceGrandTotal) {
     return "Partial payment amount cannot be more than the invoice total";
@@ -1703,6 +1740,20 @@ router.post("/", auth, checkPermission("invoiceTracker", "create"), async (req, 
       );
     }
 
+    // Seed payment log entry for initial partial payment amount
+    if (paymentStatus === "partial" && partialPaymentAmount > 0) {
+      await InvoiceTrackerPartialPayment.create(
+        {
+          invoiceId: invoice.id,
+          amount: partialPaymentAmount,
+          paymentDate: paymentDueBy || new Date().toISOString().slice(0, 10),
+          notes: null,
+          createdBy: req.user?.id || null,
+        },
+        { transaction }
+      );
+    }
+
     await transaction.commit();
 
     const created = await InvoiceTrackerInvoice.findOne({
@@ -1749,7 +1800,6 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
     const paymentStatus = sanitizeString(req.body?.paymentStatus) || "unpaid";
     const paymentDueBy = sanitizeString(req.body?.paymentDueBy) || null;
     const paymentDate = sanitizeString(req.body?.paymentDate) || null;
-    const partialPaymentAmount = toMoneyNumber(req.body?.partialPaymentAmount);
     const isPaymentOnlyEdit = invoice.inboundStatus !== "pending";
     const existingItemsForTotal = await InvoiceTrackerInvoiceItem.findAll({
       where: { invoiceId: invoice.id },
@@ -1763,12 +1813,23 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
       shippingAmount: invoice.shippingAmount,
     });
 
+    // Compute partialPaymentAmount from the payment log (authoritative for existing invoices)
+    const activePaymentRows = await InvoiceTrackerPartialPayment.findAll({
+      where: { invoiceId: invoice.id, deletedAt: null },
+      attributes: ["amount"],
+      raw: true,
+      transaction,
+    });
+    const computedPartialAmount = Number(
+      activePaymentRows.reduce((sum, p) => sum + Number(p.amount || 0), 0).toFixed(2)
+    );
+
     if (isPaymentOnlyEdit) {
       const paymentValidationError = validatePaymentFields({
         paymentStatus,
         paymentDueBy,
         paymentDate,
-        partialPaymentAmount,
+        partialPaymentAmount: computedPartialAmount,
         invoiceGrandTotal: existingInvoiceGrandTotal,
       });
       if (paymentValidationError) {
@@ -1781,7 +1842,7 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
           paymentStatus,
           paymentDueBy: paymentStatus === "credit" || paymentStatus === "partial" ? paymentDueBy : null,
           paymentDate: paymentStatus === "paid" ? paymentDate : null,
-          partialPaymentAmount: paymentStatus === "partial" ? partialPaymentAmount : null,
+          partialPaymentAmount: paymentStatus === "partial" ? computedPartialAmount : null,
           lastUpdatedBy: req.user?.id || null,
         },
         { transaction }
@@ -1832,7 +1893,7 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
       paymentStatus,
       paymentDueBy,
       paymentDate,
-      partialPaymentAmount,
+      partialPaymentAmount: computedPartialAmount,
       invoiceGrandTotal: updatedInvoiceGrandTotal,
       receivedDate,
       trackingInfo,
@@ -1867,7 +1928,7 @@ router.put("/:id", auth, checkPermission("invoiceTracker", "edit"), async (req, 
         paymentStatus,
         paymentDueBy: paymentStatus === "credit" || paymentStatus === "partial" ? paymentDueBy : null,
         paymentDate: paymentStatus === "paid" ? paymentDate : null,
-        partialPaymentAmount: paymentStatus === "partial" ? partialPaymentAmount : null,
+        partialPaymentAmount: paymentStatus === "partial" ? computedPartialAmount : null,
         receivedDate: shipmentStatus === "received" ? receivedDate : null,
         trackingInfo,
         miscellaneousAmount,
@@ -2292,6 +2353,157 @@ router.post("/:id/items/retroactive", auth, checkPermission("invoiceTracker", "e
     await transaction.rollback();
     console.error("Error adding retroactive items:", error);
     return res.status(error.status || 500).json({ error: error.message || "Failed to add retroactive items" });
+  }
+});
+
+router.post("/:id/partial-payments", auth, checkPermission("invoiceTracker", "edit"), async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      await transaction.rollback();
+      return res.status(400).json({ error: "Invalid invoice id" });
+    }
+
+    const invoice = await InvoiceTrackerInvoice.findOne({
+      where: { id, isArchived: false },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!invoice) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+    if (invoice.paymentStatus === "paid") {
+      await transaction.rollback();
+      return res.status(400).json({ error: "Cannot add payments to an already paid invoice" });
+    }
+
+    const amount = toMoneyNumber(req.body?.amount);
+    if (amount === null || amount <= 0) {
+      await transaction.rollback();
+      return res.status(400).json({ error: "Payment amount must be greater than 0" });
+    }
+
+    const paymentDate = sanitizeString(req.body?.paymentDate);
+    if (!paymentDate) {
+      await transaction.rollback();
+      return res.status(400).json({ error: "Payment date is required" });
+    }
+
+    const notes = sanitizeString(req.body?.notes) || null;
+
+    const existingPayments = await InvoiceTrackerPartialPayment.findAll({
+      where: { invoiceId: id, deletedAt: null },
+      attributes: ["amount"],
+      raw: true,
+      transaction,
+    });
+    const currentTotal = Number(
+      existingPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0).toFixed(2)
+    );
+
+    const invoiceItems = await InvoiceTrackerInvoiceItem.findAll({
+      where: { invoiceId: id },
+      attributes: ["unitPrice", "quantity"],
+      raw: true,
+      transaction,
+    });
+    const invoiceGrandTotal = computeInvoiceGrandTotal({
+      items: invoiceItems,
+      miscellaneousAmount: invoice.miscellaneousAmount,
+      shippingAmount: invoice.shippingAmount,
+    });
+
+    if (currentTotal + amount > invoiceGrandTotal + 0.001) {
+      await transaction.rollback();
+      return res.status(400).json({
+        error: `Payment would exceed invoice total. Paid so far: $${currentTotal.toFixed(2)}, invoice total: $${invoiceGrandTotal.toFixed(2)}`,
+      });
+    }
+
+    await InvoiceTrackerPartialPayment.create(
+      { invoiceId: id, amount, paymentDate, notes, createdBy: req.user?.id || null },
+      { transaction }
+    );
+
+    const newTotal = Number((currentTotal + amount).toFixed(2));
+    await invoice.update(
+      {
+        partialPaymentAmount: newTotal,
+        paymentStatus: invoice.paymentStatus === "unpaid" || invoice.paymentStatus === "credit"
+          ? invoice.paymentStatus
+          : "partial",
+        lastUpdatedBy: req.user?.id || null,
+      },
+      { transaction }
+    );
+
+    await transaction.commit();
+    const updated = await loadInvoiceById(id);
+    return res.json(serializeInvoice(updated));
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error adding partial payment:", error);
+    return res.status(error.status || 500).json({ error: error.message || "Failed to add payment" });
+  }
+});
+
+router.delete("/:id/partial-payments/:paymentId", auth, checkPermission("invoiceTracker", "edit"), async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const id = Number(req.params.id);
+    const paymentId = Number(req.params.paymentId);
+    if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(paymentId) || paymentId <= 0) {
+      await transaction.rollback();
+      return res.status(400).json({ error: "Invalid invoice or payment id" });
+    }
+
+    const invoice = await InvoiceTrackerInvoice.findOne({
+      where: { id, isArchived: false },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!invoice) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+
+    const payment = await InvoiceTrackerPartialPayment.findOne({
+      where: { id: paymentId, invoiceId: id, deletedAt: null },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!payment) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Payment not found" });
+    }
+
+    await payment.update(
+      { deletedAt: new Date(), deletedBy: req.user?.id || null },
+      { transaction }
+    );
+
+    const remaining = await InvoiceTrackerPartialPayment.findAll({
+      where: { invoiceId: id, deletedAt: null },
+      attributes: ["amount"],
+      raw: true,
+      transaction,
+    });
+    const newTotal = Number(remaining.reduce((sum, p) => sum + Number(p.amount || 0), 0).toFixed(2));
+
+    await invoice.update(
+      { partialPaymentAmount: newTotal, lastUpdatedBy: req.user?.id || null },
+      { transaction }
+    );
+
+    await transaction.commit();
+    const updated = await loadInvoiceById(id);
+    return res.json(serializeInvoice(updated));
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error removing partial payment:", error);
+    return res.status(error.status || 500).json({ error: error.message || "Failed to remove payment" });
   }
 });
 
