@@ -147,7 +147,6 @@ interface FulfillmentProfitabilityOverview {
   netMarginAfterFeesPct: number;
   negativeMarginUnits: number;
   lowMarginUnits: number;
-  knownCostWhatnotFees: number; // alias for compat
 }
 
 interface FulfillmentProfitabilityShowRow {
@@ -158,7 +157,7 @@ interface FulfillmentProfitabilityShowRow {
   knownCostRevenue: number;
   estimatedCost: number;
   grossMargin: number;
-  whatnotFees: number;
+  tiktokFees: number;
   netMarginAfterFees: number;
   netMarginAfterFeesPct: number;
 }
@@ -645,7 +644,7 @@ function TikTokFulfillmentAnalytics() {
     if (!profitOverview) return [];
     const rev  = profitOverview.knownCostRevenue;
     const cost = profitOverview.estimatedCost;
-    const fees = profitOverview.tiktokFees ?? profitOverview.knownCostWhatnotFees;
+    const fees = profitOverview.tiktokFees;
     const net  = profitOverview.netMarginAfterFees;
     return [
       { name: "Revenue",     base: 0,              val: rev,        fill: "#4caf50" },

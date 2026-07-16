@@ -90,6 +90,22 @@ const TSS_STICKER_SCAN_COUNT = `
   )
 `;
 
+// Total fulfilled scan count per shipment — used to split the $0.30 flat fee across all items in that shipment.
+// A shipment with 3 different stickers (3 auction wins) shares one $0.30 fee, so each item bears $0.10.
+// This is distinct from TSS_STICKER_SCAN_COUNT which groups within a sticker (for bundle revenue pro-rating).
+const TSS_SHIPMENT_SCAN_COUNT = `
+  (
+    SELECT tiktokShowId, importId, shipmentId,
+           COUNT(*) AS shipment_scan_count
+    FROM ${TABLES.shipmentScans}
+    WHERE result = 'matched'
+      AND productSku IS NOT NULL AND productSku <> ''
+      AND previousQuantity IS NOT NULL
+      AND newQuantity = previousQuantity - 1
+    GROUP BY tiktokShowId, importId, shipmentId
+  )
+`;
+
 // TikTok fee constants (referral 6% + payment processing 2.9% + $0.30/shipment)
 const TIKTOK_COMMISSION_RATE    = 0.06;
 const TIKTOK_PROCESSING_RATE    = 0.029;
@@ -330,7 +346,7 @@ router.get("/fulfillment-by-show", auth, checkPermission("tiktokAnalytics", "vie
         MAX(ts.name)                                                               AS showName,
         COUNT(*)                                                                   AS unitsSold,
         COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0)                AS revenue,
-        COALESCE(AVG(NULLIF(tss.soldPrice,0)),0)                                   AS avgSoldPrice,
+        COALESCE(AVG(NULLIF(tss.soldPrice,0) / sc.sticker_scan_count),0)             AS avgSoldPrice,
         COUNT(DISTINCT CONCAT(tss.tiktokShowId,':',tss.importId,':',tss.shipmentId)) AS completedShipments
       FROM ${TABLES.shipmentScans} tss
       JOIN ${TABLES.shows} ts  ON ts.id = tss.tiktokShowId
@@ -516,7 +532,7 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
         COALESCE(
           SUM(
             (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
-            + (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
+            + (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / ss.shipment_scan_count)
           ),
           0
         ) AS tiktokFees,
@@ -526,7 +542,7 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
           SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
             THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost
                - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
-               - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
+               - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / ss.shipment_scan_count)
             ELSE 0 END),
           0
         ) AS netMarginAfterFees,
@@ -535,7 +551,7 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
         COUNT(CASE WHEN vc.avgVendorCost IS NOT NULL
           AND (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost
                - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
-               - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
+               - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / ss.shipment_scan_count)
               ) < 0
           THEN 1 END) AS negativeMarginUnits,
 
@@ -544,40 +560,40 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
           AND COALESCE(tss.soldPrice,0) / sc.sticker_scan_count > 0
           AND (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost
                - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
-               - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
+               - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / ss.shipment_scan_count)
               ) / (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count) BETWEEN 0 AND 0.10
           THEN 1 END) AS lowMarginUnits
       FROM ${TABLES.shipmentScans} tss
       LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc
         ON ${skuJoinCondition("vc.sku", "tss.productSku")}
       JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
+      JOIN ${TSS_SHIPMENT_SCAN_COUNT} ss ON ss.tiktokShowId=tss.tiktokShowId AND ss.importId=tss.importId AND ss.shipmentId=tss.shipmentId
       WHERE ${fulfilledSaleCondition("tss")}
         AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
     `, { replacements: { from: range.from, to: range.to, showId } });
 
     const r = rows[0] || {};
-    const knownCostRevenue = Number(r.knownCostRevenue || 0);
-    const grossMargin      = Number(r.grossMargin      || 0);
-    const tiktokFees       = Number(r.tiktokFees       || 0);
+    const totalRevenue       = Number(r.totalRevenue       || 0);
+    const grossMargin        = Number(r.grossMargin        || 0);
+    const tiktokFees         = Number(r.tiktokFees         || 0);
     const netMarginAfterFees = Number(r.netMarginAfterFees || 0);
 
     return res.json({
       totalUnitsSold:       Number(r.totalUnitsSold       || 0),
-      totalRevenue:         Number(Number(r.totalRevenue   || 0).toFixed(2)),
-      knownCostRevenue:     Number(knownCostRevenue.toFixed(2)),
+      totalRevenue:         Number(totalRevenue.toFixed(2)),
+      knownCostRevenue:     Number(Number(r.knownCostRevenue || 0).toFixed(2)),
       knownCostUnits:       Number(r.knownCostUnits        || 0),
       unknownCostRevenue:   Number(Number(r.unknownCostRevenue || 0).toFixed(2)),
       unknownCostUnits:     Number(r.unknownCostUnits       || 0),
       estimatedCost:        Number(Number(r.estimatedCost   || 0).toFixed(2)),
       grossMargin:          Number(grossMargin.toFixed(2)),
-      grossMarginPct:       knownCostRevenue > 0 ? Number((grossMargin / knownCostRevenue * 100).toFixed(1)) : 0,
+      grossMarginPct:       totalRevenue > 0 ? Number((grossMargin / totalRevenue * 100).toFixed(1)) : 0,
       tiktokFees:           Number(tiktokFees.toFixed(2)),
       netMarginAfterFees:   Number(netMarginAfterFees.toFixed(2)),
-      netMarginAfterFeesPct:knownCostRevenue > 0 ? Number((netMarginAfterFees / knownCostRevenue * 100).toFixed(1)) : 0,
+      netMarginAfterFeesPct:totalRevenue > 0 ? Number((netMarginAfterFees / totalRevenue * 100).toFixed(1)) : 0,
       negativeMarginUnits:  Number(r.negativeMarginUnits   || 0),
       lowMarginUnits:       Number(r.lowMarginUnits         || 0),
-      knownCostWhatnotFees: Number(tiktokFees.toFixed(2)), // alias for waterfall compat
     });
   } catch (err) {
     console.error("TikTok profitability-overview error:", err);
@@ -606,17 +622,18 @@ router.get("/fulfillment-profitability-shows", auth, checkPermission("tiktokAnal
         COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost ELSE 0 END),0) AS grossMargin,
         COALESCE(SUM(
           (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
-          + (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
+          + (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / ss.shipment_scan_count)
         ),0) AS tiktokFees,
         COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
           THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost
              - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
-             - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / sc.sticker_scan_count)
+             - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / ss.shipment_scan_count)
           ELSE 0 END),0) AS netMarginAfterFees
       FROM ${TABLES.shipmentScans} tss
       JOIN ${TABLES.shows} ts ON ts.id = tss.tiktokShowId
       LEFT JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku","tss.productSku")}
       JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
+      JOIN ${TSS_SHIPMENT_SCAN_COUNT} ss ON ss.tiktokShowId=tss.tiktokShowId AND ss.importId=tss.importId AND ss.shipmentId=tss.shipmentId
       WHERE ${fulfilledSaleCondition("tss")}
         AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
@@ -635,7 +652,7 @@ router.get("/fulfillment-profitability-shows", auth, checkPermission("tiktokAnal
         knownCostRevenue:     Number(knownCostRevenue.toFixed(2)),
         estimatedCost:        Number(Number(r.estimatedCost|| 0).toFixed(2)),
         grossMargin:          Number(Number(r.grossMargin  || 0).toFixed(2)),
-        whatnotFees:          Number(Number(r.tiktokFees   || 0).toFixed(2)),
+        tiktokFees:           Number(Number(r.tiktokFees   || 0).toFixed(2)),
         netMarginAfterFees:   Number(netMarginAfterFees.toFixed(2)),
         netMarginAfterFeesPct:knownCostRevenue > 0 ? Number((netMarginAfterFees / knownCostRevenue * 100).toFixed(1)) : 0,
       };
@@ -1335,8 +1352,20 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENDPOINT: Hourly sales (revenue + orders by hour of day, EDT)
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Returns the current Eastern UTC offset string (e.g. '-04:00' for EDT, '-05:00' for EST)
+function getEasternUtcOffset() {
+  const now = new Date();
+  // Format a recognizable string in Eastern time and check for EDT vs EST
+  const formatted = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    timeZoneName: 'short',
+  }).format(now);
+  return formatted.includes('EDT') ? '-04:00' : '-05:00';
+}
+
 router.get("/fulfillment-hourly", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const { breakdown = "combined" } = req.query;
+  const easternOffset = getEasternUtcOffset();
 
   // showIds takes priority over date range; validate as positive integers
   const showIdNums = String(req.query.showIds || "")
@@ -1367,7 +1396,7 @@ router.get("/fulfillment-hourly", auth, checkPermission("tiktokAnalytics", "view
     if (breakdown === "byShow") {
       const rows = await sequelize.query(`
         SELECT
-          HOUR(CONVERT_TZ(tsi.placedAt, '+00:00', '-04:00')) AS hour,
+          HOUR(CONVERT_TZ(tsi.placedAt, '+00:00', '${easternOffset}')) AS hour,
           tsi.tiktokShowId                                    AS showId,
           MAX(ts.name)                                        AS showName,
           COUNT(*)                                            AS orders,
@@ -1391,7 +1420,7 @@ router.get("/fulfillment-hourly", auth, checkPermission("tiktokAnalytics", "view
     // combined (default)
     const rows = await sequelize.query(`
       SELECT
-        HOUR(CONVERT_TZ(tsi.placedAt, '+00:00', '-04:00')) AS hour,
+        HOUR(CONVERT_TZ(tsi.placedAt, '+00:00', '${easternOffset}')) AS hour,
         COUNT(*)                                            AS orders,
         ROUND(SUM(COALESCE(tsi.orderAmount, 0)), 2)        AS revenue
       FROM ${TABLES.shipmentItems} tsi

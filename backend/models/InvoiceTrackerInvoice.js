@@ -122,6 +122,14 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: true,
       },
+      reopenedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      reopenedBy: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
       inboundCompletedAt: {
         type: DataTypes.DATE,
         allowNull: true,

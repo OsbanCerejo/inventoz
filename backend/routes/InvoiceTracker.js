@@ -364,6 +364,8 @@ const serializeInvoice = (invoice) => {
   return {
     ...plain,
     vendorId: plain.vendorId || plain.vendor?.id || null,
+    reopenedAt: plain.reopenedAt || null,
+    reopenedBy: plain.reopenedBy || null,
     miscellaneousAmount,
     shippingAmount,
     partialPaymentAmount,
@@ -2159,6 +2161,137 @@ router.post("/:id/inbound-submit", auth, checkPermission("invoiceTracker", "edit
     await transaction.rollback();
     console.error("Error inbounding invoice rows:", error);
     return res.status(error.status || 500).json({ error: error.message || "Failed to inbound selected rows" });
+  }
+});
+
+router.post("/:id/reopen", auth, checkPermission("invoiceTracker", "edit"), async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      await transaction.rollback();
+      return res.status(400).json({ error: "Invalid invoice id" });
+    }
+
+    const invoice = await loadInvoiceById(id, { transaction, include: [], lock: true });
+    if (!invoice) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+    if (invoice.isArchived) {
+      await transaction.rollback();
+      return res.status(400).json({ error: "Archived invoices cannot be reopened" });
+    }
+    if (invoice.inboundStatus === "pending") {
+      await transaction.rollback();
+      return res.status(400).json({ error: "Invoice is still in pending inbound state — no need to reopen" });
+    }
+
+    await invoice.update(
+      {
+        reopenedAt: new Date(),
+        reopenedBy: req.user?.id || null,
+        lastUpdatedBy: req.user?.id || null,
+      },
+      { transaction }
+    );
+
+    await transaction.commit();
+    const updated = await loadInvoiceById(id);
+    return res.json(serializeInvoice(updated));
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error reopening invoice:", error);
+    return res.status(error.status || 500).json({ error: error.message || "Failed to reopen invoice" });
+  }
+});
+
+router.post("/:id/items/retroactive", auth, checkPermission("invoiceTracker", "edit"), async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      await transaction.rollback();
+      return res.status(400).json({ error: "Invalid invoice id" });
+    }
+
+    const invoice = await InvoiceTrackerInvoice.findOne({
+      where: { id, isArchived: false },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!invoice) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+    if (!invoice.reopenedAt) {
+      await transaction.rollback();
+      return res.status(400).json({ error: "Invoice must be reopened before adding retroactive items" });
+    }
+    if (invoice.inboundStatus === "pending") {
+      await transaction.rollback();
+      return res.status(400).json({ error: "Invoice is still pending — use the normal edit flow to add items" });
+    }
+
+    const items = await buildItems(req.body?.items);
+    if (!items.length) {
+      await transaction.rollback();
+      return res.status(400).json({ error: "At least one valid item is required" });
+    }
+
+    const now = new Date();
+    await InvoiceTrackerInvoiceItem.bulkCreate(
+      items.map((item) => ({
+        ...item,
+        invoiceId: invoice.id,
+        addedRetroactively: true,
+        retroactivelyAddedAt: now,
+        retroactivelyAddedBy: req.user?.id || null,
+      })),
+      { transaction }
+    );
+
+    // Create inbound rows directly from only the newly-added items.
+    // We do NOT call syncInvoiceInboundRows here because it merges all invoice items
+    // by sku+price key, which would collide with existing inbounded rows for the same
+    // sku+price and silently skip creating a new row for the retroactive quantity.
+    const retroGroups = groupInvoiceItems(items);
+    for (const group of retroGroups) {
+      // eslint-disable-next-line no-await-in-loop
+      await InvoiceTrackerInboundRow.create(
+        {
+          invoiceId: invoice.id,
+          sku: group.sku,
+          itemName: group.itemName,
+          unitPrice: group.unitPrice,
+          expectedQty: group.expectedQty,
+          actualQty: null,
+          deltaQty: null,
+          resolutionStatus: "pending",
+          resolutionType: null,
+          mismatchReason: null,
+          inboundedQty: null,
+          inboundCompositeSku: null,
+          resolvedBy: null,
+          resolvedAt: null,
+          inboundedBy: null,
+          inboundedAt: null,
+        },
+        { transaction }
+      );
+    }
+    await recomputeInvoiceInboundStatus(invoice.id, transaction, req.user?.id || null);
+
+    invoice.lastUpdatedBy = req.user?.id || invoice.lastUpdatedBy;
+    await invoice.save({ transaction });
+    await transaction.commit();
+
+    const updated = await loadInvoiceById(id);
+    return res.json(serializeInvoice(updated));
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error adding retroactive items:", error);
+    return res.status(error.status || 500).json({ error: error.message || "Failed to add retroactive items" });
   }
 });
 

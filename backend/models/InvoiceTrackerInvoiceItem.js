@@ -29,6 +29,19 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: 1,
       },
+      addedRetroactively: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      retroactivelyAddedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      retroactivelyAddedBy: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
     },
     {
       tableName: "invoiceTrackerInvoiceItems",

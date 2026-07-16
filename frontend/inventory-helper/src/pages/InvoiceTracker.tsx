@@ -68,6 +68,8 @@ type InvoiceItem = {
   unitPrice: number;
   quantity: number;
   lineTotal?: number;
+  addedRetroactively?: boolean;
+  retroactivelyAddedAt?: string | null;
 };
 
 type UserMini = {
@@ -118,6 +120,8 @@ type Invoice = {
   inboundCompletedAt?: string | null;
   inboundCompletedBy?: number | null;
   inboundCompleterDisplay?: string | null;
+  reopenedAt?: string | null;
+  reopenedBy?: number | null;
   totalAmount: number;
   itemCount: number;
   items: InvoiceItem[];
@@ -238,6 +242,8 @@ const emptyForm = {
   inboundCompletedAt: "",
   inboundCompletedBy: null,
   inboundCompleterDisplay: "",
+  reopenedAt: null as string | null,
+  reopenedBy: null as number | null,
   items: [] as InvoiceItem[],
 };
 
@@ -279,6 +285,12 @@ function InvoiceTracker() {
   const [inboundRows, setInboundRows] = useState<InboundRow[]>([]);
   const [inboundSummary, setInboundSummary] = useState<InboundSummary | null>(null);
   const [selectedInboundRowIds, setSelectedInboundRowIds] = useState<number[]>([]);
+  const [reopenConfirmOpen, setReopenConfirmOpen] = useState(false);
+  const [reopening, setReopening] = useState(false);
+  const [retroactiveDialogOpen, setRetroactiveDialogOpen] = useState(false);
+  const [retroactiveItems, setRetroactiveItems] = useState<{ sku: string; itemName: string; quantity: number; unitPrice: number }[]>([{ sku: "", itemName: "", quantity: 1, unitPrice: 0 }]);
+  const [retroactiveSkuLoading, setRetroactiveSkuLoading] = useState<Record<number, boolean>>({});
+  const [savingRetroactive, setSavingRetroactive] = useState(false);
 
   const canCreate = hasPermission("invoiceTracker", "create");
   const canEdit = hasPermission("invoiceTracker", "edit");
@@ -503,6 +515,8 @@ function InvoiceTracker() {
     inboundCompletedAt: detail.inboundCompletedAt || "",
     inboundCompletedBy: detail.inboundCompletedBy || null,
     inboundCompleterDisplay: detail.inboundCompleterDisplay || "",
+    reopenedAt: detail.reopenedAt || null,
+    reopenedBy: detail.reopenedBy || null,
     miscellaneousAmount: Number(detail.miscellaneousAmount || 0),
     shippingAmount: Number(detail.shippingAmount || 0),
     notes: detail.notes || "",
@@ -514,6 +528,8 @@ function InvoiceTracker() {
             itemName: item.itemName,
             unitPrice: Number(item.unitPrice || 0),
             quantity: Number(item.quantity || 0),
+            addedRetroactively: !!item.addedRetroactively,
+            retroactivelyAddedAt: item.retroactivelyAddedAt || null,
           }))
         : [],
   });
@@ -598,6 +614,89 @@ function InvoiceTracker() {
       return;
     }
     openInboundDialog();
+  };
+
+  const handleReopen = async () => {
+    if (!token || !form.id) return;
+    try {
+      setReopening(true);
+      const { data } = await axios.post<Invoice>(
+        getApiUrl(`invoice-tracker/${form.id}/reopen`),
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const normalized = normalizeInvoiceToForm(data);
+      setForm(normalized as any);
+      setSavedFormSnapshot(buildFormSnapshot(normalized as any));
+      setReopenConfirmOpen(false);
+      setRetroactiveDialogOpen(true);
+      toast.success("Invoice reopened. You can now add missing SKUs.");
+      loadInvoices();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Failed to reopen invoice");
+    } finally {
+      setReopening(false);
+    }
+  };
+
+  const lookupRetroactiveSku = async (index: number, sku: string) => {
+    if (!sku.trim() || !token) return;
+    setRetroactiveSkuLoading((prev) => ({ ...prev, [index]: true }));
+    try {
+      const { data } = await axios.get(getApiUrl(`invoice-tracker/lookup-product?sku=${encodeURIComponent(sku.trim())}`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setRetroactiveItems((prev) =>
+        prev.map((item, i) => (i === index ? { ...item, sku: data.sku, itemName: data.itemName } : item))
+      );
+    } catch {
+      setRetroactiveItems((prev) =>
+        prev.map((item, i) => (i === index ? { ...item, itemName: "" } : item))
+      );
+    } finally {
+      setRetroactiveSkuLoading((prev) => ({ ...prev, [index]: false }));
+    }
+  };
+
+  const handleSaveRetroactiveItems = async () => {
+    if (!token || !form.id) return;
+
+    // Run lookups for any rows that have a SKU but no itemName yet (e.g. user typed but didn't Tab/Enter)
+    const pendingLookups = retroactiveItems
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => item.sku.trim() && !item.itemName.trim());
+    if (pendingLookups.length) {
+      await Promise.all(pendingLookups.map(({ index, item }) => lookupRetroactiveSku(index, item.sku)));
+      // Re-read state after async lookups — validItems check happens in the updated state
+      // We need to bail out here and let the user click again (state update is async)
+      toast.info("SKU lookup in progress — click Save again.");
+      return;
+    }
+
+    const validItems = retroactiveItems.filter((item) => item.sku.trim() && item.itemName.trim() && item.quantity > 0);
+    if (!validItems.length) {
+      toast.error("Add at least one valid item with a recognised SKU.");
+      return;
+    }
+    try {
+      setSavingRetroactive(true);
+      const { data } = await axios.post<Invoice>(
+        getApiUrl(`invoice-tracker/${form.id}/items/retroactive`),
+        { items: validItems.map((item) => ({ sku: item.sku, quantity: item.quantity, unitPrice: item.unitPrice })) },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const normalized = normalizeInvoiceToForm(data);
+      setForm(normalized as any);
+      setSavedFormSnapshot(buildFormSnapshot(normalized as any));
+      setRetroactiveDialogOpen(false);
+      setRetroactiveItems([{ sku: "", itemName: "", quantity: 1, unitPrice: 0 }]);
+      toast.success("Missing SKUs added. You can now resolve and inbound them.");
+      loadInvoices();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Failed to add items");
+    } finally {
+      setSavingRetroactive(false);
+    }
   };
 
   const sendPaymentReminder = async () => {
@@ -2204,6 +2303,17 @@ function InvoiceTracker() {
                             ? "Start Inbound"
                             : "Continue Inbound"}
                     </Button>
+                    {canEdit && form.id && !form.isArchived && form.inboundStatus !== "pending" && (
+                      <Button
+                        variant="outlined"
+                        color="warning"
+                        size="small"
+                        onClick={() => form.reopenedAt ? setRetroactiveDialogOpen(true) : setReopenConfirmOpen(true)}
+                        sx={{ borderColor: "#f59e0b", color: "#b45309", "&:hover": { borderColor: "#d97706", bgcolor: "#fffbeb" } }}
+                      >
+                        {form.reopenedAt ? "Add More SKUs" : "Reopen — Add Missing SKUs"}
+                      </Button>
+                    )}
                 </Stack>
               </Paper>
             </Grid>
@@ -2358,7 +2468,12 @@ function InvoiceTracker() {
                 </Stack>
                 {form.inboundStatus !== "pending" && (
                   <Typography variant="body2" color="text.secondary">
-                    Inbound has already started for this invoice. Only payment status fields can be edited now. If something else needs to be received, create a new invoice.
+                    Inbound has already started for this invoice. Only payment fields can be edited.{" "}
+                    {canEdit && !form.isArchived && (
+                      <Box component="span" sx={{ color: "#b45309", fontWeight: 500, cursor: "pointer", textDecoration: "underline" }} onClick={() => form.reopenedAt ? setRetroactiveDialogOpen(true) : setReopenConfirmOpen(true)}>
+                        {form.reopenedAt ? "Add more missing SKUs." : "Reopen to add missing SKUs."}
+                      </Box>
+                    )}
                   </Typography>
                 )}
               </Stack>
@@ -2366,7 +2481,16 @@ function InvoiceTracker() {
                 {form.items.map((item, index) => {
                   const lineTotal = Number(item.unitPrice || 0) * Number(item.quantity || 0);
                   return (
-                    <Paper key={`${item.id || "new"}-${index}`} variant="outlined" sx={{ p: 1.5 }}>
+                    <Paper key={`${item.id || "new"}-${index}`} variant="outlined" sx={{ p: 1.5, borderColor: item.addedRetroactively ? "#f59e0b" : undefined }}>
+                      {item.addedRetroactively && (
+                        <Box sx={{ mb: 1 }}>
+                          <Chip
+                            label={`Retroactive${item.retroactivelyAddedAt ? ` — added ${new Date(item.retroactivelyAddedAt).toLocaleDateString()}` : ""}`}
+                            size="small"
+                            sx={{ bgcolor: "#fef3c7", color: "#92400e", border: "1px solid #f59e0b", fontSize: "0.7rem", height: 20 }}
+                          />
+                        </Box>
+                      )}
                       <Box
                         sx={{
                           display: "grid",
@@ -2825,6 +2949,120 @@ function InvoiceTracker() {
             disabled={inboundLoading}
           >
             Proceed
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Reopen confirmation dialog */}
+      <Dialog open={reopenConfirmOpen} onClose={() => { if (!reopening) setReopenConfirmOpen(false); }} maxWidth="sm" fullWidth>
+        <DialogTitle>Reopen Invoice to Add Missing SKUs?</DialogTitle>
+        <DialogContent dividers>
+          <Typography sx={{ mb: 1.5 }}>
+            This invoice has already been (partially) inbounded. Reopening allows you to add SKUs that were missed — for example, items that weren't scanned at the time.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Existing inbound rows will not be affected. New items will appear as pending rows in the inbound review, ready to be resolved and inbounded.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReopenConfirmOpen(false)} disabled={reopening}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={handleReopen}
+            disabled={reopening}
+            sx={{ bgcolor: "#f59e0b", "&:hover": { bgcolor: "#d97706" } }}
+          >
+            {reopening ? "Reopening…" : "Reopen Invoice"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Retroactive items dialog */}
+      <Dialog
+        open={retroactiveDialogOpen}
+        onClose={() => { if (!savingRetroactive) { setRetroactiveDialogOpen(false); setRetroactiveItems([{ sku: "", itemName: "", quantity: 1, unitPrice: 0 }]); } }}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Add Missing SKUs</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Enter the SKUs that were on this invoice but were not inbounded at the time. They will be marked as retroactive and added to the inbound queue.
+          </Typography>
+          <Stack spacing={1.5}>
+            {retroactiveItems.map((item, index) => (
+              <Paper key={index} variant="outlined" sx={{ p: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 2fr 0.8fr 0.8fr auto", gap: 1.5, alignItems: "start" }}>
+                  <TextField
+                    size="small"
+                    label="SKU *"
+                    value={item.sku}
+                    onChange={(e) => setRetroactiveItems((prev) => prev.map((r, i) => i === index ? { ...r, sku: e.target.value, itemName: "" } : r))}
+                    onBlur={() => lookupRetroactiveSku(index, item.sku)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); lookupRetroactiveSku(index, item.sku); } }}
+                    helperText={retroactiveSkuLoading[index] ? "Looking up…" : item.sku && !item.itemName ? "Press Enter or Tab to look up" : " "}
+                  />
+                  <TextField
+                    size="small"
+                    label="Item Name"
+                    value={item.itemName}
+                    disabled
+                    helperText=" "
+                  />
+                  <TextField
+                    size="small"
+                    label="Qty"
+                    type="number"
+                    inputProps={{ min: 1, step: 1 }}
+                    value={item.quantity}
+                    onChange={(e) => setRetroactiveItems((prev) => prev.map((r, i) => i === index ? { ...r, quantity: Number(e.target.value) || 1 } : r))}
+                    helperText=" "
+                  />
+                  <TextField
+                    size="small"
+                    label="Unit Price"
+                    type="number"
+                    inputProps={{ min: 0, step: "0.01" }}
+                    value={item.unitPrice}
+                    onChange={(e) => setRetroactiveItems((prev) => prev.map((r, i) => i === index ? { ...r, unitPrice: Number(e.target.value) || 0 } : r))}
+                    helperText=" "
+                  />
+                  <Box sx={{ pt: "4px" }}>
+                    <IconButton
+                      color="error"
+                      size="small"
+                      onClick={() => setRetroactiveItems((prev) => prev.filter((_, i) => i !== index))}
+                      disabled={retroactiveItems.length === 1}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                </Box>
+              </Paper>
+            ))}
+            <Box>
+              <Button
+                startIcon={<AddIcon />}
+                variant="outlined"
+                size="small"
+                onClick={() => setRetroactiveItems((prev) => [...prev, { sku: "", itemName: "", quantity: 1, unitPrice: 0 }])}
+              >
+                Add Another SKU
+              </Button>
+            </Box>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setRetroactiveDialogOpen(false); setRetroactiveItems([{ sku: "", itemName: "", quantity: 1, unitPrice: 0 }]); }} disabled={savingRetroactive}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSaveRetroactiveItems}
+            disabled={savingRetroactive || retroactiveItems.every((item) => !item.sku.trim() || !item.itemName.trim())}
+          >
+            {savingRetroactive ? "Saving…" : "Add to Inbound Queue"}
           </Button>
         </DialogActions>
       </Dialog>
