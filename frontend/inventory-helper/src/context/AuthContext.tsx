@@ -60,6 +60,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const scheduleIdleLogout = (lastActivityAt: number) => {
     clearIdleTimer();
+    if (user?.role === "admin") return;
     const elapsed = Date.now() - lastActivityAt;
     const remaining = Math.max(IDLE_TIMEOUT_MS - elapsed, 0);
     idleTimerRef.current = window.setTimeout(() => {
@@ -224,7 +225,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || user?.role === "admin") return;
 
     const events: Array<keyof WindowEventMap> = ["mousemove", "keydown", "click", "scroll", "touchstart"];
     const resetIdleTimer = () => touchLastActivity();
@@ -236,11 +237,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       events.forEach((eventName) => window.removeEventListener(eventName, resetIdleTimer));
       clearIdleTimer();
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user?.role]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (event.key === LAST_ACTIVITY_KEY && isAuthenticated) {
+      if (event.key === LAST_ACTIVITY_KEY && isAuthenticated && user?.role !== "admin") {
         scheduleIdleLogout(getLastActivityAt());
         return;
       }

@@ -421,6 +421,7 @@ const serializeInvoice = (invoice) => {
         uploaderDisplay: getDisplayUser(proofPlain.uploader),
       };
     }),
+    skipQuantityOnInbound: Boolean(plain.skipQuantityOnInbound),
     partialPayments: serializedPartialPayments,
     totalPaid,
     remainingBalance,
@@ -937,8 +938,10 @@ const createInvoiceInboundRecord = async ({
     throw error;
   }
 
-  const currentQuantity = Number(product.quantity || 0);
-  await product.update({ quantity: currentQuantity + actualQty }, { transaction });
+  if (!invoice.skipQuantityOnInbound) {
+    const currentQuantity = Number(product.quantity || 0);
+    await product.update({ quantity: currentQuantity + actualQty }, { transaction });
+  }
 
   return {
     compositeSku,
@@ -1607,7 +1610,7 @@ router.post("/:id/send-payment-reminder", auth, checkPermission("invoiceTracker"
   }
 });
 
-router.get("/:id/inbound-review", auth, checkPermission("invoiceTracker", "view"), async (req, res) => {
+router.post("/:id/inbound-review", auth, checkPermission("invoiceTracker", "edit"), async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
     const id = Number(req.params.id);
@@ -1619,6 +1622,7 @@ router.get("/:id/inbound-review", auth, checkPermission("invoiceTracker", "view"
     const invoice = await InvoiceTrackerInvoice.findOne({
       where: { id, isArchived: false },
       transaction,
+      lock: transaction.LOCK.UPDATE,
     });
     if (!invoice) {
       await transaction.rollback();
@@ -1626,6 +1630,17 @@ router.get("/:id/inbound-review", auth, checkPermission("invoiceTracker", "view"
     }
 
     await ensureInboundEligibility(invoice, transaction);
+
+    // Only set the flag when starting inbound for the first time (pending).
+    // Once rows are being inbounded the flag is locked to prevent mid-process changes.
+    if (invoice.inboundStatus === "pending") {
+      const skipQty = req.body?.skipQuantityOnInbound === true;
+      await invoice.update(
+        { skipQuantityOnInbound: skipQty, lastUpdatedBy: req.user?.id || null },
+        { transaction }
+      );
+    }
+
     await syncInvoiceInboundRows(invoice, transaction);
     await recomputeInvoiceInboundStatus(invoice.id, transaction, invoice.inboundCompletedBy || null);
 
@@ -2343,8 +2358,12 @@ router.post("/:id/items/retroactive", auth, checkPermission("invoiceTracker", "e
     }
     await recomputeInvoiceInboundStatus(invoice.id, transaction, req.user?.id || null);
 
-    invoice.lastUpdatedBy = req.user?.id || invoice.lastUpdatedBy;
-    await invoice.save({ transaction });
+    // Retroactive items are always record-only — force the flag so inbounding these
+    // rows never adds to product quantity.
+    await invoice.update(
+      { skipQuantityOnInbound: true, lastUpdatedBy: req.user?.id || null },
+      { transaction }
+    );
     await transaction.commit();
 
     const updated = await loadInvoiceById(id);
@@ -2386,12 +2405,13 @@ router.post("/:id/partial-payments", auth, checkPermission("invoiceTracker", "ed
     }
 
     const paymentDate = sanitizeString(req.body?.paymentDate);
-    if (!paymentDate) {
+    if (!paymentDate || !/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) {
       await transaction.rollback();
-      return res.status(400).json({ error: "Payment date is required" });
+      return res.status(400).json({ error: "Payment date is required and must be in YYYY-MM-DD format" });
     }
 
-    const notes = sanitizeString(req.body?.notes) || null;
+    const rawNotes = sanitizeString(req.body?.notes) || null;
+    const notes = rawNotes && rawNotes.length > 2000 ? rawNotes.slice(0, 2000) : rawNotes;
 
     const existingPayments = await InvoiceTrackerPartialPayment.findAll({
       where: { invoiceId: id, deletedAt: null },
@@ -2428,12 +2448,18 @@ router.post("/:id/partial-payments", auth, checkPermission("invoiceTracker", "ed
     );
 
     const newTotal = Number((currentTotal + amount).toFixed(2));
+    // "credit" status is user-controlled — don't override it.
+    // "unpaid" → "partial" only when paymentDueBy is already set (required for "partial" validation).
+    // Any other status (e.g. already "partial") stays as-is.
+    let newPaymentStatus = invoice.paymentStatus;
+    if (invoice.paymentStatus === "unpaid" && invoice.paymentDueBy) {
+      newPaymentStatus = "partial";
+    }
+
     await invoice.update(
       {
         partialPaymentAmount: newTotal,
-        paymentStatus: invoice.paymentStatus === "unpaid" || invoice.paymentStatus === "credit"
-          ? invoice.paymentStatus
-          : "partial",
+        paymentStatus: newPaymentStatus,
         lastUpdatedBy: req.user?.id || null,
       },
       { transaction }
@@ -2492,8 +2518,15 @@ router.delete("/:id/partial-payments/:paymentId", auth, checkPermission("invoice
     });
     const newTotal = Number(remaining.reduce((sum, p) => sum + Number(p.amount || 0), 0).toFixed(2));
 
+    // "credit" status is user-controlled — preserve it even when all payments are removed.
+    // Only reset "partial" → "unpaid" when the total hits zero.
+    let newPaymentStatus = invoice.paymentStatus;
+    if (invoice.paymentStatus === "partial" && newTotal === 0) {
+      newPaymentStatus = "unpaid";
+    }
+
     await invoice.update(
-      { partialPaymentAmount: newTotal, lastUpdatedBy: req.user?.id || null },
+      { partialPaymentAmount: newTotal, paymentStatus: newPaymentStatus, lastUpdatedBy: req.user?.id || null },
       { transaction }
     );
 

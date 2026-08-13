@@ -38,6 +38,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: "pending",
       },
+      skipQuantityOnInbound: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       paymentStatus: {
         type: DataTypes.ENUM("paid", "unpaid", "credit", "partial"),
         allowNull: false,

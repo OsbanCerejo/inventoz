@@ -134,6 +134,7 @@ type Invoice = {
   inboundCompletedAt?: string | null;
   inboundCompletedBy?: number | null;
   inboundCompleterDisplay?: string | null;
+  skipQuantityOnInbound?: boolean;
   reopenedAt?: string | null;
   reopenedBy?: number | null;
   totalAmount: number;
@@ -259,6 +260,7 @@ const emptyForm = {
   inboundCompletedAt: "",
   inboundCompletedBy: null,
   inboundCompleterDisplay: "",
+  skipQuantityOnInbound: false,
   reopenedAt: null as string | null,
   reopenedBy: null as number | null,
   items: [] as InvoiceItem[],
@@ -297,6 +299,7 @@ function InvoiceTracker() {
   const [skuLookupLoading, setSkuLookupLoading] = useState<Record<number, boolean>>({});
   const [inboundDialogOpen, setInboundDialogOpen] = useState(false);
   const [startInboundConfirmOpen, setStartInboundConfirmOpen] = useState(false);
+  const [inboundSkipQty, setInboundSkipQty] = useState(false);
   const [inboundLoading, setInboundLoading] = useState(false);
   const [inboundSubmitting, setInboundSubmitting] = useState(false);
   const [inboundRows, setInboundRows] = useState<InboundRow[]>([]);
@@ -541,6 +544,7 @@ function InvoiceTracker() {
     inboundCompletedAt: detail.inboundCompletedAt || "",
     inboundCompletedBy: detail.inboundCompletedBy || null,
     inboundCompleterDisplay: detail.inboundCompleterDisplay || "",
+    skipQuantityOnInbound: Boolean(detail.skipQuantityOnInbound),
     reopenedAt: detail.reopenedAt || null,
     reopenedBy: detail.reopenedBy || null,
     miscellaneousAmount: Number(detail.miscellaneousAmount || 0),
@@ -600,6 +604,7 @@ function InvoiceTracker() {
     setAddPaymentAmount("");
     setAddPaymentDate(new Date().toISOString().slice(0, 10));
     setAddPaymentNotes("");
+    setInboundSkipQty(false);
   };
 
   const applyInboundReviewPayload = (payload: InboundReviewResponse) => {
@@ -621,14 +626,20 @@ function InvoiceTracker() {
     }
   };
 
-  const openInboundDialog = async () => {
+  const openInboundDialog = async (skipQty = false) => {
     if (!token || !form.id) return;
     try {
       setInboundLoading(true);
-      const response = await axios.get<InboundReviewResponse>(getApiUrl(`invoice-tracker/${form.id}/inbound-review`), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axios.post<InboundReviewResponse>(
+        getApiUrl(`invoice-tracker/${form.id}/inbound-review`),
+        { skipQuantityOnInbound: skipQty },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       applyInboundReviewPayload(response.data);
+      // Sync the flag back into form so the banner stays accurate
+      if (response.data?.invoice) {
+        setForm((prev) => ({ ...prev, skipQuantityOnInbound: Boolean(response.data.invoice.skipQuantityOnInbound) }));
+      }
       setInboundDialogOpen(true);
     } catch (error: any) {
       console.error("Failed to load inbound review:", error);
@@ -2896,6 +2907,19 @@ function InvoiceTracker() {
         </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
+            {form.skipQuantityOnInbound && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, p: 1.5, bgcolor: "#fffbeb", border: "1px solid #f59e0b", borderRadius: 1 }}>
+                <Typography sx={{ fontSize: 18 }}>⚠️</Typography>
+                <Box>
+                  <Typography variant="body2" fontWeight={700} sx={{ color: "#92400e" }}>
+                    Record-Only Mode — Quantity Will Not Change
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: "#78350f" }}>
+                    Inbound history and pricing records will be saved, but product stock counts will not be updated for any row on this invoice.
+                  </Typography>
+                </Box>
+              </Box>
+            )}
             <Paper variant="outlined" sx={{ p: 2, bgcolor: "grey.50" }}>
               <Grid container spacing={2}>
                 <Grid item xs={12} md={3}>
@@ -3134,19 +3158,75 @@ function InvoiceTracker() {
       <Dialog
         open={startInboundConfirmOpen}
         onClose={() => {
-          if (!inboundLoading) setStartInboundConfirmOpen(false);
+          if (!inboundLoading) {
+            setStartInboundConfirmOpen(false);
+            setInboundSkipQty(false);
+          }
         }}
         maxWidth="sm"
         fullWidth
       >
         <DialogTitle>Start Inbound?</DialogTitle>
         <DialogContent dividers>
-          <Typography>
+          <Typography sx={{ mb: 2 }}>
             Once you start the inbounding process, you cannot edit the invoice. Are you sure you want to proceed?
           </Typography>
+          <Box sx={{ p: 2, border: "1px solid #e5e7eb", borderRadius: 1, bgcolor: "#f9fafb" }}>
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
+              Inventory Quantity
+            </Typography>
+            <Stack spacing={1}>
+              <Box
+                onClick={() => setInboundSkipQty(false)}
+                sx={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 1.5,
+                  p: 1.25,
+                  border: `2px solid ${!inboundSkipQty ? "#6366f1" : "#e5e7eb"}`,
+                  borderRadius: 1,
+                  cursor: "pointer",
+                  bgcolor: !inboundSkipQty ? "#eef2ff" : "transparent",
+                  transition: "all 0.15s",
+                }}
+              >
+                <Box sx={{ mt: 0.25, width: 16, height: 16, borderRadius: "50%", border: `2px solid ${!inboundSkipQty ? "#6366f1" : "#9ca3af"}`, bgcolor: !inboundSkipQty ? "#6366f1" : "transparent", flexShrink: 0 }} />
+                <Box>
+                  <Typography variant="body2" fontWeight={600}>Add to inventory quantity</Typography>
+                  <Typography variant="caption" color="text.secondary">Stock counts will increase for each inbounded SKU (standard behaviour)</Typography>
+                </Box>
+              </Box>
+              <Box
+                onClick={() => setInboundSkipQty(true)}
+                sx={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 1.5,
+                  p: 1.25,
+                  border: `2px solid ${inboundSkipQty ? "#f59e0b" : "#e5e7eb"}`,
+                  borderRadius: 1,
+                  cursor: "pointer",
+                  bgcolor: inboundSkipQty ? "#fffbeb" : "transparent",
+                  transition: "all 0.15s",
+                }}
+              >
+                <Box sx={{ mt: 0.25, width: 16, height: 16, borderRadius: "50%", border: `2px solid ${inboundSkipQty ? "#f59e0b" : "#9ca3af"}`, bgcolor: inboundSkipQty ? "#f59e0b" : "transparent", flexShrink: 0 }} />
+                <Box>
+                  <Typography variant="body2" fontWeight={600}>Record only — do not add to quantity</Typography>
+                  <Typography variant="caption" color="text.secondary">Inbound history and pricing records will be saved but stock counts will not change</Typography>
+                </Box>
+              </Box>
+            </Stack>
+          </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setStartInboundConfirmOpen(false)} disabled={inboundLoading}>
+          <Button
+            onClick={() => {
+              setStartInboundConfirmOpen(false);
+              setInboundSkipQty(false);
+            }}
+            disabled={inboundLoading}
+          >
             Cancel
           </Button>
           <Button
@@ -3154,7 +3234,8 @@ function InvoiceTracker() {
             color="secondary"
             onClick={async () => {
               setStartInboundConfirmOpen(false);
-              await openInboundDialog();
+              await openInboundDialog(inboundSkipQty);
+              setInboundSkipQty(false);
             }}
             disabled={inboundLoading}
           >
