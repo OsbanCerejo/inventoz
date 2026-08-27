@@ -50,6 +50,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
   const idleTimerRef = useRef<number | null>(null);
+  const userRoleRef = useRef<string | null>(null);
+  userRoleRef.current = user?.role ?? null;
 
   const clearIdleTimer = () => {
     if (idleTimerRef.current) {
@@ -60,7 +62,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const scheduleIdleLogout = (lastActivityAt: number) => {
     clearIdleTimer();
-    if (user?.role === "admin") return;
+    if (userRoleRef.current === "admin") return;
     const elapsed = Date.now() - lastActivityAt;
     const remaining = Math.max(IDLE_TIMEOUT_MS - elapsed, 0);
     idleTimerRef.current = window.setTimeout(() => {
