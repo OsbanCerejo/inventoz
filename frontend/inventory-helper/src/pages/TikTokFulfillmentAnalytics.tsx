@@ -335,6 +335,30 @@ interface FulfillmentSkuDetailResponse {
   }>;
 }
 
+interface BrandAnalyticsShowRow {
+  showId: number;
+  showName: string;
+  unitsSold: number;
+  revenue: number;
+  totalUnitsSold: number;
+  totalRevenue: number;
+  unitsPct: number;
+  revenuePct: number;
+}
+
+interface BrandAnalyticsResult {
+  brand: string;
+  byShow: BrandAnalyticsShowRow[];
+  totals: {
+    unitsSold: number;
+    revenue: number;
+    totalUnitsSold: number;
+    totalRevenue: number;
+    unitsPct: number;
+    revenuePct: number;
+  };
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const formatDateInput = (date: Date) => date.toISOString().slice(0, 10);
@@ -362,7 +386,7 @@ const riskColorMap: Record<FulfillmentInventoryExposureRow["riskBand"], string> 
   no_signal:"#607d8b",
 };
 
-const TAB_LABELS = ["Overview", "Sales", "Profitability", "Operations", "Fulfillment Velocity", "Geography", "Inventory", "Item Lookup", "Hourly Sales"];
+const TAB_LABELS = ["Overview", "Sales", "Profitability", "Operations", "Fulfillment Velocity", "Geography", "Inventory", "Item Lookup", "Hourly Sales", "Brand Analytics"];
 
 const SHOW_COLORS = ["#e91e63","#9c27b0","#3f51b5","#03a9f4","#009688","#8bc34a","#ff9800","#f44336"];
 
@@ -481,6 +505,15 @@ function TikTokFulfillmentAnalytics() {
   const [hourlyCombined, setHourlyCombined]           = useState<HourlyCombinedRow[]>([]);
   const [hourlyByShow, setHourlyByShow]               = useState<HourlyShowRow[]>([]);
   const [hourlyLoading, setHourlyLoading]             = useState(false);
+
+  // Brand analytics
+  const [brandSelectedShows, setBrandSelectedShows] = useState<TikTokShow[]>([]);
+  const [brandInput, setBrandInput]         = useState("");
+  const [brandStartDate, setBrandStartDate] = useState("");
+  const [brandEndDate, setBrandEndDate]     = useState("");
+  const [brandResult, setBrandResult]       = useState<BrandAnalyticsResult | null>(null);
+  const [brandLoading, setBrandLoading]     = useState(false);
+  const [brandError, setBrandError]         = useState<string | null>(null);
 
   // SKU lookup
   const [skuSearchInput, setSkuSearchInput] = useState("");
@@ -1766,6 +1799,124 @@ function TikTokFulfillmentAnalytics() {
     );
   };
 
+  const renderBrandAnalyticsTab = () => {
+    const fetchBrandAnalytics = async () => {
+      if (!brandInput.trim()) { setBrandError("Please enter a brand name."); return; }
+      if (brandSelectedShows.length === 0) { setBrandError("Please select at least one show."); return; }
+      setBrandLoading(true);
+      setBrandError(null);
+      setBrandResult(null);
+      try {
+        const params: Record<string, string> = {
+          showIds: brandSelectedShows.map(s => s.id).join(","),
+          brand: brandInput.trim(),
+        };
+        if (brandStartDate) params.startDate = brandStartDate;
+        if (brandEndDate)   params.endDate   = brandEndDate;
+        const r = await axios.get(getApiUrl("tiktok/analytics/brand-analytics"), { params });
+        setBrandResult(r.data);
+      } catch (e: any) {
+        setBrandError(e?.response?.data?.error || "Failed to fetch brand analytics.");
+      } finally {
+        setBrandLoading(false);
+      }
+    };
+
+    return (
+      <Stack spacing={3}>
+        <SectionCard title="Brand Analytics" icon={<BarChartIcon />}>
+          <Stack spacing={2}>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ sm: "center" }} flexWrap="wrap">
+              <Autocomplete
+                multiple
+                options={shows}
+                getOptionLabel={s => `#${s.id} — ${s.name}`}
+                value={brandSelectedShows}
+                onChange={(_, v) => setBrandSelectedShows(v)}
+                renderInput={params => <TextField {...params} label="Shows (by ID)" size="small" sx={{ minWidth: 280 }} />}
+                sx={{ minWidth: 280 }}
+              />
+              <TextField
+                label="Brand"
+                size="small"
+                value={brandInput}
+                onChange={e => setBrandInput(e.target.value)}
+                placeholder="e.g. MAH"
+                sx={{ minWidth: 160 }}
+              />
+              <TextField label="Start Date" type="date" size="small" value={brandStartDate}
+                onChange={e => setBrandStartDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ minWidth: 150 }} />
+              <TextField label="End Date" type="date" size="small" value={brandEndDate}
+                onChange={e => setBrandEndDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ minWidth: 150 }} />
+              <Button variant="contained" size="small" onClick={fetchBrandAnalytics} disabled={brandLoading}
+                sx={{ bgcolor: "#e91e63", "&:hover": { bgcolor: "#c2185b" } }}>
+                {brandLoading ? <CircularProgress size={16} sx={{ color: "#fff" }} /> : "Run"}
+              </Button>
+            </Stack>
+
+            {brandError && <Alert severity="error" onClose={() => setBrandError(null)}>{brandError}</Alert>}
+
+            {brandResult && (
+              <Stack spacing={2}>
+                {/* Totals summary */}
+                <Grid container spacing={2}>
+                  {[
+                    { label: "Units Sold (Brand)", value: formatNumber(brandResult.totals.unitsSold) },
+                    { label: "Revenue (Brand)",    value: formatCurrency(brandResult.totals.revenue) },
+                    { label: "Total Units (Shows)",value: formatNumber(brandResult.totals.totalUnitsSold) },
+                    { label: "Units %",            value: `${brandResult.totals.unitsPct}%` },
+                    { label: "Revenue %",          value: `${brandResult.totals.revenuePct}%` },
+                  ].map(({ label, value }) => (
+                    <Grid item xs={6} sm={4} md={2.4} key={label}>
+                      <KpiCard label={label} value={value} icon={<BarChartIcon />} color="#e91e63" />
+                    </Grid>
+                  ))}
+                </Grid>
+
+                {/* Per-show breakdown table */}
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: "#fce4ec" }}>
+                        <TableCell sx={{ fontWeight: 700, fontSize: "0.75rem" }}>Show</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.75rem" }}>Brand Units</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.75rem" }}>Brand Revenue</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.75rem" }}>Total Units</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.75rem" }}>Total Revenue</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.75rem" }}>Units %</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.75rem" }}>Revenue %</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {brandResult.byShow.map(row => (
+                        <TableRow key={row.showId} hover>
+                          <TableCell sx={{ fontSize: "0.75rem" }}>#{row.showId} — {row.showName}</TableCell>
+                          <TableCell align="right" sx={{ fontSize: "0.75rem" }}>{formatNumber(row.unitsSold)}</TableCell>
+                          <TableCell align="right" sx={{ fontSize: "0.75rem" }}>{formatCurrency(row.revenue)}</TableCell>
+                          <TableCell align="right" sx={{ fontSize: "0.75rem" }}>{formatNumber(row.totalUnitsSold)}</TableCell>
+                          <TableCell align="right" sx={{ fontSize: "0.75rem" }}>{formatCurrency(row.totalRevenue)}</TableCell>
+                          <TableCell align="right" sx={{ fontSize: "0.75rem", fontWeight: 600, color: "#e91e63" }}>{row.unitsPct}%</TableCell>
+                          <TableCell align="right" sx={{ fontSize: "0.75rem", fontWeight: 600, color: "#e91e63" }}>{row.revenuePct}%</TableCell>
+                        </TableRow>
+                      ))}
+                      {brandResult.byShow.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={7} align="center">
+                            <Typography variant="body2" color="text.secondary">No matched sales found for this brand in the selected shows.</Typography>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Stack>
+            )}
+          </Stack>
+        </SectionCard>
+      </Stack>
+    );
+  };
+
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -1837,6 +1988,7 @@ function TikTokFulfillmentAnalytics() {
         {activeTab === 6 && renderInventoryTab()}
         {activeTab === 7 && renderItemLookupTab()}
         {activeTab === 8 && renderHourlySalesTab()}
+        {activeTab === 9 && renderBrandAnalyticsTab()}
       </Box>
     </Box>
   );

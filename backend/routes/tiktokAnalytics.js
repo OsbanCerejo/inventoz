@@ -1440,5 +1440,135 @@ router.get("/fulfillment-hourly", auth, checkPermission("tiktokAnalytics", "view
   }
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// ENDPOINT: Brand Analytics — units sold, revenue, and % of show total
+// Query params: showIds (comma-separated), brand (partial match), startDate, endDate
+// ══════════════════════════════════════════════════════════════════════════════
+router.get("/brand-analytics", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
+  const { showIds: showIdsRaw, brand, startDate, endDate } = req.query;
+
+  if (!showIdsRaw) return res.status(400).json({ error: "showIds is required" });
+  if (!brand)     return res.status(400).json({ error: "brand is required" });
+
+  const showIds = String(showIdsRaw).split(",").map(s => Number(s.trim())).filter(n => !isNaN(n) && n > 0);
+  if (showIds.length === 0) return res.status(400).json({ error: "No valid showIds provided" });
+
+  const showIdPlaceholders = showIds.map(() => "?").join(",");
+
+  // Build optional date filter via EXISTS on shipmentItems.placedAt
+  let dateFilter = "";
+  const dateParams = [];
+  if (startDate && endDate) {
+    dateFilter = `
+      AND EXISTS (
+        SELECT 1 FROM ${TABLES.shipmentItems} _tsi
+        WHERE _tsi.tiktokShowId = tss.tiktokShowId
+          AND _tsi.importId     = tss.importId
+          AND _tsi.shipmentId   = tss.shipmentId
+          AND _tsi.placedAt >= ?
+          AND _tsi.placedAt  < ?
+      )`;
+    dateParams.push(startDate, endDate);
+  }
+
+  const fulfilledWhere = `
+    tss.result = 'matched'
+    AND tss.productSku IS NOT NULL AND tss.productSku <> ''
+    AND tss.previousQuantity IS NOT NULL
+    AND tss.newQuantity = tss.previousQuantity - 1
+  `;
+
+  try {
+    // Per-show breakdown for the selected brand
+    const brandRows = await sequelize.query(`
+      SELECT
+        tss.tiktokShowId                                        AS showId,
+        MAX(ts.name)                                            AS showName,
+        COUNT(*)                                                AS unitsSold,
+        COALESCE(SUM(COALESCE(tss.soldPrice, 0) / sc.sticker_scan_count), 0) AS revenue
+      FROM ${TABLES.shipmentScans} tss
+      JOIN ${TABLES.shows} ts ON ts.id = tss.tiktokShowId
+      JOIN ${TABLES.products} p ON p.sku COLLATE utf8mb4_unicode_ci = tss.productSku COLLATE utf8mb4_unicode_ci
+      JOIN ${TSS_STICKER_SCAN_COUNT} sc
+        ON sc.tiktokShowId = tss.tiktokShowId
+        AND sc.importId    = tss.importId
+        AND sc.shipmentId  = tss.shipmentId
+        AND sc.auctionStickerNumber = tss.auctionStickerNumber
+      WHERE ${fulfilledWhere}
+        AND tss.tiktokShowId IN (${showIdPlaceholders})
+        AND p.brand LIKE ?
+        ${dateFilter}
+      GROUP BY tss.tiktokShowId
+      ORDER BY revenue DESC
+    `, {
+      replacements: [...showIds, `%${brand}%`, ...dateParams],
+      type: sequelize.QueryTypes.SELECT,
+    });
+
+    // Total fulfilled scans per show (any brand) to compute brand %
+    const totalRows = await sequelize.query(`
+      SELECT
+        tss.tiktokShowId AS showId,
+        COUNT(*)         AS totalUnitsSold,
+        COALESCE(SUM(COALESCE(tss.soldPrice, 0) / sc.sticker_scan_count), 0) AS totalRevenue
+      FROM ${TABLES.shipmentScans} tss
+      JOIN ${TSS_STICKER_SCAN_COUNT} sc
+        ON sc.tiktokShowId = tss.tiktokShowId
+        AND sc.importId    = tss.importId
+        AND sc.shipmentId  = tss.shipmentId
+        AND sc.auctionStickerNumber = tss.auctionStickerNumber
+      WHERE ${fulfilledWhere}
+        AND tss.tiktokShowId IN (${showIdPlaceholders})
+        ${dateFilter}
+      GROUP BY tss.tiktokShowId
+    `, {
+      replacements: [...showIds, ...dateParams],
+      type: sequelize.QueryTypes.SELECT,
+    });
+
+    const totalMap = new Map(totalRows.map(r => [Number(r.showId), r]));
+
+    const byShow = brandRows.map(r => {
+      const showId = Number(r.showId);
+      const tot = totalMap.get(showId);
+      const unitsSold = Number(r.unitsSold || 0);
+      const revenue   = Number(Number(r.revenue || 0).toFixed(2));
+      const totalUnits   = tot ? Number(tot.totalUnitsSold || 0) : 0;
+      const totalRevenue = tot ? Number(Number(tot.totalRevenue || 0).toFixed(2)) : 0;
+      return {
+        showId,
+        showName: r.showName,
+        unitsSold,
+        revenue,
+        totalUnitsSold: totalUnits,
+        totalRevenue,
+        unitsPct:   totalUnits   > 0 ? Number((unitsSold / totalUnits   * 100).toFixed(1)) : 0,
+        revenuePct: totalRevenue > 0 ? Number((revenue   / totalRevenue * 100).toFixed(1)) : 0,
+      };
+    });
+
+    const grandUnitsSold    = byShow.reduce((a, r) => a + r.unitsSold, 0);
+    const grandRevenue      = byShow.reduce((a, r) => a + r.revenue,   0);
+    const grandTotalUnits   = byShow.reduce((a, r) => a + r.totalUnitsSold, 0);
+    const grandTotalRevenue = byShow.reduce((a, r) => a + r.totalRevenue,   0);
+
+    return res.json({
+      brand,
+      byShow,
+      totals: {
+        unitsSold:      grandUnitsSold,
+        revenue:        Number(grandRevenue.toFixed(2)),
+        totalUnitsSold: grandTotalUnits,
+        totalRevenue:   Number(grandTotalRevenue.toFixed(2)),
+        unitsPct:   grandTotalUnits   > 0 ? Number((grandUnitsSold  / grandTotalUnits   * 100).toFixed(1)) : 0,
+        revenuePct: grandTotalRevenue > 0 ? Number((grandRevenue    / grandTotalRevenue * 100).toFixed(1)) : 0,
+      },
+    });
+  } catch (err) {
+    console.error("TikTok brand-analytics error:", err);
+    return res.status(500).json({ error: "Failed to fetch brand analytics" });
+  }
+});
+
 module.exports = router;
 
