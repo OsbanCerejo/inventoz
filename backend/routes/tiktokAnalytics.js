@@ -14,6 +14,25 @@ const {
   User,
 } = require("../models");
 
+// ─── In-memory response cache (3-minute TTL) ────────────────────────────────────
+const _apiCache = new Map();
+const CACHE_TTL_MS = 3 * 60 * 1000;
+
+function cacheGet(key) {
+  const e = _apiCache.get(key);
+  if (!e) return null;
+  if (Date.now() > e.exp) { _apiCache.delete(key); return null; }
+  return e.data;
+}
+function cacheSet(key, data) {
+  if (_apiCache.size > 500) {
+    const cutoff = Date.now();
+    for (const [k, v] of _apiCache) { if (v.exp < cutoff) _apiCache.delete(k); }
+  }
+  _apiCache.set(key, { data, exp: Date.now() + CACHE_TTL_MS });
+}
+router.clearCache = () => _apiCache.clear();
+
 // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const toTableName = (model) => {
@@ -178,7 +197,7 @@ router.get("/fulfillment-overview", auth, checkPermission("tiktokAnalytics", "vi
       // Completed (fulfilled via scans) â€” drive from scans to avoid fan-out
       sequelize.query(`
         SELECT
-          COUNT(*)                                                          AS completedShipments,
+          COUNT(*)                                                          AS unitsSold,
           COUNT(DISTINCT tss.productSku)                                    AS uniqueSkusSold,
           COUNT(DISTINCT CONCAT(tss.tiktokShowId,':',tss.importId,':',tss.shipmentId)) AS uniqueShipments,
           COUNT(DISTINCT tss.tiktokShowId)                                  AS uniqueShows,
@@ -248,7 +267,8 @@ router.get("/fulfillment-overview", auth, checkPermission("tiktokAnalytics", "vi
     return res.json({
       revenue:                  Number(completedRow?.revenue               || 0),
       avgSoldPrice:             Number(Number(completedRow?.avgSoldPrice   || 0).toFixed(2)),
-      completedShipments:       Number(completedRow?.completedShipments    || 0),
+      unitsSold:                Number(completedRow?.unitsSold             || 0),
+      uniqueShipments:          Number(completedRow?.uniqueShipments       || 0),
       uniqueSkusSold:           Number(completedRow?.uniqueSkusSold        || 0),
       uniqueShows:              Number(completedRow?.uniqueShows           || 0),
       totalDiscounts:           Number(discountRow?.totalDiscounts         || 0),
@@ -286,7 +306,8 @@ router.get("/fulfillment-trend", auth, checkPermission("tiktokAnalytics", "view"
         ${bucketExpr} AS bucket,
         COUNT(*) AS unitsSold,
         COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue,
-        COUNT(DISTINCT CONCAT(tss.tiktokShowId,':',tss.importId,':',tss.shipmentId)) AS completedShipments
+        COUNT(DISTINCT CONCAT(tss.tiktokShowId,':',tss.importId,':',tss.shipmentId)) AS completedShipments,
+        ROUND(COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) / NULLIF(COUNT(DISTINCT CONCAT(tss.tiktokShowId,':',tss.importId,':',tss.shipmentId)),0), 2) AS avgOrderValue
       FROM ${TABLES.shipmentScans} tss
       JOIN ${TSI_ONE_PER_SHIPMENT} tsi
         ON tsi.tiktokShowId = tss.tiktokShowId
@@ -306,6 +327,7 @@ router.get("/fulfillment-trend", auth, checkPermission("tiktokAnalytics", "view"
       unitsSold:           Number(r.unitsSold           || 0),
       revenue:             Number(Number(r.revenue       || 0).toFixed(2)),
       completedShipments:  Number(r.completedShipments  || 0),
+      avgOrderValue:       Number(Number(r.avgOrderValue || 0).toFixed(2)),
     })));
   } catch (err) {
     console.error("TikTok trend error:", err);
@@ -390,7 +412,7 @@ router.get("/fulfillment-top-products", auth, checkPermission("tiktokAnalytics",
         COUNT(*)                                          AS unitsSold,
         COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue,
         COALESCE(AVG(NULLIF(tss.soldPrice,0) / sc.sticker_scan_count),0)          AS avgSoldPrice,
-        COALESCE(MIN(tss.soldPrice / sc.sticker_scan_count),0)                    AS lowestSoldPrice,
+        MIN(CASE WHEN tss.soldPrice > 0 THEN tss.soldPrice / sc.sticker_scan_count ELSE NULL END) AS lowestSoldPrice,
         COALESCE(MAX(tss.soldPrice / sc.sticker_scan_count),0)                    AS highestSoldPrice
       FROM ${TABLES.shipmentScans} tss
       LEFT JOIN ${TABLES.products} p
@@ -409,7 +431,7 @@ router.get("/fulfillment-top-products", auth, checkPermission("tiktokAnalytics",
       unitsSold:       Number(r.unitsSold       || 0),
       revenue:         Number(Number(r.revenue   || 0).toFixed(2)),
       avgSoldPrice:    Number(Number(r.avgSoldPrice || 0).toFixed(2)),
-      lowestSoldPrice: Number(Number(r.lowestSoldPrice || 0).toFixed(2)),
+      lowestSoldPrice: r.lowestSoldPrice != null ? Number(Number(r.lowestSoldPrice).toFixed(2)) : null,
       highestSoldPrice:Number(Number(r.highestSoldPrice|| 0).toFixed(2)),
     })));
   } catch (err) {
@@ -503,6 +525,10 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
   if (!range) return res.status(400).json({ error: "Invalid date range" });
   const showId = req.query.showId ? Number(req.query.showId) : null;
 
+  const ck = `profit-overview:${range.from}:${range.to}:${showId}`;
+  const hit = cacheGet(ck);
+  if (hit) return res.json(hit);
+
   try {
     const [rows] = await sequelize.query(`
       SELECT
@@ -536,6 +562,15 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
           ),
           0
         ) AS tiktokFees,
+
+        -- TikTok fees scoped to known-cost items only (matches netMarginAfterFees scope)
+        COALESCE(
+          SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
+            THEN (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
+               + (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / ss.shipment_scan_count)
+            ELSE 0 END),
+          0
+        ) AS knownCostTikTokFees,
 
         -- Net margin after fees
         COALESCE(
@@ -574,27 +609,31 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
     `, { replacements: { from: range.from, to: range.to, showId } });
 
     const r = rows[0] || {};
-    const totalRevenue       = Number(r.totalRevenue       || 0);
-    const grossMargin        = Number(r.grossMargin        || 0);
-    const tiktokFees         = Number(r.tiktokFees         || 0);
-    const netMarginAfterFees = Number(r.netMarginAfterFees || 0);
+    const totalRevenue        = Number(r.totalRevenue        || 0);
+    const grossMargin         = Number(r.grossMargin         || 0);
+    const tiktokFees          = Number(r.tiktokFees          || 0);
+    const knownCostTikTokFees = Number(r.knownCostTikTokFees || 0);
+    const netMarginAfterFees  = Number(r.netMarginAfterFees  || 0);
 
-    return res.json({
-      totalUnitsSold:       Number(r.totalUnitsSold       || 0),
-      totalRevenue:         Number(totalRevenue.toFixed(2)),
-      knownCostRevenue:     Number(Number(r.knownCostRevenue || 0).toFixed(2)),
-      knownCostUnits:       Number(r.knownCostUnits        || 0),
-      unknownCostRevenue:   Number(Number(r.unknownCostRevenue || 0).toFixed(2)),
-      unknownCostUnits:     Number(r.unknownCostUnits       || 0),
-      estimatedCost:        Number(Number(r.estimatedCost   || 0).toFixed(2)),
-      grossMargin:          Number(grossMargin.toFixed(2)),
-      grossMarginPct:       totalRevenue > 0 ? Number((grossMargin / totalRevenue * 100).toFixed(1)) : 0,
-      tiktokFees:           Number(tiktokFees.toFixed(2)),
-      netMarginAfterFees:   Number(netMarginAfterFees.toFixed(2)),
-      netMarginAfterFeesPct:totalRevenue > 0 ? Number((netMarginAfterFees / totalRevenue * 100).toFixed(1)) : 0,
-      negativeMarginUnits:  Number(r.negativeMarginUnits   || 0),
-      lowMarginUnits:       Number(r.lowMarginUnits         || 0),
-    });
+    const payload = {
+      totalUnitsSold:        Number(r.totalUnitsSold       || 0),
+      totalRevenue:          Number(totalRevenue.toFixed(2)),
+      knownCostRevenue:      Number(Number(r.knownCostRevenue || 0).toFixed(2)),
+      knownCostUnits:        Number(r.knownCostUnits        || 0),
+      unknownCostRevenue:    Number(Number(r.unknownCostRevenue || 0).toFixed(2)),
+      unknownCostUnits:      Number(r.unknownCostUnits       || 0),
+      estimatedCost:         Number(Number(r.estimatedCost   || 0).toFixed(2)),
+      grossMargin:           Number(grossMargin.toFixed(2)),
+      grossMarginPct:        totalRevenue > 0 ? Number((grossMargin / totalRevenue * 100).toFixed(1)) : 0,
+      tiktokFees:            Number(tiktokFees.toFixed(2)),
+      knownCostTikTokFees:   Number(knownCostTikTokFees.toFixed(2)),
+      netMarginAfterFees:    Number(netMarginAfterFees.toFixed(2)),
+      netMarginAfterFeesPct: totalRevenue > 0 ? Number((netMarginAfterFees / totalRevenue * 100).toFixed(1)) : 0,
+      negativeMarginUnits:   Number(r.negativeMarginUnits   || 0),
+      lowMarginUnits:        Number(r.lowMarginUnits         || 0),
+    };
+    cacheSet(ck, payload);
+    return res.json(payload);
   } catch (err) {
     console.error("TikTok profitability-overview error:", err);
     return res.status(500).json({ error: "Failed to fetch profitability overview" });
@@ -610,6 +649,10 @@ router.get("/fulfillment-profitability-shows", auth, checkPermission("tiktokAnal
   const showId = req.query.showId ? Number(req.query.showId) : null;
   const limit  = Math.min(Number(req.query.limit || 15), 50);
 
+  const ck = `profit-shows:${range.from}:${range.to}:${showId}:${limit}`;
+  const hit = cacheGet(ck);
+  if (hit) return res.json(hit);
+
   try {
     const rows = await sequelize.query(`
       SELECT
@@ -624,6 +667,10 @@ router.get("/fulfillment-profitability-shows", auth, checkPermission("tiktokAnal
           (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
           + (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / ss.shipment_scan_count)
         ),0) AS tiktokFees,
+        COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
+          THEN (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
+             + (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_PROCESSING_RATE} + ${TIKTOK_PROCESSING_FIXED} / ss.shipment_scan_count)
+          ELSE 0 END),0) AS knownCostTikTokFees,
         COALESCE(SUM(CASE WHEN vc.avgVendorCost IS NOT NULL
           THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost
              - (COALESCE(tss.soldPrice,0) / sc.sticker_scan_count * ${TIKTOK_COMMISSION_RATE})
@@ -642,21 +689,28 @@ router.get("/fulfillment-profitability-shows", auth, checkPermission("tiktokAnal
       LIMIT :limit
     `, { replacements: { from: range.from, to: range.to, showId, limit }, type: sequelize.QueryTypes.SELECT });
 
-    return res.json(rows.map(r => {
-      const knownCostRevenue  = Number(r.knownCostRevenue  || 0);
+    const result = rows.map(r => {
+      const revenue            = Number(r.revenue            || 0);
+      const knownCostRevenue   = Number(r.knownCostRevenue   || 0);
       const netMarginAfterFees = Number(r.netMarginAfterFees || 0);
+      // knownCostTikTokFees: fees attributable only to known-cost items, so columns reconcile
+      const knownCostTikTokFees = Number(r.knownCostTikTokFees || 0);
       return {
         ...r,
-        unitsSold:            Number(r.unitsSold           || 0),
-        revenue:              Number(Number(r.revenue      || 0).toFixed(2)),
-        knownCostRevenue:     Number(knownCostRevenue.toFixed(2)),
-        estimatedCost:        Number(Number(r.estimatedCost|| 0).toFixed(2)),
-        grossMargin:          Number(Number(r.grossMargin  || 0).toFixed(2)),
-        tiktokFees:           Number(Number(r.tiktokFees   || 0).toFixed(2)),
-        netMarginAfterFees:   Number(netMarginAfterFees.toFixed(2)),
-        netMarginAfterFeesPct:knownCostRevenue > 0 ? Number((netMarginAfterFees / knownCostRevenue * 100).toFixed(1)) : 0,
+        unitsSold:             Number(r.unitsSold            || 0),
+        revenue:               Number(revenue.toFixed(2)),
+        knownCostRevenue:      Number(knownCostRevenue.toFixed(2)),
+        estimatedCost:         Number(Number(r.estimatedCost || 0).toFixed(2)),
+        grossMargin:           Number(Number(r.grossMargin   || 0).toFixed(2)),
+        tiktokFees:            Number(Number(r.tiktokFees    || 0).toFixed(2)),
+        knownCostTikTokFees:   Number(knownCostTikTokFees.toFixed(2)),
+        netMarginAfterFees:    Number(netMarginAfterFees.toFixed(2)),
+        // Use total revenue as denominator so % is honest (suppressed when cost data is partial)
+        netMarginAfterFeesPct: revenue > 0 ? Number((netMarginAfterFees / revenue * 100).toFixed(1)) : 0,
       };
-    }));
+    });
+    cacheSet(ck, result);
+    return res.json(result);
   } catch (err) {
     console.error("TikTok profitability-shows error:", err);
     return res.status(500).json({ error: "Failed to fetch show profitability" });
@@ -671,6 +725,10 @@ router.get("/fulfillment-brand-profitability", auth, checkPermission("tiktokAnal
   if (!range) return res.status(400).json({ error: "Invalid date range" });
   const showId = req.query.showId ? Number(req.query.showId) : null;
   const limit  = Math.min(Number(req.query.limit || 15), 50);
+
+  const ck = `brand-profit:${range.from}:${range.to}:${showId}:${limit}`;
+  const hit = cacheGet(ck);
+  if (hit) return res.json(hit);
 
   try {
     const rows = await sequelize.query(`
@@ -694,17 +752,19 @@ router.get("/fulfillment-brand-profitability", auth, checkPermission("tiktokAnal
       LIMIT :limit
     `, { replacements: { from: range.from, to: range.to, showId, limit }, type: sequelize.QueryTypes.SELECT });
 
-    return res.json(rows.map(r => ({
+    const result = rows.map(r => ({
       ...r,
       unitsSold:        Number(r.unitsSold        || 0),
       revenue:          Number(Number(r.revenue    || 0).toFixed(2)),
       knownCostRevenue: Number(Number(r.knownCostRevenue || 0).toFixed(2)),
       estimatedCost:    Number(Number(r.estimatedCost    || 0).toFixed(2)),
       grossMargin:      Number(Number(r.grossMargin      || 0).toFixed(2)),
-      grossMarginPct:   Number(r.knownCostRevenue) > 0
-        ? Number((Number(r.grossMargin) / Number(r.knownCostRevenue) * 100).toFixed(1)) : 0,
+      grossMarginPct:   Number(r.revenue) > 0
+        ? Number((Number(r.grossMargin) / Number(r.revenue) * 100).toFixed(1)) : 0,
       unknownCostUnits: Number(r.unknownCostUnits || 0),
-    })));
+    }));
+    cacheSet(ck, result);
+    return res.json(result);
   } catch (err) {
     console.error("TikTok brand-profitability error:", err);
     return res.status(500).json({ error: "Failed to fetch brand profitability" });
@@ -736,10 +796,12 @@ router.get("/fulfillment-review-queue", auth, checkPermission("tiktokAnalytics",
         JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
           ON sc.tiktokShowId = tsi.tiktokShowId AND sc.importId = tsi.importId AND sc.shipmentId = tsi.shipmentId
         WHERE tsi.status = 'pending_review'
+          AND tsi.placedAt >= :from
+          AND tsi.placedAt  < :to
           AND (:showId IS NULL OR tsi.tiktokShowId = :showId)
         GROUP BY ageBucket
         ORDER BY MIN(DATEDIFF(NOW(), sc.closedAt)) ASC
-      `, { replacements: { showId }, type: sequelize.QueryTypes.SELECT }),
+      `, { replacements: { from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
 
       sequelize.query(`
         SELECT
@@ -747,11 +809,13 @@ router.get("/fulfillment-review-queue", auth, checkPermission("tiktokAnalytics",
           COUNT(DISTINCT CONCAT(tsi.tiktokShowId,':',tsi.importId,':',tsi.shipmentId)) AS shipmentCount
         FROM ${TABLES.shipmentItems} tsi
         WHERE tsi.status = 'pending_review'
+          AND tsi.placedAt >= :from
+          AND tsi.placedAt  < :to
           AND (:showId IS NULL OR tsi.tiktokShowId = :showId)
         GROUP BY COALESCE(tsi.mismatchReason,'Unknown')
         ORDER BY shipmentCount DESC
         LIMIT 10
-      `, { replacements: { showId }, type: sequelize.QueryTypes.SELECT }),
+      `, { replacements: { from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
 
       sequelize.query(`
         SELECT
@@ -770,11 +834,13 @@ router.get("/fulfillment-review-queue", auth, checkPermission("tiktokAnalytics",
         JOIN ${SHIPMENT_CLOSE_SUMMARY_SUBQUERY} sc
           ON sc.tiktokShowId = tsi.tiktokShowId AND sc.importId = tsi.importId AND sc.shipmentId = tsi.shipmentId
         WHERE tsi.status = 'pending_review'
+          AND tsi.placedAt >= :from
+          AND tsi.placedAt  < :to
           AND (:showId IS NULL OR tsi.tiktokShowId = :showId)
         GROUP BY tsi.tiktokShowId, tsi.importId, tsi.shipmentId
         ORDER BY ageDays DESC
         LIMIT 50
-      `, { replacements: { showId }, type: sequelize.QueryTypes.SELECT }),
+      `, { replacements: { from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
     ]);
 
     return res.json({
@@ -796,6 +862,10 @@ router.get("/fulfillment-inventory-exposure", auth, checkPermission("tiktokAnaly
   if (!range) return res.status(400).json({ error: "Invalid date range" });
   const showId = req.query.showId ? Number(req.query.showId) : null;
   const limit  = Math.min(Number(req.query.limit || 100), 500);
+
+  const ck = `inventory-exposure:${range.from}:${range.to}:${showId}:${limit}`;
+  const hit = cacheGet(ck);
+  if (hit) return res.json(hit);
 
   try {
     const rows = await sequelize.query(`
@@ -835,7 +905,7 @@ router.get("/fulfillment-inventory-exposure", auth, checkPermission("tiktokAnaly
       LIMIT :limit
     `, { replacements: { from: range.from, to: range.to, showId, limit }, type: sequelize.QueryTypes.SELECT });
 
-    return res.json(rows.map(r => ({
+    const result = rows.map(r => ({
       ...r,
       currentQty:       Number(r.currentQty       || 0),
       unitsSold:        Number(r.unitsSold         || 0),
@@ -844,7 +914,9 @@ router.get("/fulfillment-inventory-exposure", auth, checkPermission("tiktokAnaly
       grossMargin:      r.grossMargin  !== null ? Number(Number(r.grossMargin).toFixed(2)) : null,
       unknownCostUnits: Number(r.unknownCostUnits  || 0),
       minimumQuantity:  r.minimumQuantity !== null ? Number(r.minimumQuantity) : null,
-    })));
+    }));
+    cacheSet(ck, result);
+    return res.json(result);
   } catch (err) {
     console.error("TikTok inventory-exposure error:", err);
     return res.status(500).json({ error: "Failed to fetch inventory exposure" });
@@ -908,7 +980,7 @@ router.get("/fulfillment-velocity", auth, checkPermission("tiktokAnalytics", "vi
       ORDER BY MIN(TIMESTAMPDIFF(HOUR, tsi.placedAt, tsi.shippedAt)) ASC
     `, { replacements: { from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT });
 
-    const s = summary[0][0] || {};
+    const s = summary[0] || {};
     return res.json({
       totalOrders:              Number(s.totalOrders              || 0),
       avgDaysPlacedToPaid:      s.avgDaysPlacedToPaid      != null ? Number(s.avgDaysPlacedToPaid)      : null,
@@ -1208,7 +1280,7 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
           COUNT(*) AS unitsSold,
           COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue,
           COALESCE(AVG(NULLIF(tss.soldPrice,0) / sc.sticker_scan_count),0)          AS avgSoldPrice,
-          COALESCE(MIN(tss.soldPrice / sc.sticker_scan_count),0)                    AS lowestSoldPrice,
+          MIN(CASE WHEN tss.soldPrice > 0 THEN tss.soldPrice / sc.sticker_scan_count ELSE NULL END) AS lowestSoldPrice,
           COALESCE(MAX(tss.soldPrice / sc.sticker_scan_count),0)                    AS highestSoldPrice,
           COUNT(DISTINCT tss.tiktokShowId)           AS uniqueShows,
           COUNT(DISTINCT CONCAT(tss.tiktokShowId,':',tss.importId,':',tss.shipmentId)) AS uniqueShipments,
@@ -1329,7 +1401,7 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
         unitsSold:         Number(s.unitsSold         || 0),
         revenue:           Number(Number(s.revenue     || 0).toFixed(2)),
         avgSoldPrice:      Number(Number(s.avgSoldPrice|| 0).toFixed(2)),
-        lowestSoldPrice:   Number(Number(s.lowestSoldPrice  || 0).toFixed(2)),
+        lowestSoldPrice:   s.lowestSoldPrice != null ? Number(Number(s.lowestSoldPrice).toFixed(2)) : null,
         highestSoldPrice:  Number(Number(s.highestSoldPrice || 0).toFixed(2)),
         uniqueShows:       Number(s.uniqueShows        || 0),
         uniqueShipments:   Number(s.uniqueShipments    || 0),
@@ -1567,6 +1639,59 @@ router.get("/brand-analytics", auth, checkPermission("tiktokAnalytics", "view"),
   } catch (err) {
     console.error("TikTok brand-analytics error:", err);
     return res.status(500).json({ error: "Failed to fetch brand analytics" });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// ENDPOINT: Negative margin items
+// ════════════════════════════════════════════════════════════════════════════
+router.get("/fulfillment-negative-margin-items", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) return res.status(400).json({ error: "Invalid date range" });
+  const showId = req.query.showId ? Number(req.query.showId) : null;
+  const limit  = Math.min(Number(req.query.limit || 25), 100);
+
+  const ck = `negative-margin:${range.from}:${range.to}:${showId}:${limit}`;
+  const hit = cacheGet(ck);
+  if (hit) return res.json(hit);
+
+  try {
+    const rows = await sequelize.query(`
+      SELECT
+        tss.productSku                                                       AS sku,
+        MAX(p.brand)                                                         AS brand,
+        MAX(p.itemName)                                                      AS itemName,
+        COUNT(*)                                                             AS unitsSoldAtLoss,
+        ROUND(AVG(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count), 2)    AS avgSoldPrice,
+        ROUND(AVG(vc.avgVendorCost), 2)                                      AS avgVendorCost,
+        ROUND(AVG(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost), 2) AS avgNetLossPerUnit,
+        ROUND(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost), 2) AS totalNetLoss
+      FROM ${TABLES.shipmentScans} tss
+      LEFT JOIN ${TABLES.products} p ON ${skuJoinCondition("p.sku","tss.productSku")}
+      JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku","tss.productSku")}
+      JOIN ${TSS_STICKER_SCAN_COUNT} sc ON sc.tiktokShowId=tss.tiktokShowId AND sc.importId=tss.importId AND sc.shipmentId=tss.shipmentId AND sc.auctionStickerNumber=tss.auctionStickerNumber
+      WHERE ${fulfilledSaleCondition("tss")}
+        AND ${tsiExistsDateFilter("tss")}
+        AND (:showId IS NULL OR tss.tiktokShowId = :showId)
+        AND COALESCE(tss.soldPrice,0) / sc.sticker_scan_count < vc.avgVendorCost
+      GROUP BY tss.productSku
+      ORDER BY totalNetLoss ASC
+      LIMIT :limit
+    `, { replacements: { from: range.from, to: range.to, showId, limit }, type: sequelize.QueryTypes.SELECT });
+
+    const result = rows.map(r => ({
+      ...r,
+      unitsSoldAtLoss:  Number(r.unitsSoldAtLoss  || 0),
+      avgSoldPrice:     Number(Number(r.avgSoldPrice    || 0).toFixed(2)),
+      avgVendorCost:    Number(Number(r.avgVendorCost   || 0).toFixed(2)),
+      avgNetLossPerUnit: Number(Number(r.avgNetLossPerUnit || 0).toFixed(2)),
+      totalNetLoss:     Number(Number(r.totalNetLoss    || 0).toFixed(2)),
+    }));
+    cacheSet(ck, result);
+    return res.json(result);
+  } catch (err) {
+    console.error("TikTok negative-margin-items error:", err);
+    return res.status(500).json({ error: "Failed to fetch negative margin items" });
   }
 });
 

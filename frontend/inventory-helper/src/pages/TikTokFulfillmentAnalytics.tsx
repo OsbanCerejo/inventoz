@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
   Alert,
@@ -81,7 +81,8 @@ interface TikTokShow {
 interface FulfillmentOverviewData {
   revenue: number;
   avgSoldPrice: number;
-  completedShipments: number;
+  unitsSold: number;
+  uniqueShipments: number;
   uniqueSkusSold: number;
   uniqueShows: number;
   totalDiscounts: number;
@@ -98,6 +99,18 @@ interface FulfillmentTrendRow {
   unitsSold: number;
   revenue: number;
   completedShipments: number;
+  avgOrderValue: number;
+}
+
+interface FulfillmentNegativeMarginRow {
+  sku: string;
+  brand: string;
+  itemName: string;
+  unitsSoldAtLoss: number;
+  avgSoldPrice: number;
+  avgVendorCost: number;
+  avgNetLossPerUnit: number;
+  totalNetLoss: number;
 }
 
 interface FulfillmentShowRow {
@@ -116,18 +129,12 @@ interface FulfillmentTopProduct {
   unitsSold: number;
   revenue: number;
   avgSoldPrice: number;
-  lowestSoldPrice: number;
+  lowestSoldPrice: number | null;
   highestSoldPrice: number;
 }
 
 interface FulfillmentBrandMixRow {
   brand: string;
-  unitsSold: number;
-  revenue: number;
-}
-
-interface FulfillmentSalesMixRow {
-  contextType: string;
   unitsSold: number;
   revenue: number;
 }
@@ -143,6 +150,7 @@ interface FulfillmentProfitabilityOverview {
   grossMargin: number;
   grossMarginPct: number;
   tiktokFees: number;
+  knownCostTikTokFees: number;
   netMarginAfterFees: number;
   netMarginAfterFeesPct: number;
   negativeMarginUnits: number;
@@ -158,6 +166,7 @@ interface FulfillmentProfitabilityShowRow {
   estimatedCost: number;
   grossMargin: number;
   tiktokFees: number;
+  knownCostTikTokFees: number;
   netMarginAfterFees: number;
   netMarginAfterFeesPct: number;
 }
@@ -308,7 +317,7 @@ interface FulfillmentSkuDetailResponse {
     unitsSold: number;
     revenue: number;
     avgSoldPrice: number;
-    lowestSoldPrice: number;
+    lowestSoldPrice: number | null;
     highestSoldPrice: number;
     uniqueShows: number;
     uniqueShipments: number;
@@ -483,7 +492,7 @@ function TikTokFulfillmentAnalytics() {
   const [showsPerf, setShowsPerf]       = useState<FulfillmentShowRow[]>([]);
   const [topProducts, setTopProducts]   = useState<FulfillmentTopProduct[]>([]);
   const [brandMix, setBrandMix]         = useState<FulfillmentBrandMixRow[]>([]);
-  const [, setSalesMix]                 = useState<FulfillmentSalesMixRow[]>([]);
+  const [negativeMarginItems, setNegativeMarginItems] = useState<FulfillmentNegativeMarginRow[]>([]);
   const [profitOverview, setProfitOverview] = useState<FulfillmentProfitabilityOverview | null>(null);
   const [profitShows, setProfitShows]   = useState<FulfillmentProfitabilityShowRow[]>([]);
   const [brandProfitability, setBrandProfitability] = useState<FulfillmentBrandProfitabilityRow[]>([]);
@@ -526,6 +535,9 @@ function TikTokFulfillmentAnalytics() {
   const [loading, setLoading]           = useState(false);
   const [error, setError]               = useState<string | null>(null);
 
+  // Track which tab groups have been loaded for the current params
+  const loadedGroupsRef = useRef<Set<string>>(new Set());
+
   const params = useMemo(
     () => ({ from: fromDate, to: toDate, showId: selectedShowId ? Number(selectedShowId) : undefined, limit: 25 }),
     [fromDate, toDate, selectedShowId]
@@ -538,80 +550,98 @@ function TikTokFulfillmentAnalytics() {
       .catch(e => console.error("Failed to load TikTok shows:", e));
   }, []);
 
-  // Load all main data
+  // Core group: overview + sales tabs (always load on params change)
   useEffect(() => {
-    const fetchAll = async () => {
+    loadedGroupsRef.current = new Set(); // reset on params change
+    const fetchCore = async () => {
       setLoading(true);
       setError(null);
-      const results = await Promise.allSettled([
+      const [overviewR, showsR, topProductsR, brandMixR] = await Promise.allSettled([
         axios.get(getApiUrl("tiktok/analytics/fulfillment-overview"), { params }),
         axios.get(getApiUrl("tiktok/analytics/fulfillment-by-show"), { params }),
         axios.get(getApiUrl("tiktok/analytics/fulfillment-top-products"), { params }),
         axios.get(getApiUrl("tiktok/analytics/fulfillment-brand-mix"), { params: { ...params, limit: 12 } }),
-        axios.get(getApiUrl("tiktok/analytics/fulfillment-sales-mix"), { params }),
-        axios.get(getApiUrl("tiktok/analytics/fulfillment-profitability-overview"), { params }),
-        axios.get(getApiUrl("tiktok/analytics/fulfillment-profitability-shows"), { params: { ...params, limit: 10 } }),
-        axios.get(getApiUrl("tiktok/analytics/fulfillment-brand-profitability"), { params: { ...params, limit: 15 } }),
-        axios.get(getApiUrl("tiktok/analytics/fulfillment-review-queue"), { params: { showId: params.showId } }),
-        axios.get(getApiUrl("tiktok/analytics/fulfillment-velocity"), { params }),
-        axios.get(getApiUrl("tiktok/analytics/fulfillment-shipping-providers"), { params }),
-        axios.get(getApiUrl("tiktok/analytics/fulfillment-delivery-options"), { params }),
-        axios.get(getApiUrl("tiktok/analytics/fulfillment-payment-methods"), { params }),
-        axios.get(getApiUrl("tiktok/analytics/fulfillment-by-state"), { params }),
-        axios.get(getApiUrl("tiktok/analytics/fulfillment-by-city"), { params }),
-        axios.get(getApiUrl("tiktok/analytics/fulfillment-discount-impact"), { params }),
-        axios.get(getApiUrl("tiktok/analytics/fulfillment-inventory-exposure"), { params: { ...params, limit: 100 } }),
       ]);
+      if (overviewR.status    === "fulfilled") setOverview(overviewR.value.data);
+      if (showsR.status       === "fulfilled") setShowsPerf(showsR.value.data || []);
+      if (topProductsR.status === "fulfilled") setTopProducts(topProductsR.value.data || []);
+      if (brandMixR.status    === "fulfilled") setBrandMix(brandMixR.value.data || []);
+      const failed = [
+        { name: "overview",    result: overviewR },
+        { name: "by-show",     result: showsR },
+        { name: "top-products",result: topProductsR },
+      ].filter(e => e.result.status === "rejected");
+      if (failed.length) setError(`Some panels failed to load: ${failed.map(f => f.name).join(", ")}.`);
+      setLoading(false);
+      loadedGroupsRef.current.add("core");
+    };
+    fetchCore();
+  }, [params]);
 
-      const [
-        overviewR, showsR, topProductsR, brandMixR, salesMixR,
-        profitOverviewR, profitShowsR, brandProfitR,
-        reviewQueueR, velocityR, shippingR, deliveryR, paymentR,
-        stateR, cityR, discountR, inventoryR,
-      ] = results;
-
-      if (overviewR.status      === "fulfilled") setOverview(overviewR.value.data);
-      if (showsR.status         === "fulfilled") setShowsPerf(showsR.value.data || []);
-      if (topProductsR.status   === "fulfilled") setTopProducts(topProductsR.value.data || []);
-      if (brandMixR.status      === "fulfilled") setBrandMix(brandMixR.value.data || []);
-      if (salesMixR.status      === "fulfilled") setSalesMix(salesMixR.value.data || []);
+  // Profitability tab (tab 2)
+  useEffect(() => {
+    if (activeTab !== 2 || loadedGroupsRef.current.has("profitability")) return;
+    loadedGroupsRef.current.add("profitability");
+    Promise.allSettled([
+      axios.get(getApiUrl("tiktok/analytics/fulfillment-profitability-overview"), { params }),
+      axios.get(getApiUrl("tiktok/analytics/fulfillment-profitability-shows"), { params: { ...params, limit: 10 } }),
+      axios.get(getApiUrl("tiktok/analytics/fulfillment-brand-profitability"), { params: { ...params, limit: 15 } }),
+      axios.get(getApiUrl("tiktok/analytics/fulfillment-discount-impact"), { params }),
+      axios.get(getApiUrl("tiktok/analytics/fulfillment-negative-margin-items"), { params: { ...params, limit: 25 } }),
+    ]).then(([profitOverviewR, profitShowsR, brandProfitR, discountR, negMarginR]) => {
       if (profitOverviewR.status === "fulfilled") setProfitOverview(profitOverviewR.value.data || null);
       if (profitShowsR.status   === "fulfilled") setProfitShows(profitShowsR.value.data || []);
       if (brandProfitR.status   === "fulfilled") setBrandProfitability(brandProfitR.value.data || []);
-      if (reviewQueueR.status   === "fulfilled") {
+      if (discountR.status      === "fulfilled") setDiscountImpact(discountR.value.data || []);
+      if (negMarginR.status     === "fulfilled") setNegativeMarginItems(negMarginR.value.data || []);
+    });
+  }, [activeTab, params]);
+
+  // Operations tab (tab 3)
+  useEffect(() => {
+    if (activeTab !== 3 || loadedGroupsRef.current.has("operations")) return;
+    loadedGroupsRef.current.add("operations");
+    Promise.allSettled([
+      axios.get(getApiUrl("tiktok/analytics/fulfillment-review-queue"), { params: { showId: params.showId } }),
+      axios.get(getApiUrl("tiktok/analytics/fulfillment-velocity"), { params }),
+      axios.get(getApiUrl("tiktok/analytics/fulfillment-shipping-providers"), { params }),
+      axios.get(getApiUrl("tiktok/analytics/fulfillment-delivery-options"), { params }),
+      axios.get(getApiUrl("tiktok/analytics/fulfillment-payment-methods"), { params }),
+    ]).then(([reviewQueueR, velocityR, shippingR, deliveryR, paymentR]) => {
+      if (reviewQueueR.status === "fulfilled") {
         const d = reviewQueueR.value.data || {};
         setReviewAging(d.aging || []);
         setReviewReasons(d.reasons || []);
         setReviewShipments(d.shipments || []);
       }
-      if (velocityR.status      === "fulfilled") setVelocity(velocityR.value.data || null);
-      if (shippingR.status      === "fulfilled") setShippingProviders(shippingR.value.data || []);
-      if (deliveryR.status      === "fulfilled") setDeliveryOptions(deliveryR.value.data || []);
-      if (paymentR.status       === "fulfilled") setPaymentMethods(paymentR.value.data || []);
-      if (stateR.status         === "fulfilled") setByState(stateR.value.data || []);
-      if (cityR.status          === "fulfilled") setByCity(cityR.value.data || []);
-      if (discountR.status      === "fulfilled") setDiscountImpact(discountR.value.data || []);
-      if (inventoryR.status     === "fulfilled") setInventoryExposure(inventoryR.value.data || []);
+      if (velocityR.status  === "fulfilled") setVelocity(velocityR.value.data || null);
+      if (shippingR.status  === "fulfilled") setShippingProviders(shippingR.value.data || []);
+      if (deliveryR.status  === "fulfilled") setDeliveryOptions(deliveryR.value.data || []);
+      if (paymentR.status   === "fulfilled") setPaymentMethods(paymentR.value.data || []);
+    });
+  }, [activeTab, params]);
 
-      const failed = [
-        { name: "overview",             result: overviewR },
-        { name: "by-show",              result: showsR },
-        { name: "top-products",         result: topProductsR },
-        { name: "brand-mix",            result: brandMixR },
-        { name: "profitability-overview", result: profitOverviewR },
-        { name: "review-queue",         result: reviewQueueR },
-        { name: "velocity",             result: velocityR },
-        { name: "shipping-providers",   result: shippingR },
-        { name: "by-state",             result: stateR },
-        { name: "inventory",            result: inventoryR },
-      ].filter(e => e.result.status === "rejected");
+  // Geography tab (tab 5)
+  useEffect(() => {
+    if (activeTab !== 5 || loadedGroupsRef.current.has("geography")) return;
+    loadedGroupsRef.current.add("geography");
+    Promise.allSettled([
+      axios.get(getApiUrl("tiktok/analytics/fulfillment-by-state"), { params }),
+      axios.get(getApiUrl("tiktok/analytics/fulfillment-by-city"), { params }),
+    ]).then(([stateR, cityR]) => {
+      if (stateR.status === "fulfilled") setByState(stateR.value.data || []);
+      if (cityR.status  === "fulfilled") setByCity(cityR.value.data || []);
+    });
+  }, [activeTab, params]);
 
-      if (failed.length) setError(`Some panels failed to load: ${failed.map(f => f.name).join(", ")}.`);
-      setLoading(false);
-    };
-
-    fetchAll();
-  }, [params]);
+  // Inventory tab (tab 6)
+  useEffect(() => {
+    if (activeTab !== 6 || loadedGroupsRef.current.has("inventory")) return;
+    loadedGroupsRef.current.add("inventory");
+    axios.get(getApiUrl("tiktok/analytics/fulfillment-inventory-exposure"), { params: { ...params, limit: 100 } })
+      .then(r => setInventoryExposure(r.data || []))
+      .catch(() => {});
+  }, [activeTab, params]);
 
   // Trend (separate — has own granularity param)
   useEffect(() => {
@@ -675,15 +705,17 @@ function TikTokFulfillmentAnalytics() {
 
   const waterfallData = useMemo(() => {
     if (!profitOverview) return [];
+    // Use known-cost scoped values throughout so bars reconcile:
+    // knownCostRevenue - estimatedCost - knownCostTikTokFees = netMarginAfterFees
     const rev  = profitOverview.knownCostRevenue;
     const cost = profitOverview.estimatedCost;
-    const fees = profitOverview.tiktokFees;
+    const fees = profitOverview.knownCostTikTokFees ?? (profitOverview.tiktokFees * (rev / (profitOverview.totalRevenue || 1)));
     const net  = profitOverview.netMarginAfterFees;
     return [
-      { name: "Revenue",     base: 0,              val: rev,        fill: "#4caf50" },
-      { name: "- COGS",      base: rev - cost,     val: cost,       fill: "#e53935" },
-      { name: "- TikTok Fees",base: rev - cost - fees, val: fees,   fill: "#fb8c00" },
-      { name: "Net Margin",  base: 0,              val: net,        fill: net >= 0 ? "#1976d2" : "#c62828" },
+      { name: "Revenue (known-cost)",   base: 0,              val: rev,        fill: "#4caf50" },
+      { name: "- COGS",                 base: rev - cost,     val: cost,       fill: "#e53935" },
+      { name: "- TikTok Fees",          base: rev - cost - fees, val: fees,    fill: "#fb8c00" },
+      { name: "Net Margin",             base: 0,              val: net,        fill: net >= 0 ? "#1976d2" : "#c62828" },
     ];
   }, [profitOverview]);
 
@@ -693,7 +725,7 @@ function TikTokFulfillmentAnalytics() {
   );
 
   const profitabilityScatterData = useMemo(() =>
-    profitShows.map(s => ({ showName: truncate(s.showName, 20), revenue: s.knownCostRevenue, marginPct: s.netMarginAfterFeesPct, unitsSold: s.unitsSold })),
+    profitShows.map(s => ({ showName: truncate(s.showName, 20), revenue: s.revenue, marginPct: s.netMarginAfterFeesPct, unitsSold: s.unitsSold })),
     [profitShows]
   );
 
@@ -747,8 +779,8 @@ function TikTokFulfillmentAnalytics() {
         {/* KPI row */}
         <Grid container spacing={2}>
           {[
-            { label: "Revenue", value: formatCurrency(ov?.revenue), icon: <AttachMoneyIcon />, subtext: `${formatNumber(ov?.completedShipments)} total items sold` },
-            { label: "Avg Sold Price", value: formatCurrency(ov?.avgSoldPrice), icon: <LocalOfferIcon />, subtext: `${formatNumber(ov?.uniqueSkusSold)} unique SKUs` },
+            { label: "Revenue", value: formatCurrency(ov?.revenue), icon: <AttachMoneyIcon />, subtext: `${formatNumber(ov?.unitsSold)} items · ${formatNumber(ov?.uniqueShipments)} orders` },
+            { label: "Avg Item Price", value: formatCurrency(ov?.avgSoldPrice), icon: <LocalOfferIcon />, subtext: `${formatNumber(ov?.uniqueSkusSold)} unique SKUs` },
             { label: "Pending Shipments", value: formatNumber(ov?.pendingShipments), icon: <HourglassEmptyIcon />, color: "#f57c00", subtext: `${formatCurrency(ov?.pendingRevenue)} at risk` },
             { label: "Under Review", value: formatNumber(ov?.reviewShipments), icon: <ErrorOutlineIcon />, color: "#d32f2f", subtext: `${formatCurrency(ov?.reviewRevenue)} affected` },
             { label: "Total Discounts", value: formatCurrency(ov?.totalDiscounts), icon: <LocalOfferIcon />, color: "#7b1fa2", subtext: "discount given to buyers" },
@@ -778,11 +810,12 @@ function TikTokFulfillmentAnalytics() {
               <YAxis yAxisId="left" tickFormatter={kFormatter} tick={{ fontSize: 11 }} />
               <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
               <RechartsTooltip formatter={((v: number, name: string) => [
-                name === "Revenue" ? formatCurrency(v) : formatNumber(v), name,
+                name === "Revenue" || name === "Avg Order Value" ? formatCurrency(v) : formatNumber(v), name,
               ]) as any} labelFormatter={l => formatTick(String(l), trendGranularity)} />
               <Legend />
               <Area yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" fill="#fce4ec" stroke="#e91e63" strokeWidth={2} fillOpacity={0.5} />
               <Bar yAxisId="right" dataKey="unitsSold" name="Units Sold" fill="#9c27b0" opacity={0.7} />
+              <Line yAxisId="left" type="monotone" dataKey="avgOrderValue" name="Avg Order Value" stroke="#0288d1" strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </SectionCard>
@@ -840,12 +873,12 @@ function TikTokFulfillmentAnalytics() {
 
         {/* Revenue vs ASP scatter */}
         <Grid item xs={12} md={6}>
-          <SectionCard title="Revenue vs Avg Sold Price by Show" icon={<ShowChartIcon />} minHeight={320}>
+          <SectionCard title="Revenue vs Avg Item Price by Show" icon={<ShowChartIcon />} minHeight={320}>
             <ResponsiveContainer width="100%" height={320}>
               <ScatterChart margin={{ top: 10, right: 20, left: 0, bottom: 30 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="revenue" name="Revenue" tickFormatter={kFormatter} label={{ value: "Revenue", position: "insideBottom", offset: -10, fontSize: 11 }} tick={{ fontSize: 10 }} />
-                <YAxis dataKey="avgSoldPrice" name="Avg Sold Price" tickFormatter={v => `$${v}`} tick={{ fontSize: 10 }} />
+                <YAxis dataKey="avgSoldPrice" name="Avg Item Price" tickFormatter={v => `$${v}`} tick={{ fontSize: 10 }} />
                 <RechartsTooltip cursor={{ strokeDasharray: "3 3" }} content={({ payload }) => {
                   if (!payload?.length) return null;
                   const d = payload[0].payload;
@@ -916,16 +949,27 @@ function TikTokFulfillmentAnalytics() {
 
   const renderProfitabilityTab = () => {
     const po = profitOverview;
+    const coveragePct = po && po.totalRevenue > 0
+      ? Math.round((po.knownCostRevenue / po.totalRevenue) * 100) : null;
+    const unknownRevenue = po ? po.unknownCostRevenue : 0;
 
     return (
       <Stack spacing={3}>
+        {/* Cost coverage warning */}
+        {coveragePct !== null && coveragePct < 100 && (
+          <Alert severity="warning" icon={<WarningAmberIcon />}>
+            <strong>{100 - coveragePct}% of revenue ({formatCurrency(unknownRevenue)}) has no cost data</strong>
+            {" "}— margin figures reflect known-cost items only. Assign vendor costs to the missing SKUs for full accuracy.
+          </Alert>
+        )}
+
         {/* Profitability KPIs */}
         <Grid container spacing={2}>
           {[
             { label: "Known-Cost Revenue", value: formatCurrency(po?.knownCostRevenue), icon: <AttachMoneyIcon />, subtext: `${formatNumber(po?.knownCostUnits)} units with cost data` },
             { label: "Est. COGS", value: formatCurrency(po?.estimatedCost), icon: <ReceiptIcon />, color: "#e53935" },
             { label: "Gross Margin", value: formatCurrency(po?.grossMargin), icon: <TrendingUpIcon />, color: "#388e3c", subtext: `${po?.grossMarginPct ?? 0}%` },
-            { label: "TikTok Fees", value: formatCurrency(po?.tiktokFees), icon: <LocalShippingIcon />, color: "#f57c00" },
+            { label: "TikTok Fees (known-cost)", value: formatCurrency(po?.knownCostTikTokFees ?? po?.tiktokFees), icon: <LocalShippingIcon />, color: "#f57c00", subtext: `${formatCurrency(po?.tiktokFees)} on all items` },
             { label: "Net Margin", value: formatCurrency(po?.netMarginAfterFees), icon: <ShowChartIcon />, color: (po?.netMarginAfterFees ?? 0) >= 0 ? "#1565c0" : "#c62828", subtext: `${po?.netMarginAfterFeesPct ?? 0}%` },
             { label: "Negative Margin Units", value: formatNumber(po?.negativeMarginUnits), icon: <WarningAmberIcon />, color: "#d32f2f" },
           ].map((kpi, i) => (
@@ -1038,6 +1082,42 @@ function TikTokFulfillmentAnalytics() {
             </BarChart>
           </ResponsiveContainer>
         </SectionCard>
+
+        {/* Negative margin items */}
+        {negativeMarginItems.length > 0 && (
+          <SectionCard title="Items Sold at a Loss" icon={<WarningAmberIcon />} minHeight={200}>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>SKU</TableCell>
+                    <TableCell>Brand</TableCell>
+                    <TableCell>Item</TableCell>
+                    <TableCell align="right">Units at Loss</TableCell>
+                    <TableCell align="right">Avg Sold Price</TableCell>
+                    <TableCell align="right">Avg Cost</TableCell>
+                    <TableCell align="right">Avg Loss/Unit</TableCell>
+                    <TableCell align="right">Total Loss</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {negativeMarginItems.map((row, i) => (
+                    <TableRow key={i} sx={{ bgcolor: i % 2 === 0 ? "transparent" : "action.hover" }}>
+                      <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{row.sku}</TableCell>
+                      <TableCell>{row.brand}</TableCell>
+                      <TableCell sx={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.itemName}</TableCell>
+                      <TableCell align="right">{formatNumber(row.unitsSoldAtLoss)}</TableCell>
+                      <TableCell align="right">{formatCurrency(row.avgSoldPrice)}</TableCell>
+                      <TableCell align="right">{formatCurrency(row.avgVendorCost)}</TableCell>
+                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: 700 }}>{formatCurrency(row.avgNetLossPerUnit)}</TableCell>
+                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: 700 }}>{formatCurrency(row.totalNetLoss)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </SectionCard>
+        )}
       </Stack>
     );
   };
@@ -1498,7 +1578,7 @@ function TikTokFulfillmentAnalytics() {
                         { label: "Avg Sold Price",value: formatCurrency(summary.avgSoldPrice) },
                         { label: "Gross Margin",  value: formatCurrency(summary.grossMargin) },
                         { label: "Total Discounts",value: formatCurrency(summary.totalDiscounts) },
-                        { label: "Price Range",   value: `${formatCurrency(summary.lowestSoldPrice)} – ${formatCurrency(summary.highestSoldPrice)}` },
+                        { label: "Price Range",   value: summary.lowestSoldPrice != null ? `${formatCurrency(summary.lowestSoldPrice)} – ${formatCurrency(summary.highestSoldPrice)}` : `N/A – ${formatCurrency(summary.highestSoldPrice)}` },
                         { label: "Shows",         value: formatNumber(summary.uniqueShows) },
                       ].map((kv, i) => (
                         <Grid item xs={6} key={i}>
