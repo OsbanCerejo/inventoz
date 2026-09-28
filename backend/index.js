@@ -12,7 +12,7 @@ const customerServiceOverdueCron = require("./cron/customerServiceOverdue");
 const { aggregateSalesSummary } = require("./cron/salesSummary");
 const path = require("path");
 
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 
 const validateCriticalEnv = () => {
   if (process.env.NODE_ENV !== "production") return;

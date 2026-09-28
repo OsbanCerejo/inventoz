@@ -1390,16 +1390,27 @@ router.post("/updateQuantities", auth, checkPermission('products', 'edit'), asyn
 // Get low stock products (admin only)
 router.get("/checklist", auth, checkPermission('products', 'view'), async (req, res) => {
   try {
-    const { Products } = require("../models");
-    const { Op } = require("sequelize");
-    const items = await Products.findAll({
-      where: { refillChecklist: true },
-      attributes: ['sku', 'brand', 'itemName', 'strength', 'sizeOz', 'sizeMl', 'condition', 'location', 'warehouseLocations', 'quantity', 'image'],
-      order: [
-        ['brand', 'ASC'],
-        ['itemName', 'ASC'],
-      ],
-    });
+    const { sequelize } = require("../models");
+    const { QueryTypes } = require("sequelize");
+    const items = await sequelize.query(
+      `SELECT
+         p.sku, p.brand, p.itemName, p.strength, p.sizeOz, p.sizeMl,
+         p.condition, p.location, p.warehouseLocations, p.quantity, p.image
+       FROM Products p
+       LEFT JOIN (
+         SELECT productSku, COUNT(*) AS salesCount
+         FROM tiktokShipmentScans
+         WHERE result = 'matched'
+           AND productSku IS NOT NULL AND productSku <> ''
+           AND previousQuantity IS NOT NULL
+           AND newQuantity = previousQuantity - 1
+           AND updatedAt >= NOW() - INTERVAL 7 DAY
+         GROUP BY productSku
+       ) s ON s.productSku = p.sku
+       WHERE p.refillChecklist = 1
+       ORDER BY COALESCE(s.salesCount, 0) DESC, p.brand ASC, p.itemName ASC`,
+      { type: QueryTypes.SELECT }
+    );
     res.json(items);
   } catch (error) {
     console.error("Error getting checklist products:", error);

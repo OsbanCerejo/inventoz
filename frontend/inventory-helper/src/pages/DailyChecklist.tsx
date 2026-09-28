@@ -37,6 +37,7 @@ interface ChecklistProduct {
 
 interface ItemState {
   needsRefill: boolean;
+  lowStock: boolean;
   done: boolean;
   notes: string;
 }
@@ -66,14 +67,22 @@ function loadChecks(userId: number | string): Record<string, ItemState> | null {
   }
 }
 
-function get9amToday(): Date {
-  const d = new Date();
-  d.setHours(9, 0, 0, 0);
-  return d;
+function get9amEastern(): Date {
+  const now = new Date();
+  const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(now);
+  for (const h of [13, 14]) {
+    const candidate = new Date(`${dateStr}T${String(h).padStart(2, '0')}:00:00Z`);
+    const easternHour = parseInt(
+      new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }).format(candidate),
+      10
+    );
+    if (easternHour === 9) return candidate;
+  }
+  return new Date(`${dateStr}T14:00:00Z`);
 }
 
 function getEffectiveReset(): Date {
-  const reset = get9amToday();
+  const reset = get9amEastern();
   const now = new Date();
   return reset > now ? new Date(reset.getTime() - 86400000) : reset;
 }
@@ -116,6 +125,8 @@ export default function DailyChecklist() {
   const isAdmin = user?.role === "admin";
   const userId = user?.id ?? user?.username ?? "";
 
+  const PAGE_SIZE = 50;
+
   const [products, setProducts] = useState<ChecklistProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,21 +135,21 @@ export default function DailyChecklist() {
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
-    // Admins always see the checklist; non-admins check server status
+    if (!token || userId === "") return;
     if (isAdmin) {
       fetchProducts();
       return;
     }
-    // Fast local check first, then verify with server
     if (isLocallySubmitted(userId)) {
       setSubmitted(true);
       setLoading(false);
       return;
     }
     checkStatusThenFetch();
-  }, []);
+  }, [token, userId, isAdmin]);
 
   const checkStatusThenFetch = async () => {
     try {
@@ -166,10 +177,11 @@ export default function DailyChecklist() {
         headers: { Authorization: `Bearer ${token}` },
       });
       setProducts(res.data);
+      setPage(0);
       const saved = loadChecks(userId);
       const initial: Record<string, ItemState> = {};
       res.data.forEach((p: ChecklistProduct) => {
-        initial[p.sku] = saved?.[p.sku] ?? { needsRefill: false, done: false, notes: "" };
+        initial[p.sku] = saved?.[p.sku] ?? { needsRefill: false, lowStock: false, done: false, notes: "" };
       });
       setItemStates(initial);
     } catch {
@@ -177,6 +189,14 @@ export default function DailyChecklist() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleLowStock = (sku: string) => {
+    setItemStates(prev => {
+      const next = { ...prev, [sku]: { ...prev[sku], lowStock: !prev[sku].lowStock } };
+      saveChecks(userId, next);
+      return next;
+    });
   };
 
   const toggleRefill = (sku: string) => {
@@ -189,7 +209,8 @@ export default function DailyChecklist() {
 
   const toggleDone = (sku: string) => {
     setItemStates(prev => {
-      const next = { ...prev, [sku]: { ...prev[sku], done: !prev[sku].done } };
+      const wasDone = prev[sku].done;
+      const next = { ...prev, [sku]: { ...prev[sku], done: !wasDone, needsRefill: wasDone ? prev[sku].needsRefill : false } };
       saveChecks(userId, next);
       return next;
     });
@@ -214,6 +235,7 @@ export default function DailyChecklist() {
         fullName: formatFullName(p),
         quantity: p.quantity,
         needsRefill: itemStates[p.sku]?.needsRefill ?? false,
+        lowStock: itemStates[p.sku]?.lowStock ?? false,
         done: itemStates[p.sku]?.done ?? false,
         notes: itemStates[p.sku]?.notes ?? "",
       }));
@@ -293,7 +315,12 @@ export default function DailyChecklist() {
           </Box>
         )}
 
-        {products.length > 0 && <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
+        {products.length > 0 && (() => {
+          const totalPages = Math.ceil(products.length / PAGE_SIZE);
+          const pageProducts = products.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+          return (
+          <>
+          <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "#f5f5f5", borderBottom: "1px solid #e0e0e0" }}>
@@ -303,18 +330,19 @@ export default function DailyChecklist() {
                 <th style={{ width: 130, padding: "8px 8px", textAlign: "left", fontWeight: 500, color: "#888", fontSize: 11 }}>Location</th>
                 <th style={{ width: 55, padding: "8px 8px", textAlign: "center", fontWeight: 500, color: "#888", fontSize: 11 }}>Qty</th>
                 <th style={{ width: 80, padding: "8px 8px", textAlign: "center", fontWeight: 500, color: "#c62828", fontSize: 11 }}>Need refill</th>
+                <th style={{ width: 75, padding: "8px 8px", textAlign: "center", fontWeight: 500, color: "#e65100", fontSize: 11 }}>Low stock</th>
                 <th style={{ width: 60, padding: "8px 8px", textAlign: "center", fontWeight: 500, color: "#2e7d32", fontSize: 11 }}>Done</th>
                 <th style={{ width: 180, padding: "8px 8px", textAlign: "left", fontWeight: 500, color: "#888", fontSize: 11 }}>Notes</th>
               </tr>
             </thead>
             <tbody>
-              {products.map((p, i) => {
-                const state = itemStates[p.sku] ?? { needsRefill: false, done: false, notes: "" };
+              {pageProducts.map((p, i) => {
+                const state = itemStates[p.sku] ?? { needsRefill: false, lowStock: false, done: false, notes: "" };
                 return (
                   <tr
                     key={p.sku}
                     style={{
-                      borderBottom: i < products.length - 1 ? "1px solid #f0f0f0" : "none",
+                      borderBottom: i < pageProducts.length - 1 ? "1px solid #f0f0f0" : "none",
                       background: state.done ? "#f9fbe7" : state.needsRefill ? "#fff8f8" : "white",
                       transition: "background 0.15s",
                     }}
@@ -350,6 +378,9 @@ export default function DailyChecklist() {
                       <Checkbox checked={state.needsRefill} onChange={() => toggleRefill(p.sku)} size="small" sx={{ color: "#ef9a9a", "&.Mui-checked": { color: "#c62828" } }} />
                     </td>
                     <td style={{ padding: "8px 8px", verticalAlign: "middle", textAlign: "center" }}>
+                      <Checkbox checked={state.lowStock} onChange={() => toggleLowStock(p.sku)} size="small" sx={{ color: "#ffb74d", "&.Mui-checked": { color: "#e65100" } }} />
+                    </td>
+                    <td style={{ padding: "8px 8px", verticalAlign: "middle", textAlign: "center" }}>
                       <Checkbox checked={state.done} onChange={() => toggleDone(p.sku)} size="small" sx={{ color: "#a5d6a7", "&.Mui-checked": { color: "#2e7d32" } }} />
                     </td>
                     <td style={{ padding: "6px 8px", verticalAlign: "middle" }}>
@@ -369,7 +400,19 @@ export default function DailyChecklist() {
               })}
             </tbody>
           </table>
-        </Paper>}
+        </Paper>
+          {totalPages > 1 && (
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, mt: 2 }}>
+              <Button size="small" variant="outlined" disabled={page === 0} onClick={() => setPage(0)} sx={{ minWidth: 36 }}>«</Button>
+              <Button size="small" variant="outlined" disabled={page === 0} onClick={() => setPage(p => p - 1)} sx={{ minWidth: 36 }}>‹</Button>
+              <Typography variant="body2" sx={{ px: 1 }}>Page {page + 1} of {totalPages}</Typography>
+              <Button size="small" variant="outlined" disabled={page === totalPages - 1} onClick={() => setPage(p => p + 1)} sx={{ minWidth: 36 }}>›</Button>
+              <Button size="small" variant="outlined" disabled={page === totalPages - 1} onClick={() => setPage(totalPages - 1)} sx={{ minWidth: 36 }}>»</Button>
+            </Box>
+          )}
+          </>
+          );
+        })()}
 
         {products.length > 0 && <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2 }}>
           {SubmitButton}

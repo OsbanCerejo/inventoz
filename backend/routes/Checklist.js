@@ -88,6 +88,9 @@ router.post('/submit', auth, async (req, res) => {
       const refillCell = item.needsRefill
         ? `<td style="padding:8px 10px;text-align:center;color:#c62828;font-weight:600;">&#10003; Yes</td>`
         : `<td style="padding:8px 10px;text-align:center;color:#888;">No</td>`;
+      const lowStockCell = item.lowStock
+        ? `<td style="padding:8px 10px;text-align:center;color:#e65100;font-weight:600;">&#10003; Yes</td>`
+        : `<td style="padding:8px 10px;text-align:center;color:#888;">No</td>`;
       const doneCell = item.done
         ? `<td style="padding:8px 10px;text-align:center;color:#2e7d32;font-weight:600;">&#10003; Done</td>`
         : `<td style="padding:8px 10px;text-align:center;color:#888;">—</td>`;
@@ -100,12 +103,14 @@ router.post('/submit', auth, async (req, res) => {
           <td style="padding:8px 10px;font-size:13px;">${escapeHtml(item.fullName)}</td>
           <td style="padding:8px 10px;text-align:center;font-weight:600;font-size:13px;">${item.quantity ?? 0}</td>
           ${refillCell}
+          ${lowStockCell}
           ${doneCell}
           ${notesCell}
         </tr>`;
     }).join('');
 
     const needsRefillCount = items.filter(i => i.needsRefill).length;
+    const lowStockCount = items.filter(i => i.lowStock).length;
     const doneCount = items.filter(i => i.done).length;
 
     const html = `
@@ -117,6 +122,7 @@ router.post('/submit', auth, async (req, res) => {
         <div style="background:#e3f2fd;padding:12px 24px;">
           <span style="font-size:13px;color:#1565c0;margin-right:24px;"><strong>${items.length}</strong> items checked</span>
           <span style="font-size:13px;color:#c62828;margin-right:24px;"><strong>${needsRefillCount}</strong> need refill</span>
+          <span style="font-size:13px;color:#e65100;margin-right:24px;"><strong>${lowStockCount}</strong> low stock</span>
           <span style="font-size:13px;color:#2e7d32;"><strong>${doneCount}</strong> marked done</span>
         </div>
         <table style="width:100%;border-collapse:collapse;background:white;border:1px solid #e0e0e0;border-top:none;">
@@ -126,6 +132,7 @@ router.post('/submit', auth, async (req, res) => {
               <th style="padding:8px 10px;text-align:left;font-size:11px;color:#888;font-weight:500;">Product</th>
               <th style="padding:8px 10px;text-align:center;font-size:11px;color:#888;font-weight:500;">Qty</th>
               <th style="padding:8px 10px;text-align:center;font-size:11px;color:#c62828;font-weight:500;">Need refill</th>
+              <th style="padding:8px 10px;text-align:center;font-size:11px;color:#e65100;font-weight:500;">Low stock</th>
               <th style="padding:8px 10px;text-align:center;font-size:11px;color:#2e7d32;font-weight:500;">Done</th>
               <th style="padding:8px 10px;text-align:left;font-size:11px;color:#888;font-weight:500;">Notes</th>
             </tr>
