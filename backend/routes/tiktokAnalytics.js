@@ -106,6 +106,7 @@ const TSS_STICKER_SCAN_COUNT = `
       AND previousQuantity IS NOT NULL
       AND newQuantity = previousQuantity - 1
     GROUP BY tiktokShowId, importId, shipmentId, auctionStickerNumber
+    HAVING COUNT(*) = 1
   )
 `;
 
@@ -624,11 +625,11 @@ router.get("/fulfillment-profitability-overview", auth, checkPermission("tiktokA
       unknownCostUnits:      Number(r.unknownCostUnits       || 0),
       estimatedCost:         Number(Number(r.estimatedCost   || 0).toFixed(2)),
       grossMargin:           Number(grossMargin.toFixed(2)),
-      grossMarginPct:        totalRevenue > 0 ? Number((grossMargin / totalRevenue * 100).toFixed(1)) : 0,
+      grossMarginPct:        Number(r.knownCostRevenue) > 0 ? Number((grossMargin / Number(r.knownCostRevenue) * 100).toFixed(1)) : 0,
       tiktokFees:            Number(tiktokFees.toFixed(2)),
       knownCostTikTokFees:   Number(knownCostTikTokFees.toFixed(2)),
       netMarginAfterFees:    Number(netMarginAfterFees.toFixed(2)),
-      netMarginAfterFeesPct: totalRevenue > 0 ? Number((netMarginAfterFees / totalRevenue * 100).toFixed(1)) : 0,
+      netMarginAfterFeesPct: Number(r.knownCostRevenue) > 0 ? Number((netMarginAfterFees / Number(r.knownCostRevenue) * 100).toFixed(1)) : 0,
       negativeMarginUnits:   Number(r.negativeMarginUnits   || 0),
       lowMarginUnits:        Number(r.lowMarginUnits         || 0),
     };
@@ -1649,7 +1650,7 @@ router.get("/fulfillment-negative-margin-items", auth, checkPermission("tiktokAn
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
   const showId = req.query.showId ? Number(req.query.showId) : null;
-  const limit  = Math.min(Number(req.query.limit || 25), 100);
+  const limit  = Math.min(Number(req.query.limit || 100), 100);
 
   const ck = `negative-margin:${range.from}:${range.to}:${showId}:${limit}`;
   const hit = cacheGet(ck);
@@ -1658,14 +1659,15 @@ router.get("/fulfillment-negative-margin-items", auth, checkPermission("tiktokAn
   try {
     const rows = await sequelize.query(`
       SELECT
-        tss.productSku                                                       AS sku,
-        MAX(p.brand)                                                         AS brand,
-        MAX(p.itemName)                                                      AS itemName,
-        COUNT(*)                                                             AS unitsSoldAtLoss,
-        ROUND(AVG(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count), 2)    AS avgSoldPrice,
-        ROUND(AVG(vc.avgVendorCost), 2)                                      AS avgVendorCost,
-        ROUND(AVG(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost), 2) AS avgNetLossPerUnit,
-        ROUND(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost), 2) AS totalNetLoss
+        tss.productSku                                                                AS sku,
+        MAX(p.brand)                                                                  AS brand,
+        MAX(p.itemName)                                                               AS itemName,
+        COUNT(*)                                                                      AS unitsSold,
+        COUNT(CASE WHEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count < vc.avgVendorCost THEN 1 END) AS unitsSoldAtLoss,
+        ROUND(AVG(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count), 2)             AS avgSoldPrice,
+        ROUND(MAX(vc.avgVendorCost), 2)                                               AS avgVendorCost,
+        ROUND(AVG(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count) - MAX(vc.avgVendorCost), 2) AS marginGap,
+        ROUND(SUM(CASE WHEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count < vc.avgVendorCost THEN COALESCE(tss.soldPrice,0) / sc.sticker_scan_count - vc.avgVendorCost END), 2) AS totalNetLoss
       FROM ${TABLES.shipmentScans} tss
       LEFT JOIN ${TABLES.products} p ON ${skuJoinCondition("p.sku","tss.productSku")}
       JOIN ${ACTIVE_VENDOR_COST_SUBQUERY} vc ON ${skuJoinCondition("vc.sku","tss.productSku")}
@@ -1673,19 +1675,19 @@ router.get("/fulfillment-negative-margin-items", auth, checkPermission("tiktokAn
       WHERE ${fulfilledSaleCondition("tss")}
         AND ${tsiExistsDateFilter("tss")}
         AND (:showId IS NULL OR tss.tiktokShowId = :showId)
-        AND COALESCE(tss.soldPrice,0) / sc.sticker_scan_count < vc.avgVendorCost
       GROUP BY tss.productSku
-      ORDER BY totalNetLoss ASC
+      ORDER BY marginGap ASC
       LIMIT :limit
     `, { replacements: { from: range.from, to: range.to, showId, limit }, type: sequelize.QueryTypes.SELECT });
 
     const result = rows.map(r => ({
       ...r,
+      unitsSold:        Number(r.unitsSold        || 0),
       unitsSoldAtLoss:  Number(r.unitsSoldAtLoss  || 0),
-      avgSoldPrice:     Number(Number(r.avgSoldPrice    || 0).toFixed(2)),
-      avgVendorCost:    Number(Number(r.avgVendorCost   || 0).toFixed(2)),
-      avgNetLossPerUnit: Number(Number(r.avgNetLossPerUnit || 0).toFixed(2)),
-      totalNetLoss:     Number(Number(r.totalNetLoss    || 0).toFixed(2)),
+      avgSoldPrice:     Number(Number(r.avgSoldPrice   || 0).toFixed(2)),
+      avgVendorCost:    Number(Number(r.avgVendorCost  || 0).toFixed(2)),
+      marginGap:        Number(Number(r.marginGap      || 0).toFixed(2)),
+      totalNetLoss:     r.totalNetLoss != null ? Number(Number(r.totalNetLoss).toFixed(2)) : null,
     }));
     cacheSet(ck, result);
     return res.json(result);

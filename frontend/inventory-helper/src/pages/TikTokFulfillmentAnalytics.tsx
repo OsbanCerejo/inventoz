@@ -106,11 +106,12 @@ interface FulfillmentNegativeMarginRow {
   sku: string;
   brand: string;
   itemName: string;
+  unitsSold: number;
   unitsSoldAtLoss: number;
   avgSoldPrice: number;
   avgVendorCost: number;
-  avgNetLossPerUnit: number;
-  totalNetLoss: number;
+  marginGap: number;
+  totalNetLoss: number | null;
 }
 
 interface FulfillmentShowRow {
@@ -1083,36 +1084,46 @@ function TikTokFulfillmentAnalytics() {
           </ResponsiveContainer>
         </SectionCard>
 
-        {/* Negative margin items */}
+        {/* At-risk margins table */}
         {negativeMarginItems.length > 0 && (
-          <SectionCard title="Items Sold at a Loss" icon={<WarningAmberIcon />} minHeight={200}>
+          <SectionCard title="Tightest Margins" icon={<WarningAmberIcon />} minHeight={200}>
             <TableContainer>
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>SKU</TableCell>
-                    <TableCell>Brand</TableCell>
-                    <TableCell>Item</TableCell>
-                    <TableCell align="right">Units at Loss</TableCell>
-                    <TableCell align="right">Avg Sold Price</TableCell>
-                    <TableCell align="right">Avg Cost</TableCell>
-                    <TableCell align="right">Avg Loss/Unit</TableCell>
-                    <TableCell align="right">Total Loss</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>SKU</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Brand</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Item</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>Units Sold</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>Units at Loss</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>Avg Sold Price</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>Vendor Cost</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>Margin Gap</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>Total Loss</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {negativeMarginItems.map((row, i) => (
-                    <TableRow key={i} sx={{ bgcolor: i % 2 === 0 ? "transparent" : "action.hover" }}>
-                      <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{row.sku}</TableCell>
-                      <TableCell>{row.brand}</TableCell>
-                      <TableCell sx={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.itemName}</TableCell>
-                      <TableCell align="right">{formatNumber(row.unitsSoldAtLoss)}</TableCell>
-                      <TableCell align="right">{formatCurrency(row.avgSoldPrice)}</TableCell>
-                      <TableCell align="right">{formatCurrency(row.avgVendorCost)}</TableCell>
-                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: 700 }}>{formatCurrency(row.avgNetLossPerUnit)}</TableCell>
-                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: 700 }}>{formatCurrency(row.totalNetLoss)}</TableCell>
-                    </TableRow>
-                  ))}
+                  {negativeMarginItems.map((row, i) => {
+                    const isLoss = row.marginGap < 0;
+                    const isClose = row.marginGap >= 0 && row.marginGap < 3;
+                    return (
+                      <TableRow key={i} sx={{ bgcolor: isLoss ? "#fff5f5" : isClose ? "#fffde7" : "transparent" }}>
+                        <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{row.sku}</TableCell>
+                        <TableCell>{row.brand}</TableCell>
+                        <TableCell sx={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.itemName}</TableCell>
+                        <TableCell align="right">{formatNumber(row.unitsSold)}</TableCell>
+                        <TableCell align="right" sx={{ color: row.unitsSoldAtLoss > 0 ? "#d32f2f" : "inherit" }}>{row.unitsSoldAtLoss > 0 ? formatNumber(row.unitsSoldAtLoss) : "—"}</TableCell>
+                        <TableCell align="right">{formatCurrency(row.avgSoldPrice)}</TableCell>
+                        <TableCell align="right">{formatCurrency(row.avgVendorCost)}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700, color: isLoss ? "#d32f2f" : isClose ? "#e65100" : "#2e7d32" }}>
+                          {isLoss ? "" : "+"}{formatCurrency(row.marginGap)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ color: row.totalNetLoss != null && row.totalNetLoss < 0 ? "#d32f2f" : "inherit", fontWeight: 700 }}>
+                          {row.totalNetLoss != null ? formatCurrency(row.totalNetLoss) : "—"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
