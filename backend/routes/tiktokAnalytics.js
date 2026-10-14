@@ -297,9 +297,9 @@ router.get("/fulfillment-trend", auth, checkPermission("tiktokAnalytics", "view"
   const showId = req.query.showId ? Number(req.query.showId) : null;
 
   const bucketExpr =
-    granularity === "month" ? "DATE_FORMAT(tsi.placedAt, '%Y-%m-01')"
-    : granularity === "week" ? "DATE_FORMAT(DATE_SUB(tsi.placedAt, INTERVAL WEEKDAY(tsi.placedAt) DAY), '%Y-%m-%d')"
-    : "DATE_FORMAT(tsi.placedAt, '%Y-%m-%d')";
+    granularity === "month" ? "DATE_FORMAT(DATE_ADD(tsi.placedAt, INTERVAL 3 HOUR), '%Y-%m-01')"
+    : granularity === "week" ? "DATE_FORMAT(DATE_SUB(DATE_ADD(tsi.placedAt, INTERVAL 3 HOUR), INTERVAL WEEKDAY(DATE_ADD(tsi.placedAt, INTERVAL 3 HOUR)) DAY), '%Y-%m-%d')"
+    : "DATE_FORMAT(DATE_ADD(tsi.placedAt, INTERVAL 3 HOUR), '%Y-%m-%d')";
 
   try {
     const rows = await sequelize.query(`
@@ -1328,7 +1328,7 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
 
       // By day (recent trend) â€” use aggregated tsi subquery for placedAt bucketing
       sequelize.query(`
-        SELECT DATE_FORMAT(tsi.placedAt,'%Y-%m-%d') AS bucket, COUNT(*) AS unitsSold,
+        SELECT DATE_FORMAT(DATE_ADD(tsi.placedAt, INTERVAL 3 HOUR),'%Y-%m-%d') AS bucket, COUNT(*) AS unitsSold,
           COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue
         FROM ${TABLES.shipmentScans} tss
         JOIN ${TSI_ONE_PER_SHIPMENT} tsi
@@ -1338,12 +1338,12 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
           AND ${skuJoinCondition("tss.productSku",":sku")}
           AND tsi.placedAt >= :from AND tsi.placedAt < :to
           AND (:showId IS NULL OR tss.tiktokShowId = :showId)
-        GROUP BY DATE_FORMAT(tsi.placedAt,'%Y-%m-%d') ORDER BY bucket DESC LIMIT 14
+        GROUP BY DATE_FORMAT(DATE_ADD(tsi.placedAt, INTERVAL 3 HOUR),'%Y-%m-%d') ORDER BY bucket DESC LIMIT 14
       `, { replacements: { sku, from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
 
       // Hour of day
       sequelize.query(`
-        SELECT HOUR(tsi.placedAt) AS hourOfDay, COUNT(*) AS unitsSold,
+        SELECT HOUR(DATE_ADD(tsi.placedAt, INTERVAL 3 HOUR)) AS hourOfDay, COUNT(*) AS unitsSold,
           COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue
         FROM ${TABLES.shipmentScans} tss
         JOIN ${TSI_ONE_PER_SHIPMENT} tsi
@@ -1353,12 +1353,12 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
           AND ${skuJoinCondition("tss.productSku",":sku")}
           AND tsi.placedAt >= :from AND tsi.placedAt < :to AND tsi.placedAt IS NOT NULL
           AND (:showId IS NULL OR tss.tiktokShowId = :showId)
-        GROUP BY HOUR(tsi.placedAt) ORDER BY hourOfDay ASC
+        GROUP BY HOUR(DATE_ADD(tsi.placedAt, INTERVAL 3 HOUR)) ORDER BY hourOfDay ASC
       `, { replacements: { sku, from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
 
       // Day of week
       sequelize.query(`
-        SELECT DAYNAME(tsi.placedAt) AS dayName, DAYOFWEEK(tsi.placedAt) AS dayNum,
+        SELECT DAYNAME(DATE_ADD(tsi.placedAt, INTERVAL 3 HOUR)) AS dayName, DAYOFWEEK(DATE_ADD(tsi.placedAt, INTERVAL 3 HOUR)) AS dayNum,
           COUNT(*) AS unitsSold, COALESCE(SUM(COALESCE(tss.soldPrice,0) / sc.sticker_scan_count),0) AS revenue
         FROM ${TABLES.shipmentScans} tss
         JOIN ${TSI_ONE_PER_SHIPMENT} tsi
@@ -1368,12 +1368,12 @@ router.get("/fulfillment-sku-detail", auth, checkPermission("tiktokAnalytics", "
           AND ${skuJoinCondition("tss.productSku",":sku")}
           AND tsi.placedAt >= :from AND tsi.placedAt < :to AND tsi.placedAt IS NOT NULL
           AND (:showId IS NULL OR tss.tiktokShowId = :showId)
-        GROUP BY DAYNAME(tsi.placedAt), DAYOFWEEK(tsi.placedAt) ORDER BY dayNum ASC
+        GROUP BY DAYNAME(DATE_ADD(tsi.placedAt, INTERVAL 3 HOUR)), DAYOFWEEK(DATE_ADD(tsi.placedAt, INTERVAL 3 HOUR)) ORDER BY dayNum ASC
       `, { replacements: { sku, from: range.from, to: range.to, showId }, type: sequelize.QueryTypes.SELECT }),
 
-      // Recent sales â€” aggregated tsi subquery picks one row per shipment (state/city/paymentMethod)
+      // Recent sales - aggregated tsi subquery picks one row per shipment (state/city/paymentMethod)
       sequelize.query(`
-        SELECT tss.id, MAX(ts.name) AS showName, tss.shipmentId,
+        SELECT tss.id, ts.name AS showName, tss.shipmentId,
           tss.soldPrice, tss.tracking, tss.auctionStickerNumber, tss.userId,
           tsi.placedAt AS createdAt, tsi.state, tsi.city, tsi.paymentMethod
         FROM ${TABLES.shipmentScans} tss
@@ -1438,7 +1438,6 @@ function getEasternUtcOffset() {
 
 router.get("/fulfillment-hourly", auth, checkPermission("tiktokAnalytics", "view"), async (req, res) => {
   const { breakdown = "combined" } = req.query;
-  const easternOffset = getEasternUtcOffset();
 
   // showIds takes priority over date range; validate as positive integers
   const showIdNums = String(req.query.showIds || "")
@@ -1469,7 +1468,7 @@ router.get("/fulfillment-hourly", auth, checkPermission("tiktokAnalytics", "view
     if (breakdown === "byShow") {
       const rows = await sequelize.query(`
         SELECT
-          HOUR(CONVERT_TZ(tsi.placedAt, '+00:00', '${easternOffset}')) AS hour,
+          HOUR(DATE_ADD(tsi.placedAt, INTERVAL 3 HOUR)) AS hour,
           tsi.tiktokShowId                                    AS showId,
           MAX(ts.name)                                        AS showName,
           COUNT(*)                                            AS orders,
@@ -1493,7 +1492,7 @@ router.get("/fulfillment-hourly", auth, checkPermission("tiktokAnalytics", "view
     // combined (default)
     const rows = await sequelize.query(`
       SELECT
-        HOUR(CONVERT_TZ(tsi.placedAt, '+00:00', '${easternOffset}')) AS hour,
+        HOUR(DATE_ADD(tsi.placedAt, INTERVAL 3 HOUR)) AS hour,
         COUNT(*)                                            AS orders,
         ROUND(SUM(COALESCE(tsi.orderAmount, 0)), 2)        AS revenue
       FROM ${TABLES.shipmentItems} tsi
