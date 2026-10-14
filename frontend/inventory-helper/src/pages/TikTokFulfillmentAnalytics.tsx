@@ -477,10 +477,10 @@ const HorizontalBarList = ({ items, labelKey, valueKey, maxItems = 10, barColor 
 
 function TikTokFulfillmentAnalytics() {
   const now = new Date();
-  const thirtyDaysAgo = new Date(now);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-  const [fromDate, setFromDate]         = useState(formatDateInput(thirtyDaysAgo));
+  const [fromDate, setFromDate]         = useState(formatDateInput(sevenDaysAgo));
   const [toDate, setToDate]             = useState(formatDateInput(now));
   const [selectedShowId, setSelectedShowId] = useState<string>("");
   const [activeTab, setActiveTab]       = useState(0);
@@ -524,6 +524,7 @@ function TikTokFulfillmentAnalytics() {
   const [brandResult, setBrandResult]       = useState<BrandAnalyticsResult | null>(null);
   const [brandLoading, setBrandLoading]     = useState(false);
   const [brandError, setBrandError]         = useState<string | null>(null);
+  const [allBrands, setAllBrands]           = useState<string[]>([]);
 
   // SKU lookup
   const [skuSearchInput, setSkuSearchInput] = useState("");
@@ -544,11 +545,14 @@ function TikTokFulfillmentAnalytics() {
     [fromDate, toDate, selectedShowId]
   );
 
-  // Load shows once
+  // Load shows and brands once
   useEffect(() => {
     axios.get(getApiUrl("tiktok/analytics/fulfillment-shows"))
       .then(r => setShows(r.data || []))
       .catch(e => console.error("Failed to load TikTok shows:", e));
+    axios.get(getApiUrl("brands"))
+      .then(r => setAllBrands((r.data || []).map((b: any) => b.brand).filter(Boolean).sort()))
+      .catch(e => console.error("Failed to load brands:", e));
   }, []);
 
   // Core group: overview + sales tabs (always load on params change)
@@ -1920,19 +1924,19 @@ function TikTokFulfillmentAnalytics() {
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ sm: "center" }} flexWrap="wrap">
               <Autocomplete
                 multiple
+                disableCloseOnSelect
                 options={shows}
                 getOptionLabel={s => `#${s.id} — ${s.name}`}
                 value={brandSelectedShows}
                 onChange={(_, v) => setBrandSelectedShows(v)}
-                renderInput={params => <TextField {...params} label="Shows (by ID)" size="small" sx={{ minWidth: 280 }} />}
+                renderInput={params => <TextField {...params} label="Shows" size="small" sx={{ minWidth: 280 }} />}
                 sx={{ minWidth: 280 }}
               />
-              <TextField
-                label="Brand"
-                size="small"
-                value={brandInput}
-                onChange={e => setBrandInput(e.target.value)}
-                placeholder="e.g. MAH"
+              <Autocomplete
+                options={allBrands}
+                value={brandInput || null}
+                onChange={(_, v) => setBrandInput(v || "")}
+                renderInput={params => <TextField {...params} label="Brand" size="small" placeholder="e.g. MAH" sx={{ minWidth: 160 }} />}
                 sx={{ minWidth: 160 }}
               />
               <TextField label="Start Date" type="date" size="small" value={brandStartDate}

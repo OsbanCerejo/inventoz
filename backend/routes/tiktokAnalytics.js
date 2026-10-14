@@ -343,7 +343,7 @@ router.get("/fulfillment-shows", auth, checkPermission("tiktokAnalytics", "view"
   try {
     const shows = await TikTokShow.findAll({
       attributes: ["id", "name"],
-      order: [["name", "ASC"]],
+      order: [["createdAt", "DESC"]],
       raw: true,
     });
     return res.json(shows);
