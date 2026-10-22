@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
 import {
@@ -14,12 +14,20 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
+  FormControlLabel,
   Grid,
   IconButton,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -88,10 +96,25 @@ const VisuallyHiddenInput = styled("input")({
   width: 1,
 });
 
+type MappingPreview = {
+  headers: string[];
+  sampleRows: Record<string, string>[];
+  suggestions: { price: string | null; name: string | null; upc: string | null; qty: string | null; brand: string | null };
+};
+
+type ColumnMapping = { price: string; name: string; upc: string; qty: string; brand: string };
+
+const NONE = "__none__";
+
 const PriceList = () => {
   const { token, hasPermission } = useAuth();
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [mappingOpen, setMappingOpen] = useState(false);
+  const [mappingPreview, setMappingPreview] = useState<MappingPreview | null>(null);
+  const [columnMapping, setColumnMapping] = useState<ColumnMapping>({ price: NONE, name: NONE, upc: NONE, qty: NONE, brand: NONE });
+  const [reviewMapping, setReviewMapping] = useState(false);
+  const pendingUploadRef = useRef<{ file: File; vendorName: string } | null>(null);
   const [savingCart, setSavingCart] = useState(false);
   const [clearingCart, setClearingCart] = useState(false);
   const [uploads, setUploads] = useState<UploadSummary[]>([]);
@@ -164,6 +187,27 @@ const PriceList = () => {
     return () => window.clearTimeout(timer);
   }, [searchQuery, token]);
 
+  // Group search results by UPC — items with the same UPC across vendors are shown together
+  const groupedSearchResults = useMemo(() => {
+    const upcMap = new Map<string, SearchOffer[]>();
+    const noUpc: SearchOffer[] = [];
+    for (const offer of searchResults) {
+      const key = offer.upc?.trim();
+      if (key) {
+        if (!upcMap.has(key)) upcMap.set(key, []);
+        upcMap.get(key)!.push(offer);
+      } else {
+        noUpc.push(offer);
+      }
+    }
+    // Build ordered list: grouped (multi-vendor UPCs first), then singles, then no-UPC
+    const groups: { upc: string | null; offers: SearchOffer[] }[] = [];
+    upcMap.forEach((offers, upc) => groups.push({ upc, offers }));
+    groups.sort((a, b) => (b.offers.length - a.offers.length) || (a.upc ?? "").localeCompare(b.upc ?? ""));
+    noUpc.forEach((offer) => groups.push({ upc: null, offers: [offer] }));
+    return groups;
+  }, [searchResults]);
+
   const cartGroups = useMemo(() => {
     return cartItems.reduce<Record<string, CartItem[]>>((acc, item) => {
       if (!acc[item.vendorName]) {
@@ -202,6 +246,45 @@ const PriceList = () => {
     };
   }, [cartGroups, cartItems]);
 
+  const doUpload = async (file: File, vendor: string, mapping?: ColumnMapping, dryRun?: boolean) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("vendorName", vendor);
+    if (dryRun) formData.append("dryRun", "true");
+    if (mapping) {
+      const filtered = Object.fromEntries(
+        Object.entries(mapping).filter(([, v]) => v && v !== NONE)
+      );
+      if (Object.keys(filtered).length > 0) {
+        formData.append("columnMapping", JSON.stringify(filtered));
+      }
+    }
+    const response = await axios.post<DashboardResponse & { message?: string; needsMapping?: boolean; dryRun?: boolean; preview?: MappingPreview }>(
+      getApiUrl("api/price-list/upload"),
+      formData,
+      { headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" } }
+    );
+    return response.data;
+  };
+
+  const applyUploadResult = (data: DashboardResponse & { message?: string }) => {
+    toast.success(data.message || "Pricelist uploaded.");
+    setUploads(data.uploads || []);
+    setCartItems(data.cartItems || []);
+    setCartFrozen(Boolean(data.cartFrozen));
+    setCartMessage(data.cartMessage || null);
+    setCartQuantities(
+      (data.cartItems || []).reduce<Record<number, string>>((acc, item) => {
+        acc[item.id] = String(item.quantity || 1);
+        return acc;
+      }, {})
+    );
+    setVendorName("");
+    setSelectedFile(null);
+    setSearchQuery("");
+    setSearchResults([]);
+  };
+
   const handleUpload = async () => {
     if (!selectedFile) {
       toast.error("Choose a pricelist file first.");
@@ -214,36 +297,43 @@ const PriceList = () => {
 
     try {
       setUploading(true);
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-      formData.append("vendorName", vendorName.trim());
+      const openMappingDialog = (preview: MappingPreview, file: File, vendor: string) => {
+        pendingUploadRef.current = { file, vendorName: vendor };
+        const s = preview.suggestions;
+        setColumnMapping({ price: s.price || NONE, name: s.name || NONE, upc: s.upc || NONE, qty: s.qty || NONE, brand: s.brand || NONE });
+        setMappingPreview(preview);
+        setMappingOpen(true);
+      };
 
-      const response = await axios.post<DashboardResponse & { message: string }>(
-        getApiUrl("api/price-list/upload"),
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
+      if (reviewMapping) {
+        // Dry run: get detected mapping without saving, then show dialog
+        const data = await doUpload(selectedFile, vendorName.trim(), undefined, true);
+        if (data.preview) openMappingDialog(data.preview, selectedFile, vendorName.trim());
+        return;
+      }
 
-      toast.success(response.data.message || "Pricelist uploaded.");
-      setUploads(response.data.uploads || []);
-      setCartItems(response.data.cartItems || []);
-      setCartFrozen(Boolean(response.data.cartFrozen));
-      setCartMessage(response.data.cartMessage || null);
-      setCartQuantities(
-        (response.data.cartItems || []).reduce<Record<number, string>>((acc, item) => {
-          acc[item.id] = String(item.quantity || 1);
-          return acc;
-        }, {})
-      );
-      setVendorName("");
-      setSelectedFile(null);
-      setSearchQuery("");
-      setSearchResults([]);
+      const data = await doUpload(selectedFile, vendorName.trim());
+      if (data.needsMapping && data.preview) {
+        openMappingDialog(data.preview, selectedFile, vendorName.trim());
+        return;
+      }
+      applyUploadResult(data as DashboardResponse & { message?: string });
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "Failed to upload pricelist.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleMappingConfirm = async () => {
+    const pending = pendingUploadRef.current;
+    if (!pending) return;
+    try {
+      setUploading(true);
+      setMappingOpen(false);
+      const data = await doUpload(pending.file, pending.vendorName, columnMapping);
+      applyUploadResult(data as DashboardResponse & { message?: string });
+      pendingUploadRef.current = null;
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to upload pricelist.");
     } finally {
@@ -454,6 +544,18 @@ const PriceList = () => {
                   <Button variant="contained" onClick={handleUpload} disabled={!canCreate || uploading}>
                     {uploading ? "Uploading..." : "Upload Latest Pricelist"}
                   </Button>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={reviewMapping}
+                        onChange={(e) => setReviewMapping(e.target.checked)}
+                        disabled={!canCreate || uploading}
+                      />
+                    }
+                    label={<Typography variant="caption">Review column mapping before uploading</Typography>}
+                    sx={{ ml: 0.5 }}
+                  />
                 </Stack>
               </CardContent>
             </Card>
@@ -569,40 +671,60 @@ const PriceList = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {searchResults.map((offer) => (
-                      <TableRow key={`${offer.id}-${offer.vendorName}`}>
-                        <TableCell>{offer.vendorName}</TableCell>
-                        <TableCell>{offer.brand || "-"}</TableCell>
-                        <TableCell>{offer.productName}</TableCell>
-                        <TableCell>{offer.upc || "-"}</TableCell>
-                        <TableCell>${Number(offer.price || 0).toFixed(2)}</TableCell>
-                        <TableCell>
-                          {offer.availableQty === null || offer.availableQty === undefined ? "-" : offer.availableQty}
-                        </TableCell>
-                        <TableCell sx={{ width: 110 }}>
-                          <TextField
-                            size="small"
-                            type="number"
-                            inputProps={{ min: 1, step: 1 }}
-                            value={rowQuantities[offer.id] ?? ""}
-                            onChange={(event) =>
-                              setRowQuantities((prev) => ({ ...prev, [offer.id]: event.target.value }))
-                            }
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Button
-                            variant="contained"
-                            size="small"
-                            startIcon={<AddIcon />}
-                            disabled={!canEdit || cartFrozen}
-                            onClick={() => handleAddToCart(offer)}
+                    {groupedSearchResults.map(({ upc, offers }) => {
+                      const isGroup = offers.length > 1;
+                      return offers.map((offer, idx) => (
+                        <>
+                          {/* Group header row — shown once per UPC group */}
+                          {isGroup && idx === 0 && (
+                            <TableRow key={`group-header-${upc}`} sx={{ bgcolor: "action.hover" }}>
+                              <TableCell colSpan={8} sx={{ py: 0.5, pl: 2 }}>
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                  <Chip label={`${offers.length} vendors`} size="small" color="primary" variant="outlined" />
+                                  <Typography variant="body2" fontWeight={700}>{offer.productName}</Typography>
+                                  {upc && <Typography variant="caption" color="text.secondary">UPC: {upc}</Typography>}
+                                </Stack>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          <TableRow
+                            key={`${offer.id}-${offer.vendorName}`}
+                            sx={isGroup ? { borderLeft: "3px solid", borderLeftColor: "primary.main" } : {}}
                           >
-                            Add
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                            <TableCell sx={isGroup ? { pl: 3 } : {}}>{offer.vendorName}</TableCell>
+                            <TableCell>{offer.brand || "-"}</TableCell>
+                            <TableCell>{offer.productName}</TableCell>
+                            <TableCell>{offer.upc || "-"}</TableCell>
+                            <TableCell>${Number(offer.price || 0).toFixed(2)}</TableCell>
+                            <TableCell>
+                              {offer.availableQty === null || offer.availableQty === undefined ? "-" : offer.availableQty}
+                            </TableCell>
+                            <TableCell sx={{ width: 110 }}>
+                              <TextField
+                                size="small"
+                                type="number"
+                                inputProps={{ min: 1, step: 1 }}
+                                value={rowQuantities[offer.id] ?? ""}
+                                onChange={(event) =>
+                                  setRowQuantities((prev) => ({ ...prev, [offer.id]: event.target.value }))
+                                }
+                              />
+                            </TableCell>
+                            <TableCell align="right">
+                              <Button
+                                variant="contained"
+                                size="small"
+                                startIcon={<AddIcon />}
+                                disabled={!canEdit || cartFrozen}
+                                onClick={() => handleAddToCart(offer)}
+                              >
+                                Add
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        </>
+                      ));
+                    })}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -771,6 +893,77 @@ const PriceList = () => {
           </CardContent>
         </Card>
       </Stack>
+
+      {/* Column Mapping Dialog */}
+      <Dialog open={mappingOpen} onClose={() => setMappingOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>{mappingPreview && columnMapping.price !== NONE ? "Review Column Mapping" : "Map Columns"}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {mappingPreview && columnMapping.price !== NONE
+              ? "Auto-detection found the columns below. Confirm or adjust before uploading."
+              : "We couldn't automatically identify the price column. Please map the columns below."}
+          </Typography>
+
+          {mappingPreview && (
+            <>
+              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", mb: 3 }}>
+                {(["price", "name", "upc", "qty", "brand"] as const).map((field) => (
+                  <Box key={field} sx={{ minWidth: 160 }}>
+                    <Typography variant="caption" sx={{ textTransform: "uppercase", fontWeight: 600 }}>
+                      {field === "qty" ? "Quantity" : field.charAt(0).toUpperCase() + field.slice(1)}
+                    </Typography>
+                    <Select
+                      size="small"
+                      fullWidth
+                      value={columnMapping[field]}
+                      onChange={(e) => setColumnMapping((prev) => ({ ...prev, [field]: e.target.value }))}
+                    >
+                      <MenuItem value={NONE}>— Not mapped —</MenuItem>
+                      {mappingPreview.headers.map((h) => (
+                        <MenuItem key={h} value={h}>{h}</MenuItem>
+                      ))}
+                    </Select>
+                  </Box>
+                ))}
+              </Box>
+
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
+                Sample rows from your file:
+              </Typography>
+              <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 220, overflow: "auto" }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      {mappingPreview.headers.map((h) => (
+                        <TableCell key={h} sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>{h}</TableCell>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {mappingPreview.sampleRows.map((row, i) => (
+                      <TableRow key={i}>
+                        {mappingPreview.headers.map((h) => (
+                          <TableCell key={h} sx={{ whiteSpace: "nowrap" }}>{row[h] ?? ""}</TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMappingOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={columnMapping.price === NONE || uploading}
+            onClick={handleMappingConfirm}
+          >
+            {uploading ? <CircularProgress size={18} /> : "Upload with Mapping"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

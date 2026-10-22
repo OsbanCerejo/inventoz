@@ -83,6 +83,45 @@ const parseAvailableValue = (value) => {
   return Math.max(0, Math.floor(parsed));
 };
 
+// Normalize a raw UPC value: strip formatting, zero-pad 11-digit numbers (Excel drops leading zero)
+const parseUpcValue = (value) => {
+  if (value === null || value === undefined || value === "") return "";
+  // Remove spaces, dashes, dots, quotes
+  const cleaned = String(value).replace(/[\s\-.'"`]/g, "").trim();
+  if (!cleaned) return "";
+  // If purely numeric and 11 digits, pad to 12 (Excel stripped the leading zero)
+  if (/^\d{11}$/.test(cleaned)) return "0" + cleaned;
+  // Accept 12–14 digit numeric strings (UPC-A, EAN-13, GTIN-14) and alphanumeric codes
+  if (/^\d{12,14}$/.test(cleaned) || /^[A-Z0-9\-]{6,20}$/i.test(cleaned)) return cleaned;
+  return "";
+};
+
+// Detect which column looks like it contains UPC/barcode values
+// Returns the column index or -1
+const detectUpcColumn = (headers, dataRows) => {
+  const sample = dataRows.slice(0, 50);
+  const scores = headers.map((_, col) => {
+    let hits = 0;
+    for (const row of sample) {
+      const v = parseUpcValue(row[col]);
+      if (v && /^\d{11,14}$/.test(v)) hits++;
+    }
+    return hits;
+  });
+  const threshold = sample.length * 0.4;
+  // Find best-scoring column that isn't already identified as price/name/qty
+  const best = scores
+    .map((score, col) => ({ col, score, header: headers[col] }))
+    .filter(({ score, header }) =>
+      score >= threshold &&
+      !PRICE_ALIASES.has(header) &&
+      !NAME_ALIASES.has(header) &&
+      !QTY_ALIASES.has(header)
+    )
+    .sort((a, b) => b.score - a.score)[0];
+  return best ? best.col : -1;
+};
+
 const buildIdentityKey = ({ vendorName, upc, productName }) => {
   const normalizedVendor = normalizeName(vendorName);
   if (sanitizeString(upc)) {
@@ -105,41 +144,193 @@ const mapRowByHeaders = (row) => {
   return mapped;
 };
 
-const parseWorkbookOffers = ({ filePath, vendorName }) => {
-  const workbook = xlsx.readFile(filePath, { cellDates: false, raw: false });
+// Known column aliases per field
+const PRICE_ALIASES = new Set([
+  "PRICE", "COST", "UNITPRICE", "UNIT_PRICE", "UNIT_COST", "UNITCOST",
+  "WHOLESALE", "WHOLESALE_PRICE", "WHOLESALEPRICE",
+  "SPECIAL", "SALE", "SALEPRICE", "SALE_PRICE",
+  "LIST", "LIST_PRICE", "LISTPRICE",
+  "MSRP", "EACH", "COST_PRICE", "COSTPRICE", "DEALER_PRICE", "DEALERPRICE",
+  "BUYING_PRICE", "BUYINGPRICE", "NET", "NET_PRICE", "NETPRICE",
+]);
+const NAME_ALIASES = new Set(["NAME", "DESCRIPTION", "ITEM", "ITEM_NAME", "ITEMNAME", "PRODUCT", "PRODUCT_NAME", "PRODUCTNAME", "TITLE"]);
+const UPC_ALIASES  = new Set([
+  "UPC", "UPCCODE", "UPC_CODE", "UPCEAN", "UPCA", "UPCBAR",
+  "BARCODE", "BAR_CODE", "BARCODENUMBER",
+  "EAN", "EAN13", "EAN_13", "EANCODE",
+  "GTIN", "GTIN13", "GTIN_13", "GTIN14", "GTIN_14",
+  "ISBN", "PRODUCTCODE", "PRODUCT_CODE",
+  "ITEMCODE", "ITEM_CODE", "ITEMNO", "ITEM_NO", "ITEMNUMBER", "ITEM_NUMBER",
+  "CODE", "CATALOGCODE", "CATALOG_CODE",
+  "SERIAL", "SERIALNO", "SERIAL_NO",
+]);
+const QTY_ALIASES  = new Set(["AVAILABLE", "AVAIL", "QTY", "STOCK", "QUANTITY", "ON_HAND", "ONHAND", "IN_STOCK", "INSTOCK"]);
+const BRAND_ALIASES = new Set(["BRAND", "MANUFACTURER", "MFG", "MAKE", "VENDOR", "SUPPLIER"]);
+
+const HEADER_KEYWORDS = new Set([...PRICE_ALIASES, ...NAME_ALIASES, ...UPC_ALIASES, ...QTY_ALIASES, ...BRAND_ALIASES, "SIZE", "WEIGHT", "SKU", "MODEL"]);
+
+const scoreRowAsHeader = (cells) => {
+  let score = 0;
+  for (const cell of cells) {
+    const n = normalizeHeader(String(cell ?? ""));
+    if (n && HEADER_KEYWORDS.has(n)) score++;
+  }
+  return score;
+};
+
+// Detect which column is numeric across data rows (fallback price detection)
+const detectNumericColumn = (headers, dataRows) => {
+  const counts = new Array(headers.length).fill(0);
+  const totals = new Array(headers.length).fill(0);
+  for (const row of dataRows.slice(0, 50)) {
+    row.forEach((cell, col) => {
+      const v = parsePriceValue(cell);
+      if (v !== null && v > 0) { counts[col]++; totals[col]++; }
+    });
+  }
+  const sample = Math.min(dataRows.length, 50);
+  const threshold = sample * 0.5;
+  // Return column indices where >50% of rows have a positive numeric value, sorted by count desc
+  return headers
+    .map((h, col) => ({ col, header: h, count: counts[col] }))
+    .filter(({ count }) => count >= threshold)
+    .sort((a, b) => b.count - a.count);
+};
+
+const resolveField = (mapped, aliases) => {
+  for (const alias of aliases) {
+    if (mapped[alias] !== undefined && mapped[alias] !== "") return mapped[alias];
+  }
+  return undefined;
+};
+
+// Extract detected sheet info without committing to offers — used for mapping preview
+const extractSheetMeta = (worksheet) => {
+  const rawRows = xlsx.utils.sheet_to_json(worksheet, { defval: "", header: 1 });
+  let bestHeaderIdx = 0;
+  let bestScore = 0;
+  rawRows.forEach((row, idx) => {
+    const score = scoreRowAsHeader(row);
+    if (score > bestScore) { bestScore = score; bestHeaderIdx = idx; }
+  });
+  const headerRow = rawRows[bestHeaderIdx] || [];
+  const headers = headerRow.map((cell) => normalizeHeader(String(cell ?? "")));
+  const originalHeaders = headerRow.map((cell) => sanitizeString(String(cell ?? "")));
+  const dataRows = rawRows.slice(bestHeaderIdx + 1).filter(row => row.some(c => String(c ?? "").trim()));
+  return { headers, originalHeaders, dataRows, bestHeaderIdx };
+};
+
+const buildOffersFromRows = ({ headers, dataRows, vendorName, columnMapping = {} }) => {
+  // columnMapping overrides: { price: "SPECIAL", name: "PRODUCT_NAME", upc: "BARCODE", qty: "AVAIL", brand: "MANUFACTURER" }
+  const priceKey   = columnMapping.price   ? normalizeHeader(columnMapping.price)   : null;
+  const nameKey    = columnMapping.name    ? normalizeHeader(columnMapping.name)     : null;
+  const upcKey     = columnMapping.upc     ? normalizeHeader(columnMapping.upc)      : null;
+  const qtyKey     = columnMapping.qty     ? normalizeHeader(columnMapping.qty)      : null;
+  const brandKey   = columnMapping.brand   ? normalizeHeader(columnMapping.brand)    : null;
+
+  // If no price mapping provided, try to detect numeric fallback column
+  let fallbackPriceHeader = null;
+  if (!priceKey) {
+    const numericCols = detectNumericColumn(headers, dataRows);
+    const candidate = numericCols.find(({ header }) => !NAME_ALIASES.has(header) && !UPC_ALIASES.has(header) && !QTY_ALIASES.has(header));
+    if (candidate) fallbackPriceHeader = candidate.header;
+  }
+
+  // If no UPC mapping provided, try to detect a UPC-like column by value pattern
+  let fallbackUpcCol = -1;
+  if (!upcKey && resolveField(Object.fromEntries(headers.map((h, i) => [h, i])), UPC_ALIASES) === undefined) {
+    fallbackUpcCol = detectUpcColumn(headers, dataRows);
+  }
+
   const offers = [];
+  dataRows.forEach((row) => {
+    const mapped = {};
+    headers.forEach((header, col) => { if (header) mapped[header] = row[col] ?? ""; });
 
-  workbook.SheetNames.forEach((sheetName) => {
-    const worksheet = workbook.Sheets[sheetName];
-    const rows = xlsx.utils.sheet_to_json(worksheet, { defval: "" });
+    const productName = sanitizeString(
+      nameKey ? mapped[nameKey] : resolveField(mapped, NAME_ALIASES)
+    );
+    const rawUpc = upcKey
+      ? mapped[upcKey]
+      : (resolveField(mapped, UPC_ALIASES) ?? (fallbackUpcCol !== -1 ? row[fallbackUpcCol] : undefined));
+    const upc = parseUpcValue(rawUpc);
+    const brand = sanitizeString(
+      brandKey ? mapped[brandKey] : resolveField(mapped, BRAND_ALIASES)
+    );
+    const rawPrice = priceKey
+      ? mapped[priceKey]
+      : (resolveField(mapped, PRICE_ALIASES) ?? (fallbackPriceHeader ? mapped[fallbackPriceHeader] : undefined));
+    const price = parsePriceValue(rawPrice);
+    const rawQty = qtyKey ? mapped[qtyKey] : resolveField(mapped, QTY_ALIASES);
+    const availableQty = parseAvailableValue(rawQty);
 
-    rows.forEach((row) => {
-      const mapped = mapRowByHeaders(row);
-      const productName = sanitizeString(mapped.NAME || mapped.DESCRIPTION || mapped.ITEM || mapped.ITEM_NAME);
-      const upc = sanitizeString(mapped.UPC || mapped.BARCODE || mapped.SERIAL || mapped.UPCEAN);
-      const brand = sanitizeString(mapped.BRAND);
-      const price = parsePriceValue(mapped.PRICE);
-      const availableQty = parseAvailableValue(
-        mapped.AVAILABLE || mapped.AVAIL || mapped.QTY || mapped.STOCK || mapped.QUANTITY
-      );
+    if (!productName && !upc) return;
+    if (price === null) return;
 
-      if (!productName && !upc) return;
-      if (price === null) return;
-
-      offers.push({
-        vendorName: sanitizeString(vendorName),
-        upc: upc || null,
-        brand: brand || null,
-        productName: productName || upc,
-        price,
-        availableQty,
-        identityKey: buildIdentityKey({ vendorName, upc, productName: productName || upc }),
-        searchText: buildSearchText({ upc, brand, productName: productName || upc, vendorName }),
-      });
+    offers.push({
+      vendorName: sanitizeString(vendorName),
+      upc: upc || null,
+      brand: brand || null,
+      productName: productName || upc,
+      price,
+      availableQty,
+      identityKey: buildIdentityKey({ vendorName, upc, productName: productName || upc }),
+      searchText: buildSearchText({ upc, brand, productName: productName || upc, vendorName }),
     });
   });
-
   return offers;
+};
+
+const parseWorkbookOffers = ({ filePath, vendorName, columnMapping = {} }) => {
+  const workbook = xlsx.readFile(filePath, { cellDates: false, raw: false });
+  const offers = [];
+  workbook.SheetNames.forEach((sheetName) => {
+    const worksheet = workbook.Sheets[sheetName];
+    const { headers, dataRows } = extractSheetMeta(worksheet);
+    offers.push(...buildOffersFromRows({ headers, dataRows, vendorName, columnMapping }));
+  });
+  return offers;
+};
+
+// Returns needsMapping:true + preview data when price column can't be auto-detected
+const buildPreview = ({ headers, originalHeaders, dataRows }) => {
+  const numericCols = detectNumericColumn(headers, dataRows);
+  const sampleRows = dataRows.slice(0, 5).map(row =>
+    originalHeaders.reduce((obj, h, col) => { obj[h] = row[col] ?? ""; return obj; }, {})
+  );
+
+  const priceHeaderIdx = headers.findIndex(h => PRICE_ALIASES.has(h));
+  const fallbackPriceIdx = numericCols.find(({ header }) => !NAME_ALIASES.has(header) && !UPC_ALIASES.has(header) && !QTY_ALIASES.has(header))?.col ?? -1;
+  const upcAliasIdx = headers.findIndex(h => UPC_ALIASES.has(h));
+  const upcFallbackIdx = upcAliasIdx === -1 ? detectUpcColumn(headers, dataRows) : -1;
+
+  return {
+    headers: originalHeaders.filter(Boolean),
+    sampleRows,
+    suggestions: {
+      price: priceHeaderIdx !== -1 ? originalHeaders[priceHeaderIdx] : (fallbackPriceIdx !== -1 ? originalHeaders[fallbackPriceIdx] : null),
+      name:  originalHeaders[headers.findIndex(h => NAME_ALIASES.has(h))]  || null,
+      upc:   upcAliasIdx !== -1 ? originalHeaders[upcAliasIdx] : (upcFallbackIdx !== -1 ? originalHeaders[upcFallbackIdx] : null),
+      qty:   originalHeaders[headers.findIndex(h => QTY_ALIASES.has(h))]   || null,
+      brand: originalHeaders[headers.findIndex(h => BRAND_ALIASES.has(h))] || null,
+    },
+  };
+};
+
+const parseWorkbookWithPreview = ({ filePath, vendorName }) => {
+  const workbook = xlsx.readFile(filePath, { cellDates: false, raw: false });
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const { headers, originalHeaders, dataRows } = extractSheetMeta(worksheet);
+
+  const preview = buildPreview({ headers, originalHeaders, dataRows });
+
+  // Try parsing as-is
+  const offers = buildOffersFromRows({ headers, dataRows, vendorName });
+  if (offers.length > 0) return { offers, needsMapping: false, preview };
+
+  // No offers — must map manually
+  return { offers: [], needsMapping: true, preview };
 };
 
 const getOrCreateCartState = async (transaction) => {
@@ -292,9 +483,42 @@ router.post(
       }
 
       uploadedFilePath = req.file.path;
-      const offers = parseWorkbookOffers({ filePath: uploadedFilePath, vendorName });
-      if (offers.length < 1) {
-        return res.status(400).json({ error: "No valid offers were found in the uploaded file." });
+      const isDryRun = req.body.dryRun === "true";
+
+      // Parse columnMapping override from request body (sent as JSON string or object)
+      let columnMapping = {};
+      if (req.body.columnMapping) {
+        try {
+          columnMapping = typeof req.body.columnMapping === "string"
+            ? JSON.parse(req.body.columnMapping)
+            : req.body.columnMapping;
+        } catch (_) { /* ignore malformed mapping */ }
+      }
+
+      // Dry run: parse and return detected mapping + preview without saving
+      if (isDryRun) {
+        const parsed = parseWorkbookWithPreview({ filePath: uploadedFilePath, vendorName });
+        if (uploadedFilePath && fs.existsSync(uploadedFilePath)) fs.unlinkSync(uploadedFilePath);
+        uploadedFilePath = null;
+        return res.status(200).json({ dryRun: true, needsMapping: parsed.needsMapping, preview: parsed.preview });
+      }
+
+      // If explicit mapping provided, use it directly; otherwise try smart detection with preview fallback
+      let offers;
+      if (Object.keys(columnMapping).length > 0) {
+        offers = parseWorkbookOffers({ filePath: uploadedFilePath, vendorName, columnMapping });
+        if (offers.length < 1) {
+          return res.status(400).json({ error: "No valid offers were found with the provided column mapping." });
+        }
+      } else {
+        const parsed = parseWorkbookWithPreview({ filePath: uploadedFilePath, vendorName });
+        if (parsed.needsMapping) {
+          return res.status(200).json({ needsMapping: true, preview: parsed.preview });
+        }
+        offers = parsed.offers;
+        if (offers.length < 1) {
+          return res.status(400).json({ error: "No valid offers were found in the uploaded file." });
+        }
       }
 
       const existingUploads = await PriceListUpload.findAll({
