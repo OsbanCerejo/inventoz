@@ -25,7 +25,7 @@ router.get('/tiktok/callback', auth, async (req, res) => {
       return res.status(400).json({ error: 'Missing auth code from TikTok' });
     }
 
-    const tokenData = await tiktokApi.exchangeCode(code, REDIRECT_URI);
+    const tokenData = await tiktokApi.exchangeCode(code);
     // tokenData: { access_token, refresh_token, access_token_expire_in, refresh_token_expire_in, open_id, seller_name, seller_base_region, ... }
 
     const accessExpiry = new Date(Date.now() + (tokenData.access_token_expire_in || 86400) * 1000);
@@ -48,7 +48,8 @@ router.get('/tiktok/callback', auth, async (req, res) => {
 
     res.json({ success: true, shopId, shopName });
   } catch (err) {
-    console.error('TikTok OAuth callback error:', err);
+    console.error('TikTok OAuth callback error:', err.message);
+    if (err.response?.data) console.error('TikTok response:', JSON.stringify(err.response.data));
     res.status(500).json({ error: err.message });
   }
 });

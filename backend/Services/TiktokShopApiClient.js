@@ -56,53 +56,42 @@ async function request(method, path, accessToken, queryParams = {}, body = null)
   return response.data.data;
 }
 
-// Exchange auth code for tokens
-async function exchangeCode(code, redirectUri) {
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const params = { app_key: APP_KEY, timestamp };
-  const bodyObj = {
-    app_key: APP_KEY,
-    app_secret: APP_SECRET,
-    auth_code: code,
-    grant_type: 'authorized_code',
-    redirect_uri: redirectUri,
-  };
-  const bodyStr = JSON.stringify(bodyObj);
-  params.sign = buildSign(params, bodyStr, APP_SECRET);
+const AUTH_BASE_URL = 'https://auth.tiktok-shops.com';
 
+// Exchange auth code for tokens (uses auth.tiktok-shops.com, no HMAC signing)
+async function exchangeCode(code) {
   const response = await axios.post(
-    `${BASE_URL}/api/v2/token/get`,
-    bodyObj,
-    { params, headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
+    `${AUTH_BASE_URL}/api/v2/token/get`,
+    {
+      app_key: APP_KEY,
+      app_secret: APP_SECRET,
+      auth_code: code,
+      grant_type: 'authorized_code',
+    },
+    { headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
   );
 
   if (response.data.code !== 0) {
-    throw new Error(`TikTok token exchange failed: ${response.data.message}`);
+    throw new Error(`TikTok token exchange failed (${response.data.code}): ${response.data.message}`);
   }
   return response.data.data;
 }
 
 // Refresh access token
 async function refreshToken(refreshTok) {
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const params = { app_key: APP_KEY, timestamp };
-  const bodyObj = {
-    app_key: APP_KEY,
-    app_secret: APP_SECRET,
-    refresh_token: refreshTok,
-    grant_type: 'refresh_token',
-  };
-  const bodyStr = JSON.stringify(bodyObj);
-  params.sign = buildSign(params, bodyStr, APP_SECRET);
-
   const response = await axios.post(
-    `${BASE_URL}/api/v2/token/refresh`,
-    bodyObj,
-    { params, headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
+    `${AUTH_BASE_URL}/api/v2/token/refresh`,
+    {
+      app_key: APP_KEY,
+      app_secret: APP_SECRET,
+      refresh_token: refreshTok,
+      grant_type: 'refresh_token',
+    },
+    { headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
   );
 
   if (response.data.code !== 0) {
-    throw new Error(`TikTok token refresh failed: ${response.data.message}`);
+    throw new Error(`TikTok token refresh failed (${response.data.code}): ${response.data.message}`);
   }
   return response.data.data;
 }
