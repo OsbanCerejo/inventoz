@@ -12,7 +12,7 @@ const REDIRECT_URI = process.env.TIKTOK_REDIRECT_URI ||
 // Returns the TikTok OAuth authorization URL for the frontend to redirect to
 router.get('/tiktok', auth, (req, res) => {
   const state = Buffer.from(JSON.stringify({ userId: req.user.id, ts: Date.now() })).toString('base64');
-  const url = `https://services.tiktokshop.com/open/authorize?service_id=${APP_KEY}&state=${state}`;
+  const url = `https://services.tiktokshop.com/open/authorize?app_key=${APP_KEY}&state=${state}`;
   res.json({ url, state });
 });
 
