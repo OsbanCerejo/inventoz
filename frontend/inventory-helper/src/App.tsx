@@ -46,6 +46,8 @@ import Brands from "./pages/Brands";
 import Settings from "./pages/Settings";
 import SkuMerge from "./pages/SkuMerge";
 import AuditLog from "./pages/AuditLog";
+import ListingManagement from "./pages/ListingManagement";
+import ListingManagementCallback from "./pages/ListingManagementCallback";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleBasedHome from "./components/RoleBasedHome";
@@ -494,6 +496,22 @@ function AppContent() {
               element={
                 <ProtectedRoute requireAdmin>
                   <AuditLog />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/listing-management"
+              element={
+                <ProtectedRoute menuItem="listingManagement">
+                  <ListingManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/listing-management/auth/tiktok/callback"
+              element={
+                <ProtectedRoute>
+                  <ListingManagementCallback />
                 </ProtectedRoute>
               }
             />

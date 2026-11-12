@@ -98,6 +98,7 @@ function NavBar() {
     { key: 'brands-tool', permissionKey: 'brands', label: 'Brands', path: '/brands' },
     { key: 'settings-tool', permissionKey: 'settings', label: 'Settings', path: '/settings' },
     { key: 'sku-merge-tool', permissionKey: 'skuMerge', label: 'SKU Merge', path: '/sku-merge' },
+    { key: 'listing-management-tool', permissionKey: 'listingManagement', label: 'Listing Management', path: '/listing-management' },
     { key: 'audit-log-tool', permissionKey: 'auditLog', label: 'Audit Log', path: '/audit-log', adminOnly: true },
     { key: 'packing-tool', permissionKey: 'packing', label: 'Packing', path: '/orders/packingMode' },
     { key: 'pricelist-tool', permissionKey: 'pricelist', label: 'PriceList', path: '/price-list' },

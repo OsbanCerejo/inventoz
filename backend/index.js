@@ -10,6 +10,8 @@ const orderProcessingCron = require("./cron/orderProcessing");
 const invoiceTrackerPaymentReminderCron = require("./cron/invoiceTrackerPaymentReminders");
 const customerServiceOverdueCron = require("./cron/customerServiceOverdue");
 const { aggregateSalesSummary } = require("./cron/salesSummary");
+const lmSyncWorker = require("./Services/LmSyncWorker");
+const { refreshExpiringTokens } = require("./cron/lmTokenRefresh");
 const path = require("path");
 
 app.use(express.json({ limit: '5mb' }));
@@ -174,6 +176,15 @@ app.use("/sku-merge", skuMergeRouter);
 const checklistRouter = require("./routes/Checklist");
 app.use("/api/checklist", checklistRouter);
 
+const listingManagementRouter = require("./routes/ListingManagement");
+app.use("/listing-management", listingManagementRouter);
+
+const listingManagementAuthRouter = require("./routes/ListingManagementAuth");
+app.use("/listing-management/auth", listingManagementAuthRouter);
+
+const listingManagementWebhookRouter = require("./routes/ListingManagementWebhook");
+app.use("/listing-management/webhook", listingManagementWebhookRouter);
+
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.static(path.join(__dirname, 'public', 'hba-site')));
@@ -272,6 +283,11 @@ sequelize
 
     // Run sales summary aggregation once on startup, then nightly at 2AM
     aggregateSalesSummary();
+
+    // Listing Management: sync worker + token refresh
+    lmSyncWorker.start();
+    setInterval(refreshExpiringTokens, 60 * 60 * 1000); // every hour
+    refreshExpiringTokens(); // run once on startup
 
     startServer();
   })
