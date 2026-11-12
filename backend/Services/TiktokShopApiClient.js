@@ -59,16 +59,20 @@ async function request(method, path, accessToken, queryParams = {}, body = null)
 const AUTH_BASE_URL = 'https://auth.tiktok-shops.com';
 
 // Exchange auth code for tokens (uses auth.tiktok-shops.com, no HMAC signing)
+// TikTok expects params as query string, not JSON body
 async function exchangeCode(code) {
   const response = await axios.post(
     `${AUTH_BASE_URL}/api/v2/token/get`,
+    null,
     {
-      app_key: APP_KEY,
-      app_secret: APP_SECRET,
-      auth_code: code,
-      grant_type: 'authorized_code',
-    },
-    { headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
+      params: {
+        app_key: APP_KEY,
+        app_secret: APP_SECRET,
+        auth_code: code,
+        grant_type: 'authorized_code',
+      },
+      timeout: 15000,
+    }
   );
 
   if (response.data.code !== 0) {
@@ -81,13 +85,16 @@ async function exchangeCode(code) {
 async function refreshToken(refreshTok) {
   const response = await axios.post(
     `${AUTH_BASE_URL}/api/v2/token/refresh`,
+    null,
     {
-      app_key: APP_KEY,
-      app_secret: APP_SECRET,
-      refresh_token: refreshTok,
-      grant_type: 'refresh_token',
-    },
-    { headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
+      params: {
+        app_key: APP_KEY,
+        app_secret: APP_SECRET,
+        refresh_token: refreshTok,
+        grant_type: 'refresh_token',
+      },
+      timeout: 15000,
+    }
   );
 
   if (response.data.code !== 0) {
