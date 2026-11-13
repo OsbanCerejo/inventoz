@@ -143,11 +143,22 @@ router.patch('/skus/:id', auth, async (req, res) => {
   }
 });
 
-// DELETE /listing-management/skus/:id  — remove from management
+// DELETE /listing-management/skus/:id  — remove from management completely
+// Deletes the SKU and all related mappings/jobs. Does NOT touch TikTok or Inventoz products.
 router.delete('/skus/:id', auth, async (req, res) => {
   try {
     const ms = await LmManagedSku.findByPk(req.params.id);
     if (!ms) return res.status(404).json({ error: 'Not found' });
+
+    // Get all mapping IDs for this SKU so we can clean up jobs
+    const mappings = await LmMarketplaceMapping.findAll({ where: { managedSkuId: ms.id }, attributes: ['id'] });
+    const mappingIds = mappings.map(m => m.id);
+
+    if (mappingIds.length > 0) {
+      await LmSyncJob.destroy({ where: { mappingId: mappingIds } });
+      await LmMarketplaceMapping.destroy({ where: { id: mappingIds } });
+    }
+
     await ms.destroy();
     res.json({ success: true });
   } catch (err) {

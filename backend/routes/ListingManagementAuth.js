@@ -76,6 +76,36 @@ router.get('/tiktok/callback', auth, async (req, res) => {
   }
 });
 
+// POST /listing-management/auth/tiktok/refresh-cipher
+// Re-fetches shop cipher for all active credentials that are missing it
+router.post('/tiktok/refresh-cipher', auth, async (req, res) => {
+  try {
+    const creds = await LmTiktokCredential.findAll({ where: { isActive: true } });
+    const results = [];
+
+    for (const cred of creds) {
+      try {
+        const shopsData = await tiktokApi.getAuthorizedShops(cred.accessToken);
+        const shops = shopsData?.shops || shopsData?.list || [];
+        if (shops.length > 0) {
+          const cipher = shops[0].cipher || shops[0].shop_cipher || null;
+          const id = shops[0].id || shops[0].shop_id || cred.shopId;
+          const name = shops[0].name || shops[0].shop_name || cred.shopName;
+          await cred.update({ shopCipher: cipher, shopId: id, shopName: name, lastHealthCheck: new Date() });
+          results.push({ shopId: cred.shopId, cipher: !!cipher, name });
+        }
+      } catch (err) {
+        console.error(`refresh-cipher failed for shop ${cred.shopId}:`, err.message);
+        results.push({ shopId: cred.shopId, error: err.message });
+      }
+    }
+
+    res.json({ results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /listing-management/auth/status
 // Returns connected shops
 router.get('/status', auth, async (req, res) => {

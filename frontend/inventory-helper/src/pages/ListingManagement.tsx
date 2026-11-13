@@ -17,6 +17,7 @@ import {
   Search as SearchIcon,
   OpenInNew as OpenInNewIcon,
   Sync as SyncIcon,
+  DeleteOutline as DeleteIcon,
 } from '@mui/icons-material';
 import { getServerUrl } from '../config/api';
 import { useAuth } from '../context/AuthContext';
@@ -136,6 +137,28 @@ export default function ListingManagement() {
       window.location.href = res.data.url;
     } catch (e: any) {
       alert('Failed to get TikTok auth URL: ' + e.message);
+    }
+  };
+
+  const handleRemoveSku = async (id: number, sku: string) => {
+    if (!window.confirm(`Remove "${sku}" from Listing Management?\n\nThis deletes it from Inventoz listing management only. TikTok Shop and your Inventoz product are not affected.`)) return;
+    try {
+      await axios.delete(`${API()}/listing-management/skus/${id}`, { headers });
+      load();
+    } catch (e: any) {
+      alert('Failed to remove SKU: ' + (e.response?.data?.error || e.message));
+    }
+  };
+
+  const refreshCipher = async () => {
+    try {
+      const res = await axios.post(`${API()}/listing-management/auth/tiktok/refresh-cipher`, {}, { headers });
+      const ok = res.data.results.filter((r: any) => r.cipher).length;
+      const fail = res.data.results.filter((r: any) => r.error).length;
+      alert(`Cipher refresh: ${ok} shop(s) updated${fail ? `, ${fail} failed (check backend logs)` : ''}`);
+      load();
+    } catch (e: any) {
+      alert('Cipher refresh failed: ' + e.message);
     }
   };
 
@@ -307,6 +330,11 @@ export default function ListingManagement() {
           <Button variant="outlined" startIcon={<OpenInNewIcon />} onClick={connectTikTok}>
             {shops.length > 0 ? `Connected: ${shops.map(s => s.shopName).join(', ')}` : 'Connect TikTok Shop'}
           </Button>
+          {shops.length > 0 && (
+            <Button variant="outlined" size="small" onClick={refreshCipher} title="Re-sync shop cipher from TikTok">
+              Refresh Cipher
+            </Button>
+          )}
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
             Add SKU
           </Button>
@@ -455,6 +483,11 @@ export default function ListingManagement() {
                           </IconButton>
                         </Tooltip>
                       )}
+                      <Tooltip title="Remove from Listing Management">
+                        <IconButton size="small" onClick={() => handleRemoveSku(row.id, row.sku)} color="error">
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                     </Box>
                   </TableCell>
                 </TableRow>
