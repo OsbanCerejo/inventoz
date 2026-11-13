@@ -49,17 +49,32 @@ async function request(method, path, accessToken, shopCipher = null, queryParams
 
   const url = `${BASE_URL}${path}`;
 
-  const response = await axios({
-    method,
-    url,
-    params,
-    data: body || undefined,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-tts-access-token': accessToken,
-    },
-    timeout: 15000,
-  });
+  let response;
+  try {
+    response = await axios({
+      method,
+      url,
+      params,
+      data: body || undefined,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-tts-access-token': accessToken,
+      },
+      timeout: 15000,
+    });
+  } catch (axiosErr) {
+    // Axios throws on non-2xx — extract TikTok's error body if present
+    const tiktokBody = axiosErr.response?.data;
+    const httpStatus = axiosErr.response?.status;
+    const msg = tiktokBody
+      ? `TikTok HTTP ${httpStatus} (code ${tiktokBody.code}): ${tiktokBody.message || JSON.stringify(tiktokBody)}`
+      : `TikTok HTTP ${httpStatus}: ${axiosErr.message}`;
+    const err = new Error(msg);
+    err.tiktokCode = tiktokBody?.code;
+    err.tiktokData = tiktokBody;
+    err.httpStatus = httpStatus;
+    throw err;
+  }
 
   if (response.data.code !== 0) {
     const err = new Error(`TikTok API error (${response.data.code}): ${response.data.message}`);
@@ -119,16 +134,16 @@ async function getAuthorizedShops(accessToken) {
   return request('GET', '/authorization/202309/shops', accessToken);
 }
 
-// Search products (POST, shop-scoped via shop_cipher)
+// Search products (POST, shop-scoped via shop_cipher) — uses 202502 version
 async function searchProducts(accessToken, shopCipher, pageToken = null) {
   const body = { page_size: 20 };
   if (pageToken) body.page_token = pageToken;
-  return request('POST', '/product/202309/products/search', accessToken, shopCipher, {}, body);
+  return request('POST', '/product/202502/products/search', accessToken, shopCipher, {}, body);
 }
 
-// Get product detail including SKUs and warehouse IDs
+// Get product detail including SKUs and warehouse IDs — uses 202502 version
 async function getProduct(accessToken, shopCipher, productId) {
-  return request('GET', `/product/202309/products/${productId}`, accessToken, shopCipher);
+  return request('GET', `/product/202502/products/${productId}`, accessToken, shopCipher);
 }
 
 // Search inventory for a list of SKU IDs

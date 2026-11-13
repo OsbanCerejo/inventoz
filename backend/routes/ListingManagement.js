@@ -285,8 +285,9 @@ router.get('/tiktok/products', auth, async (req, res) => {
     const data = await tiktokApi.searchProducts(cred.accessToken, cred.shopCipher, pageToken || null);
     res.json(data);
   } catch (err) {
-    console.error('TikTok products error:', err.message, err.tiktokData);
-    res.status(500).json({ error: err.message });
+    console.error('TikTok products error:', err.message);
+    if (err.tiktokData) console.error('TikTok error body:', JSON.stringify(err.tiktokData));
+    res.status(500).json({ error: err.message, tiktokCode: err.tiktokCode });
   }
 });
 
