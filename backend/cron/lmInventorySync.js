@@ -19,6 +19,7 @@ async function runInventorySync() {
         listingStatus: { [Op.ne]: 'inactive' },
         marketplaceProductId: { [Op.ne]: null },
         marketplaceSkuId: { [Op.ne]: null },
+        qtyInitialized: true,
       },
       include: [{
         model: LmManagedSku,
@@ -43,8 +44,28 @@ async function runInventorySync() {
     for (const mapping of mappings) {
       const inventozQty = qtyMap[mapping.managedSku.sku] ?? 0;
 
-      // Skip if qty hasn't changed
-      if (inventozQty === mapping.currentQty) continue;
+      // First time seeing this mapping — record the baseline, don't push yet
+      if (mapping.lastConfirmedQty === null || mapping.lastConfirmedQty === undefined) {
+        await mapping.update({ lastConfirmedQty: inventozQty });
+        continue;
+      }
+
+      const delta = inventozQty - mapping.lastConfirmedQty;
+
+      // Always update the snapshot regardless of whether we push
+      await mapping.update({ lastConfirmedQty: inventozQty });
+
+      // Skip if no change
+      if (delta === 0) continue;
+
+      const newTiktokQty = Math.max(0, mapping.currentQty + delta);
+
+      // If the resulting TikTok qty would exceed Inventoz qty, flag and do not push
+      if (newTiktokQty > inventozQty) {
+        console.warn(`[lmInventorySync] Stock alert: mapping ${mapping.id} (SKU ${mapping.managedSku.sku}) — calculated TikTok qty ${newTiktokQty} > Inventoz qty ${inventozQty}. Skipping push, keeping listing qty at ${mapping.currentQty}.`);
+        await mapping.update({ lastSyncStatus: 'failed' });
+        continue;
+      }
 
       // Skip if there's already a pending or processing qty_update for this mapping
       const existingJob = await LmSyncJob.findOne({
@@ -59,7 +80,7 @@ async function runInventorySync() {
       await LmSyncJob.create({
         mappingId: mapping.id,
         jobType: 'qty_update',
-        targetQty: inventozQty,
+        targetQty: newTiktokQty,
         status: 'pending',
       });
 

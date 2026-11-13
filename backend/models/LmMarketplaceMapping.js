@@ -10,6 +10,7 @@ module.exports = (sequelize, DataTypes) => {
     warehouseId: { type: DataTypes.STRING(191), allowNull: true },
     listingStatus: { type: DataTypes.STRING(64), defaultValue: 'active' },
     currentQty: { type: DataTypes.INTEGER, defaultValue: 0 },
+    qtyInitialized: { type: DataTypes.BOOLEAN, defaultValue: false },
     desiredQty: { type: DataTypes.INTEGER, defaultValue: 0 },
     lastConfirmedQty: { type: DataTypes.INTEGER, allowNull: true },
     currentPrice: { type: DataTypes.DECIMAL(10, 2), allowNull: true },

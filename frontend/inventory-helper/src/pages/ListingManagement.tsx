@@ -46,6 +46,7 @@ interface ManagedSkuRow {
     marketplaceProductId: string | null;
     marketplaceSkuId: string | null;
     currentQty: number;
+    lastConfirmedQty: number | null;
     currentPrice: number | null;
     listingStatus: string;
     syncEnabled: boolean;
@@ -456,6 +457,7 @@ export default function ListingManagement() {
                 <TableCell align="center">Stock</TableCell>
                 <TableCell align="center">Pending</TableCell>
                 <TableCell align="center">Avail.</TableCell>
+                <TableCell align="center">Next Sync</TableCell>
                 <TableCell align="center">TikTok Qty</TableCell>
                 <TableCell align="center">TikTok Price</TableCell>
                 <TableCell align="center">Status</TableCell>
@@ -503,6 +505,26 @@ export default function ListingManagement() {
                         </Typography>
                         <StockAlertBadge alert={row.stockAlert} />
                       </Box>
+                    </TableCell>
+
+                    {/* Next Sync delta */}
+                    <TableCell align="center">
+                      {(() => {
+                        const m = row.mapping;
+                        if (!m || !m.syncEnabled || m.lastConfirmedQty === null || m.lastConfirmedQty === undefined) {
+                          return <Typography variant="body2" color="text.disabled">—</Typography>;
+                        }
+                        const delta = row.inventozQty - m.lastConfirmedQty;
+                        if (delta === 0) return <Typography variant="body2" color="text.disabled">—</Typography>;
+                        return (
+                          <Chip
+                            label={delta > 0 ? `+${delta}` : `${delta}`}
+                            size="small"
+                            color={delta > 0 ? 'success' : 'error'}
+                            sx={{ fontSize: 11, fontWeight: 600 }}
+                          />
+                        );
+                      })()}
                     </TableCell>
 
                     {/* TikTok Qty — inline edit */}
@@ -709,29 +731,10 @@ export default function ListingManagement() {
                   size="small" fullWidth
                   label="Search TikTok listings"
                   value={searchInput}
-                  onChange={e => setSearchInput(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      setProductSearch(searchInput);
-                      setSelectedProductId('');
-                      setProductDetail(null);
-                      fetchTikTokProducts(selectedShopId, searchInput);
-                    }
-                  }}
+                  onChange={e => { setSearchInput(e.target.value); setSelectedProductId(''); setProductDetail(null); }}
                   InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
-                  helperText="Press Enter to search TikTok — searches by keyword or SKU"
+                  helperText="Filters loaded listings by name or SKU — use Load More to load additional pages"
                 />
-                <Button
-                  variant="outlined" size="small" sx={{ whiteSpace: 'nowrap', alignSelf: 'flex-start', mt: 0.5 }}
-                  onClick={() => {
-                    setProductSearch(searchInput);
-                    setSelectedProductId('');
-                    setProductDetail(null);
-                    fetchTikTokProducts(selectedShopId, searchInput);
-                  }}
-                >
-                  Search
-                </Button>
               </Box>
 
               {tiktokLoading ? (
@@ -740,10 +743,30 @@ export default function ListingManagement() {
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
                   No results. Try a different search.
                 </Typography>
+              ) : tiktokProducts.filter((p: any) => {
+                  if (!searchInput.trim()) return true;
+                  const q = searchInput.trim().toLowerCase();
+                  const title = (p.title || p.name || '').toLowerCase();
+                  const id = (p.id || '').toLowerCase();
+                  const skuMatch = (p.skus || p.sku_list || []).some((s: any) => (s.seller_sku || '').toLowerCase().includes(q));
+                  return title.includes(q) || id.includes(q) || skuMatch;
+                }).length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
+                  No listings match "{searchInput}". Try a different keyword or use Load More.
+                </Typography>
               ) : (
                 <Box>
                   <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, maxHeight: 220, overflowY: 'auto' }}>
-                    {tiktokProducts.map((p: any) => (
+                    {tiktokProducts.filter((p: any) => {
+                      if (!searchInput.trim()) return true;
+                      const q = searchInput.trim().toLowerCase();
+                      const title = (p.title || p.name || '').toLowerCase();
+                      const id = (p.id || '').toLowerCase();
+                      const skuMatch = (p.skus || p.sku_list || []).some((s: any) =>
+                        (s.seller_sku || '').toLowerCase().includes(q)
+                      );
+                      return title.includes(q) || id.includes(q) || skuMatch;
+                    }).map((p: any) => (
                       <Box
                         key={p.id}
                         onClick={() => { setSelectedProductId(p.id); fetchProductDetail(p.id); }}
