@@ -2,35 +2,50 @@ const crypto = require('crypto');
 const axios = require('axios');
 
 const BASE_URL = 'https://open-api.tiktokglobalshop.com';
+const AUTH_BASE_URL = 'https://auth.tiktok-shops.com';
 const APP_KEY = process.env.TIKTOK_APP_KEY;
 const APP_SECRET = process.env.TIKTOK_APP_SECRET;
 
-function buildSign(params, body, secret) {
-  // TikTok HMAC-SHA256 signing: sorted param keys + body
-  const sortedKeys = Object.keys(params).sort();
-  let input = '';
+// TikTok Shop API v2 signing:
+// sign_input = APP_SECRET + path + sorted(key+value for params excluding sign and access_token) + body + APP_SECRET
+// sign = HMAC-SHA256(key=APP_SECRET, message=sign_input), lowercase hex
+function buildSign(path, params, body, secret) {
+  const sortedKeys = Object.keys(params)
+    .filter(k => k !== 'sign' && k !== 'access_token')
+    .sort();
+
+  let input = secret + path;
   for (const key of sortedKeys) {
     input += key + params[key];
   }
-  if (body && typeof body === 'string' && body !== '{}' && body !== '') {
-    input = input + body;
+  if (body && body !== '{}' && body !== '') {
+    input += body;
   }
-  input = secret + input + secret;
+  input += secret;
+
   return crypto.createHmac('sha256', secret).update(input).digest('hex');
 }
 
-async function request(method, path, accessToken, queryParams = {}, body = null) {
+// Generic signed request to TikTok Shop Open API
+// access_token and sign are added AFTER the signature is computed (not included in signing)
+async function request(method, path, accessToken, shopCipher = null, queryParams = {}, body = null) {
   const timestamp = Math.floor(Date.now() / 1000).toString();
 
   const params = {
     app_key: APP_KEY,
     timestamp,
-    access_token: accessToken,
     ...queryParams,
   };
 
+  if (shopCipher) {
+    params.shop_cipher = shopCipher;
+  }
+
   const bodyStr = body ? JSON.stringify(body) : '';
-  params.sign = buildSign(params, bodyStr, APP_SECRET);
+  params.sign = buildSign(path, params, bodyStr, APP_SECRET);
+
+  // access_token is added after signing
+  params.access_token = accessToken;
 
   const url = `${BASE_URL}${path}`;
 
@@ -47,7 +62,7 @@ async function request(method, path, accessToken, queryParams = {}, body = null)
   });
 
   if (response.data.code !== 0) {
-    const err = new Error(`TikTok API error: ${response.data.message}`);
+    const err = new Error(`TikTok API error (${response.data.code}): ${response.data.message}`);
     err.tiktokCode = response.data.code;
     err.tiktokData = response.data;
     throw err;
@@ -56,10 +71,8 @@ async function request(method, path, accessToken, queryParams = {}, body = null)
   return response.data.data;
 }
 
-const AUTH_BASE_URL = 'https://auth.tiktok-shops.com';
-
-// Exchange auth code for tokens (uses auth.tiktok-shops.com, no HMAC signing)
-// TikTok v2 token exchange is a GET with query params (not POST, not JSON body)
+// Exchange auth code for tokens
+// TikTok v2: GET with query params, no signing, no access_token
 async function exchangeCode(code) {
   const response = await axios.get(
     `${AUTH_BASE_URL}/api/v2/token/get`,
@@ -80,7 +93,7 @@ async function exchangeCode(code) {
   return response.data.data;
 }
 
-// Refresh access token (GET with query params)
+// Refresh access token
 async function refreshToken(refreshTok) {
   const response = await axios.get(
     `${AUTH_BASE_URL}/api/v2/token/refresh`,
@@ -101,55 +114,45 @@ async function refreshToken(refreshTok) {
   return response.data.data;
 }
 
-// Get authorized shops for this token
+// Get list of authorized shops — returns shops[].{ id, cipher, name, region, code, seller_type }
 async function getAuthorizedShops(accessToken) {
-  return request('GET', '/api/v2/seller/global_shop', accessToken);
+  return request('GET', '/authorization/202309/shops', accessToken);
 }
 
-// Search products
-async function searchProducts(accessToken, shopId, pageToken = null) {
-  const query = { shop_id: shopId, page_size: 20 };
-  if (pageToken) query.page_token = pageToken;
-  return request('GET', '/api/products/search', accessToken, query);
+// Search products (POST, shop-scoped via shop_cipher)
+async function searchProducts(accessToken, shopCipher, pageToken = null) {
+  const body = { page_size: 20 };
+  if (pageToken) body.page_token = pageToken;
+  return request('POST', '/product/202309/products/search', accessToken, shopCipher, {}, body);
 }
 
-// Get product detail (includes SKUs + warehouse IDs)
-async function getProduct(accessToken, shopId, productId) {
-  return request('GET', `/api/products/${productId}`, accessToken, { shop_id: shopId });
+// Get product detail including SKUs and warehouse IDs
+async function getProduct(accessToken, shopCipher, productId) {
+  return request('GET', `/product/202309/products/${productId}`, accessToken, shopCipher);
 }
 
-// Get inventory for a list of SKU IDs
-async function getInventory(accessToken, shopId, skuIds) {
-  return request('POST', '/api/fulfillment/inventory/search', accessToken,
-    { shop_id: shopId },
-    { sku_id_list: skuIds }
-  );
+// Search inventory for a list of SKU IDs
+async function getInventory(accessToken, shopCipher, skuIds) {
+  return request('POST', '/fulfillment/202309/inventory/search', accessToken, shopCipher, {}, { sku_id_list: skuIds });
 }
 
-// Update inventory (absolute quantity)
-async function updateInventory(accessToken, shopId, skuId, warehouseId, quantity) {
-  return request('POST', '/api/fulfillment/inventory/update', accessToken,
-    { shop_id: shopId },
-    {
-      product_id: null,
-      skus: [{
-        id: skuId,
-        inventory: [{ warehouse_id: warehouseId, quantity }],
-      }],
-    }
-  );
+// Update inventory quantity (absolute)
+async function updateInventory(accessToken, shopCipher, skuId, warehouseId, quantity) {
+  return request('PUT', '/fulfillment/202309/inventory', accessToken, shopCipher, {}, {
+    skus: [{ id: skuId, inventory: [{ warehouse_id: warehouseId, quantity }] }],
+  });
 }
 
-// Get orders by status
-async function getOrders(accessToken, shopId, orderStatus, createTimeGte = null) {
-  const query = { shop_id: shopId, order_status: orderStatus, page_size: 50 };
-  if (createTimeGte) query.create_time_gte = Math.floor(createTimeGte / 1000);
-  return request('GET', '/api/orders/search', accessToken, query);
+// Search orders by status
+async function getOrders(accessToken, shopCipher, orderStatus, createTimeGte = null) {
+  const body = { order_status: orderStatus, page_size: 50 };
+  if (createTimeGte) body.create_time_gte = Math.floor(createTimeGte / 1000);
+  return request('POST', '/order/202309/orders/search', accessToken, shopCipher, {}, body);
 }
 
 // Get order detail
-async function getOrder(accessToken, shopId, orderId) {
-  return request('GET', `/api/orders/${orderId}`, accessToken, { shop_id: shopId });
+async function getOrder(accessToken, shopCipher, orderId) {
+  return request('GET', `/order/202309/orders/${orderId}`, accessToken, shopCipher);
 }
 
 module.exports = {

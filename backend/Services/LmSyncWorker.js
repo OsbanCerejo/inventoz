@@ -63,11 +63,15 @@ async function processJob(job) {
       await failJob(job, 'No active credentials for shop');
       return;
     }
+    if (!cred.shopCipher) {
+      await failJob(job, 'Shop cipher not available — reconnect TikTok Shop');
+      return;
+    }
 
     if (job.jobType === 'qty_update') {
       await tiktokApi.updateInventory(
         cred.accessToken,
-        mapping.shopId,
+        cred.shopCipher,
         mapping.marketplaceSkuId,
         mapping.warehouseId,
         job.targetQty
@@ -79,10 +83,10 @@ async function processJob(job) {
       });
 
     } else if (job.jobType === 'price_update') {
-      // Price update — TikTok price API varies by product type; using product modify
-      await tiktokApi.request('PUT', `/api/products/${mapping.marketplaceProductId}/prices`,
+      await tiktokApi.request('PUT', `/product/202309/products/${mapping.marketplaceProductId}/prices`,
         cred.accessToken,
-        { shop_id: mapping.shopId },
+        cred.shopCipher,
+        {},
         { skus: [{ id: mapping.marketplaceSkuId, price: { currency: 'USD', amount: String(job.targetPrice) } }] }
       );
       await mapping.update({
@@ -92,7 +96,7 @@ async function processJob(job) {
       });
 
     } else if (job.jobType === 'reconcile') {
-      const inventory = await tiktokApi.getInventory(cred.accessToken, mapping.shopId, [mapping.marketplaceSkuId]);
+      const inventory = await tiktokApi.getInventory(cred.accessToken, cred.shopCipher, [mapping.marketplaceSkuId]);
       const item = inventory?.inventory_list?.find(i => i.sku_id === mapping.marketplaceSkuId);
       if (item) {
         const liveQty = item.inventory?.find(w => w.warehouse_id === mapping.warehouseId)?.quantity ?? item.total_available;

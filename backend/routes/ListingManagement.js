@@ -220,7 +220,8 @@ router.post('/mappings/:id/push-qty', auth, async (req, res) => {
     if (!mapping) return res.status(404).json({ error: 'Mapping not found' });
 
     const cred = await getActiveCredential(mapping.shopId);
-    await tiktokApi.updateInventory(cred.accessToken, mapping.shopId, mapping.marketplaceSkuId, mapping.warehouseId, qty);
+    if (!cred.shopCipher) return res.status(400).json({ error: 'Shop cipher not set — reconnect TikTok Shop to fix' });
+    await tiktokApi.updateInventory(cred.accessToken, cred.shopCipher, mapping.marketplaceSkuId, mapping.warehouseId, qty);
 
     const oldQty = mapping.currentQty;
     await mapping.update({ currentQty: qty, desiredQty: qty, lastSyncAt: new Date(), lastSyncStatus: 'ok' });
@@ -269,9 +270,11 @@ router.get('/tiktok/products', auth, async (req, res) => {
     if (!shopId) return res.status(400).json({ error: 'shopId is required' });
 
     const cred = await getActiveCredential(shopId);
-    const data = await tiktokApi.searchProducts(cred.accessToken, shopId, pageToken || null);
+    if (!cred.shopCipher) return res.status(400).json({ error: 'Shop cipher not set — reconnect TikTok Shop to fix' });
+    const data = await tiktokApi.searchProducts(cred.accessToken, cred.shopCipher, pageToken || null);
     res.json(data);
   } catch (err) {
+    console.error('TikTok products error:', err.message, err.tiktokData);
     res.status(500).json({ error: err.message });
   }
 });
@@ -284,7 +287,8 @@ router.get('/tiktok/products/:productId', auth, async (req, res) => {
     if (!shopId) return res.status(400).json({ error: 'shopId is required' });
 
     const cred = await getActiveCredential(shopId);
-    const data = await tiktokApi.getProduct(cred.accessToken, shopId, req.params.productId);
+    if (!cred.shopCipher) return res.status(400).json({ error: 'Shop cipher not set — reconnect TikTok Shop to fix' });
+    const data = await tiktokApi.getProduct(cred.accessToken, cred.shopCipher, req.params.productId);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });

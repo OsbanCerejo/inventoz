@@ -3,6 +3,7 @@ module.exports = (sequelize, DataTypes) => {
     id: { type: DataTypes.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
     shopId: { type: DataTypes.STRING(191), allowNull: false, unique: true },
     shopName: { type: DataTypes.STRING(255), allowNull: true },
+    shopCipher: { type: DataTypes.STRING(500), allowNull: true },
     accessToken: { type: DataTypes.TEXT, allowNull: true },
     refreshToken: { type: DataTypes.TEXT, allowNull: true },
     accessTokenExpiry: { type: DataTypes.DATE, allowNull: true },

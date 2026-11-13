@@ -26,24 +26,40 @@ router.get('/tiktok/callback', auth, async (req, res) => {
     }
 
     const tokenData = await tiktokApi.exchangeCode(code);
-    // tokenData response varies: may have shops[] array or top-level open_id
     console.log('TikTok token data keys:', Object.keys(tokenData || {}));
 
-    // Handle expiry: TikTok returns seconds; some versions return milliseconds
+    // Handle expiry: values are in seconds
     const accessExpireIn = tokenData.access_token_expire_in || tokenData.expires_in || 86400;
     const refreshExpireIn = tokenData.refresh_token_expire_in || 2592000;
-    // If value looks like milliseconds (> 1e9), treat as ms; otherwise seconds
     const accessExpiry = new Date(Date.now() + (accessExpireIn > 1e9 ? accessExpireIn : accessExpireIn * 1000));
     const refreshExpiry = new Date(Date.now() + (refreshExpireIn > 1e9 ? refreshExpireIn : refreshExpireIn * 1000));
 
-    // TikTok v2 response: shops[] array holds shop_id and shop_name; fall back to open_id
-    const firstShop = Array.isArray(tokenData.shops) && tokenData.shops.length > 0 ? tokenData.shops[0] : null;
-    const shopId = firstShop?.shop_id || tokenData.open_id || tokenData.seller_id || 'unknown';
-    const shopName = firstShop?.shop_name || tokenData.seller_name || shopId;
+    // Fetch authorized shops to get the shop cipher (required for all API calls)
+    let shopId = 'unknown';
+    let shopName = 'unknown';
+    let shopCipher = null;
+
+    try {
+      const shopsData = await tiktokApi.getAuthorizedShops(tokenData.access_token);
+      console.log('TikTok authorized shops:', JSON.stringify(shopsData));
+      const shops = shopsData?.shops || shopsData?.list || [];
+      if (shops.length > 0) {
+        shopId = shops[0].id || shops[0].shop_id || 'unknown';
+        shopName = shops[0].name || shops[0].shop_name || shopId;
+        shopCipher = shops[0].cipher || shops[0].shop_cipher || null;
+      }
+    } catch (shopErr) {
+      console.error('Failed to fetch authorized shops (cipher unavailable):', shopErr.message);
+      // Fall back to token data fields
+      const firstShop = Array.isArray(tokenData.shops) && tokenData.shops.length > 0 ? tokenData.shops[0] : null;
+      shopId = firstShop?.shop_id || tokenData.open_id || tokenData.seller_id || 'unknown';
+      shopName = firstShop?.shop_name || tokenData.seller_name || shopId;
+    }
 
     await LmTiktokCredential.upsert({
       shopId,
       shopName,
+      shopCipher,
       accessToken: tokenData.access_token,
       refreshToken: tokenData.refresh_token,
       accessTokenExpiry: accessExpiry,
@@ -52,7 +68,7 @@ router.get('/tiktok/callback', auth, async (req, res) => {
       lastHealthCheck: new Date(),
     });
 
-    res.json({ success: true, shopId, shopName });
+    res.json({ success: true, shopId, shopName, shopCipher: !!shopCipher });
   } catch (err) {
     console.error('TikTok OAuth callback error:', err.message);
     if (err.response?.data) console.error('TikTok response:', JSON.stringify(err.response.data));
