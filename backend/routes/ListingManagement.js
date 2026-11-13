@@ -200,6 +200,7 @@ router.post('/mappings', auth, async (req, res) => {
       desiredQty: currentQty || 0,
       currentPrice: currentPrice || null,
       marketplace: 'tiktok',
+      syncEnabled: true,
     });
 
     res.status(201).json(mapping);

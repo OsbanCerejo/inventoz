@@ -89,6 +89,17 @@ export default function ListingManagement() {
   const [search, setSearch] = useState('');
   const [filterAlert, setFilterAlert] = useState(false);
   const [filterFailed, setFilterFailed] = useState(false);
+  const [syncCountdown, setSyncCountdown] = useState(300);
+
+  useEffect(() => {
+    const start = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - start) / 1000);
+      const remaining = 300 - (elapsed % 300);
+      setSyncCountdown(remaining);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Add SKU dialog
   const [addOpen, setAddOpen] = useState(false);
@@ -366,9 +377,19 @@ export default function ListingManagement() {
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box>
           <Typography variant="h5" fontWeight={700}>TikTok Listing Management</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Manage inventory sync between Inventoz and TikTok Shop listings
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.3 }}>
+            <Typography variant="body2" color="text.secondary">
+              Manage inventory sync between Inventoz and TikTok Shop listings
+            </Typography>
+            <Chip
+              icon={<SyncIcon sx={{ fontSize: '13px !important' }} />}
+              label={`Next sync in ${Math.floor(syncCountdown / 60)}:${String(syncCountdown % 60).padStart(2, '0')}`}
+              size="small"
+              variant="outlined"
+              color={syncCountdown <= 30 ? 'success' : 'default'}
+              sx={{ fontSize: 11, height: 20 }}
+            />
+          </Box>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button variant="outlined" startIcon={<RefreshIcon />} onClick={load}>Refresh</Button>
@@ -511,7 +532,7 @@ export default function ListingManagement() {
                     <TableCell align="center">
                       {(() => {
                         const m = row.mapping;
-                        if (!m || !m.syncEnabled || m.lastConfirmedQty === null || m.lastConfirmedQty === undefined) {
+                        if (!m || m.lastConfirmedQty === null || m.lastConfirmedQty === undefined) {
                           return <Typography variant="body2" color="text.disabled">—</Typography>;
                         }
                         const delta = row.inventozQty - m.lastConfirmedQty;
@@ -704,141 +725,147 @@ export default function ListingManagement() {
       </Dialog>
 
       {/* Map to TikTok Listing Dialog */}
-      <Dialog open={mapOpen} onClose={() => setMapOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={mapOpen} onClose={() => setMapOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Link {mapRow?.sku} to TikTok Listing</DialogTitle>
-        <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {mapError && <Alert severity="error">{mapError}</Alert>}
+        <DialogContent sx={{ pt: 2 }}>
+          {mapError && <Alert severity="error" sx={{ mb: 2 }}>{mapError}</Alert>}
           {shops.length === 0 ? (
             <Alert severity="warning">
               No connected TikTok shop. Click "Connect TikTok Shop" first.
             </Alert>
           ) : (
-            <>
-              {shops.length > 1 && (
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Shop</InputLabel>
-                  <Select value={selectedShopId} label="Shop"
-                    onChange={e => { setSelectedShopId(e.target.value); fetchTikTokProducts(e.target.value, searchInput || undefined); }}>
-                    {shops.map(s => (
-                      <MenuItem key={s.shopId} value={s.shopId}>{s.shopName || s.shopId}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
+            <Box sx={{ display: 'flex', gap: 2, minHeight: 420 }}>
+              {/* Left: search + listing list */}
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                {shops.length > 1 && (
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>Shop</InputLabel>
+                    <Select value={selectedShopId} label="Shop"
+                      onChange={e => { setSelectedShopId(e.target.value); fetchTikTokProducts(e.target.value, searchInput || undefined); }}>
+                      {shops.map(s => (
+                        <MenuItem key={s.shopId} value={s.shopId}>{s.shopName || s.shopId}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
 
-              <Box sx={{ display: 'flex', gap: 1 }}>
                 <TextField
                   size="small" fullWidth
                   label="Search TikTok listings"
                   value={searchInput}
-                  onChange={e => { setSearchInput(e.target.value); setSelectedProductId(''); setProductDetail(null); }}
-                  InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
-                  helperText="Filters loaded listings by name or SKU — use Load More to load additional pages"
+                  onChange={e => setSearchInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      setSelectedProductId('');
+                      setProductDetail(null);
+                      fetchTikTokProducts(selectedShopId, searchInput.trim() || undefined);
+                    }
+                  }}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <Button size="small" sx={{ minWidth: 0, px: 1 }}
+                          onClick={() => { setSelectedProductId(''); setProductDetail(null); fetchTikTokProducts(selectedShopId, searchInput.trim() || undefined); }}>
+                          Go
+                        </Button>
+                      </InputAdornment>
+                    ),
+                  }}
+                  helperText="Press Enter or Go to search all TikTok listings"
                 />
+
+                {tiktokLoading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', pt: 4 }}><CircularProgress size={24} /></Box>
+                ) : tiktokProducts.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                    No results. Try a different search.
+                  </Typography>
+                ) : (
+                  <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, flex: 1, overflowY: 'auto', maxHeight: 320 }}>
+                      {tiktokProducts.map((p: any) => (
+                        <Box
+                          key={p.id}
+                          onClick={() => { setSelectedProductId(p.id); fetchProductDetail(p.id); }}
+                          sx={{
+                            px: 1.5, py: 1.2, cursor: 'pointer', borderBottom: '1px solid', borderColor: 'divider',
+                            bgcolor: selectedProductId === p.id ? 'primary.50' : 'transparent',
+                            '&:hover': { bgcolor: selectedProductId === p.id ? 'primary.50' : 'action.hover' },
+                            '&:last-child': { borderBottom: 'none' },
+                          }}
+                        >
+                          <Typography variant="body2" fontWeight={selectedProductId === p.id ? 600 : 400}>
+                            {p.title || p.name || p.id}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">{p.id}</Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                    {tiktokNextPage && (
+                      <Button size="small" fullWidth variant="text" sx={{ mt: 0.5 }} disabled={tiktokLoadingMore}
+                        onClick={() => fetchTikTokProducts(selectedShopId, searchInput.trim() || undefined, tiktokNextPage)}>
+                        {tiktokLoadingMore ? <CircularProgress size={14} /> : 'Load more'}
+                      </Button>
+                    )}
+                  </Box>
+                )}
               </Box>
 
-              {tiktokLoading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center' }}><CircularProgress size={24} /></Box>
-              ) : tiktokProducts.length === 0 ? (
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
-                  No results. Try a different search.
+              {/* Right: SKU + warehouse selection */}
+              <Box sx={{ width: 260, display: 'flex', flexDirection: 'column', gap: 1.5, borderLeft: '1px solid', borderColor: 'divider', pl: 2 }}>
+                <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Selected Listing
                 </Typography>
-              ) : tiktokProducts.filter((p: any) => {
-                  if (!searchInput.trim()) return true;
-                  const q = searchInput.trim().toLowerCase();
-                  const title = (p.title || p.name || '').toLowerCase();
-                  const id = (p.id || '').toLowerCase();
-                  const skuMatch = (p.skus || p.sku_list || []).some((s: any) => (s.seller_sku || '').toLowerCase().includes(q));
-                  return title.includes(q) || id.includes(q) || skuMatch;
-                }).length === 0 ? (
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
-                  No listings match "{searchInput}". Try a different keyword or use Load More.
-                </Typography>
-              ) : (
-                <Box>
-                  <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, maxHeight: 220, overflowY: 'auto' }}>
-                    {tiktokProducts.filter((p: any) => {
-                      if (!searchInput.trim()) return true;
-                      const q = searchInput.trim().toLowerCase();
-                      const title = (p.title || p.name || '').toLowerCase();
-                      const id = (p.id || '').toLowerCase();
-                      const skuMatch = (p.skus || p.sku_list || []).some((s: any) =>
-                        (s.seller_sku || '').toLowerCase().includes(q)
-                      );
-                      return title.includes(q) || id.includes(q) || skuMatch;
-                    }).map((p: any) => (
-                      <Box
-                        key={p.id}
-                        onClick={() => { setSelectedProductId(p.id); fetchProductDetail(p.id); }}
-                        sx={{
-                          px: 1.5, py: 1, cursor: 'pointer', borderBottom: '1px solid', borderColor: 'divider',
-                          bgcolor: selectedProductId === p.id ? 'primary.50' : 'transparent',
-                          '&:hover': { bgcolor: selectedProductId === p.id ? 'primary.50' : 'action.hover' },
-                          '&:last-child': { borderBottom: 'none' },
-                        }}
-                      >
-                        <Typography variant="body2" fontWeight={selectedProductId === p.id ? 600 : 400} noWrap>
-                          {p.title || p.name || p.id}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">{p.id}</Typography>
-                      </Box>
-                    ))}
-                  </Box>
-                  {tiktokNextPage && (
-                    <Button
-                      size="small" fullWidth variant="text" sx={{ mt: 0.5 }}
-                      disabled={tiktokLoadingMore}
-                      onClick={() => fetchTikTokProducts(selectedShopId, productSearch || undefined, tiktokNextPage)}
-                    >
-                      {tiktokLoadingMore ? <CircularProgress size={14} /> : 'Load more'}
-                    </Button>
-                  )}
-                </Box>
-              )}
-
-              {productDetail && (() => {
-                const skus = productDetail.skus || productDetail.sku_list || [];
-                return (
-                  <FormControl size="small" fullWidth>
-                    <InputLabel>TikTok SKU / Variation</InputLabel>
-                    <Select value={selectedSkuId} label="TikTok SKU / Variation"
-                      onChange={e => {
-                        setSelectedSkuId(e.target.value as string);
-                        const sku = skus.find((s: any) => s.id === e.target.value);
-                        const warehouses = sku?.inventory || sku?.stock_infos || [];
-                        if (warehouses.length === 1) setSelectedWarehouseId(warehouses[0].warehouse_id);
-                      }}>
-                      {skus.map((s: any) => (
-                        <MenuItem key={s.id} value={s.id}>
-                          {s.seller_sku || s.id}
-                          {s.sales_attributes?.map((a: any) => ` · ${a.value_name}`).join('') || ''}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                );
-              })()}
-
-              {selectedSkuId && productDetail && (() => {
-                const skus = productDetail.skus || productDetail.sku_list || [];
-                const sku = skus.find((s: any) => s.id === selectedSkuId);
-                const warehouses = sku?.inventory || sku?.stock_infos || [];
-                if (warehouses.length <= 1) return null;
-                return (
-                  <FormControl size="small" fullWidth>
-                    <InputLabel>Warehouse</InputLabel>
-                    <Select value={selectedWarehouseId} label="Warehouse"
-                      onChange={e => setSelectedWarehouseId(e.target.value as string)}>
-                      {warehouses.map((w: any) => (
-                        <MenuItem key={w.warehouse_id} value={w.warehouse_id}>
-                          {w.warehouse_name || w.warehouse_id} (qty: {w.quantity ?? w.available_stock ?? '?'})
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                );
-              })()}
-            </>
+                {!productDetail ? (
+                  <Typography variant="body2" color="text.disabled" sx={{ pt: 1 }}>
+                    Click a listing on the left to select it
+                  </Typography>
+                ) : (() => {
+                  const skus = productDetail.skus || productDetail.sku_list || [];
+                  const selectedSku = skus.find((s: any) => s.id === selectedSkuId);
+                  const warehouses = selectedSku?.inventory || selectedSku?.stock_infos || [];
+                  return (
+                    <>
+                      <Typography variant="body2" fontWeight={600}>
+                        {productDetail.title || productDetail.name || selectedProductId}
+                      </Typography>
+                      <FormControl size="small" fullWidth>
+                        <InputLabel>SKU / Variation</InputLabel>
+                        <Select value={selectedSkuId} label="SKU / Variation"
+                          onChange={e => {
+                            setSelectedSkuId(e.target.value as string);
+                            const sku = skus.find((s: any) => s.id === e.target.value);
+                            const wh = sku?.inventory || sku?.stock_infos || [];
+                            if (wh.length === 1) setSelectedWarehouseId(wh[0].warehouse_id);
+                            else setSelectedWarehouseId('');
+                          }}>
+                          {skus.map((s: any) => (
+                            <MenuItem key={s.id} value={s.id}>
+                              {s.seller_sku || s.id}
+                              {s.sales_attributes?.map((a: any) => ` · ${a.value_name}`).join('') || ''}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      {warehouses.length > 1 && (
+                        <FormControl size="small" fullWidth>
+                          <InputLabel>Warehouse</InputLabel>
+                          <Select value={selectedWarehouseId} label="Warehouse"
+                            onChange={e => setSelectedWarehouseId(e.target.value as string)}>
+                            {warehouses.map((w: any) => (
+                              <MenuItem key={w.warehouse_id} value={w.warehouse_id}>
+                                {w.warehouse_name || w.warehouse_id} (qty: {w.quantity ?? w.available_stock ?? '?'})
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      )}
+                    </>
+                  );
+                })()}
+              </Box>
+            </Box>
           )}
         </DialogContent>
         <DialogActions>

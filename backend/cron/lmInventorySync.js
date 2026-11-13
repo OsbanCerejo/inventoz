@@ -42,7 +42,11 @@ async function runInventorySync() {
     let enqueued = 0;
 
     for (const mapping of mappings) {
-      const inventozQty = qtyMap[mapping.managedSku.sku] ?? 0;
+      if (!(mapping.managedSku.sku in qtyMap)) {
+        console.warn(`[lmInventorySync] SKU ${mapping.managedSku.sku} not found in Products — skipping mapping ${mapping.id}`);
+        continue;
+      }
+      const inventozQty = qtyMap[mapping.managedSku.sku];
 
       // First time seeing this mapping — record the baseline, don't push yet
       if (mapping.lastConfirmedQty === null || mapping.lastConfirmedQty === undefined) {
