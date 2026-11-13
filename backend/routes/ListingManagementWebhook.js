@@ -5,14 +5,27 @@ const { sequelize, Products, LmTiktokOrder, LmMarketplaceMapping, LmManagedSku, 
 
 const APP_SECRET = process.env.TIKTOK_APP_SECRET;
 
-// TikTok sends webhook as raw JSON body — verify HMAC signature
+// TikTok webhook signature: HMAC-SHA256(APP_SECRET, timestamp + nonce + body_string)
 function verifySignature(req) {
   const signature = req.headers['x-tts-signature'] || req.headers['x-tiktok-signature'];
   if (!signature) return false;
 
-  const body = JSON.stringify(req.body);
-  const expected = crypto.createHmac('sha256', APP_SECRET).update(body).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'));
+  const timestamp = req.headers['x-tts-timestamp'] || req.headers['timestamp'] || '';
+  const nonce = req.headers['x-nonce'] || req.headers['nonce'] || '';
+  const bodyStr = JSON.stringify(req.body);
+
+  // TikTok signs: timestamp + "\n" + nonce + "\n" + body + "\n"
+  const input = `${timestamp}\n${nonce}\n${bodyStr}\n`;
+  const expected = crypto.createHmac('sha256', APP_SECRET).update(input).digest('base64');
+
+  // Signature header may be base64 or hex — try both
+  if (signature === expected) return true;
+  const expectedHex = crypto.createHmac('sha256', APP_SECRET).update(input).digest('hex');
+  if (signature === expectedHex) return true;
+
+  // Fallback: body-only signing (older format)
+  const bodyOnly = crypto.createHmac('sha256', APP_SECRET).update(bodyStr).digest('hex');
+  return signature === bodyOnly;
 }
 
 // POST /listing-management/webhook/tiktok
@@ -22,7 +35,14 @@ router.post('/tiktok', express.json(), async (req, res) => {
 
   try {
     if (APP_SECRET && !verifySignature(req)) {
-      console.warn('[LM Webhook] Invalid signature — ignoring');
+      console.warn('[LM Webhook] Invalid signature — headers:', JSON.stringify({
+        'x-tts-signature': req.headers['x-tts-signature'],
+        'x-tiktok-signature': req.headers['x-tiktok-signature'],
+        'x-tts-timestamp': req.headers['x-tts-timestamp'],
+        'x-nonce': req.headers['x-nonce'],
+        timestamp: req.headers['timestamp'],
+        nonce: req.headers['nonce'],
+      }));
       return;
     }
 
