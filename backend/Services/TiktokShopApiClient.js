@@ -59,11 +59,10 @@ async function request(method, path, accessToken, queryParams = {}, body = null)
 const AUTH_BASE_URL = 'https://auth.tiktok-shops.com';
 
 // Exchange auth code for tokens (uses auth.tiktok-shops.com, no HMAC signing)
-// TikTok expects params as query string, not JSON body
+// TikTok v2 token exchange is a GET with query params (not POST, not JSON body)
 async function exchangeCode(code) {
-  const response = await axios.post(
+  const response = await axios.get(
     `${AUTH_BASE_URL}/api/v2/token/get`,
-    null,
     {
       params: {
         app_key: APP_KEY,
@@ -81,11 +80,10 @@ async function exchangeCode(code) {
   return response.data.data;
 }
 
-// Refresh access token
+// Refresh access token (GET with query params)
 async function refreshToken(refreshTok) {
-  const response = await axios.post(
+  const response = await axios.get(
     `${AUTH_BASE_URL}/api/v2/token/refresh`,
-    null,
     {
       params: {
         app_key: APP_KEY,

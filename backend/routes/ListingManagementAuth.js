@@ -26,14 +26,20 @@ router.get('/tiktok/callback', auth, async (req, res) => {
     }
 
     const tokenData = await tiktokApi.exchangeCode(code);
-    // tokenData: { access_token, refresh_token, access_token_expire_in, refresh_token_expire_in, open_id, seller_name, seller_base_region, ... }
+    // tokenData response varies: may have shops[] array or top-level open_id
+    console.log('TikTok token data keys:', Object.keys(tokenData || {}));
 
-    const accessExpiry = new Date(Date.now() + (tokenData.access_token_expire_in || 86400) * 1000);
-    const refreshExpiry = new Date(Date.now() + (tokenData.refresh_token_expire_in || 2592000) * 1000);
+    // Handle expiry: TikTok returns seconds; some versions return milliseconds
+    const accessExpireIn = tokenData.access_token_expire_in || tokenData.expires_in || 86400;
+    const refreshExpireIn = tokenData.refresh_token_expire_in || 2592000;
+    // If value looks like milliseconds (> 1e9), treat as ms; otherwise seconds
+    const accessExpiry = new Date(Date.now() + (accessExpireIn > 1e9 ? accessExpireIn : accessExpireIn * 1000));
+    const refreshExpiry = new Date(Date.now() + (refreshExpireIn > 1e9 ? refreshExpireIn : refreshExpireIn * 1000));
 
-    // TikTok uses open_id as shop identifier in v2
-    const shopId = tokenData.open_id || tokenData.seller_id || 'unknown';
-    const shopName = tokenData.seller_name || shopId;
+    // TikTok v2 response: shops[] array holds shop_id and shop_name; fall back to open_id
+    const firstShop = Array.isArray(tokenData.shops) && tokenData.shops.length > 0 ? tokenData.shops[0] : null;
+    const shopId = firstShop?.shop_id || tokenData.open_id || tokenData.seller_id || 'unknown';
+    const shopName = firstShop?.shop_name || tokenData.seller_name || shopId;
 
     await LmTiktokCredential.upsert({
       shopId,
