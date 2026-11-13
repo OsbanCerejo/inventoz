@@ -245,7 +245,9 @@ router.post('/mappings/:id/push-qty', auth, async (req, res) => {
     await tiktokApi.updateInventory(cred.accessToken, cred.shopCipher, mapping.marketplaceProductId, mapping.marketplaceSkuId, mapping.warehouseId, qty);
 
     const oldQty = mapping.currentQty;
-    await mapping.update({ currentQty: qty, desiredQty: qty, qtyInitialized: true, lastSyncAt: new Date(), lastSyncStatus: 'ok' });
+    const product = await Products.findOne({ where: { sku: mapping.managedSku.sku }, attributes: ['quantity'] });
+    const inventozQty = product?.quantity ?? qty;
+    await mapping.update({ currentQty: qty, desiredQty: qty, qtyInitialized: true, lastConfirmedQty: inventozQty, lastSyncAt: new Date(), lastSyncStatus: 'ok' });
     await LmQtyHistory.create({ mappingId: mapping.id, oldQty, newQty: qty, reason: reason || 'manual', changedBy: req.user.id });
 
     res.json({ success: true, currentQty: qty });
