@@ -241,7 +241,7 @@ router.post('/mappings/:id/push-qty', auth, async (req, res) => {
 
     const cred = await getActiveCredential(mapping.shopId);
     if (!cred.shopCipher) return res.status(400).json({ error: 'Shop cipher not set — reconnect TikTok Shop to fix' });
-    await tiktokApi.updateInventory(cred.accessToken, cred.shopCipher, mapping.marketplaceSkuId, mapping.warehouseId, qty);
+    await tiktokApi.updateInventory(cred.accessToken, cred.shopCipher, mapping.marketplaceProductId, mapping.marketplaceSkuId, mapping.warehouseId, qty);
 
     const oldQty = mapping.currentQty;
     await mapping.update({ currentQty: qty, desiredQty: qty, lastSyncAt: new Date(), lastSyncStatus: 'ok' });
