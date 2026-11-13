@@ -86,16 +86,22 @@ router.post('/tiktok/refresh-cipher', auth, async (req, res) => {
     for (const cred of creds) {
       try {
         const shopsData = await tiktokApi.getAuthorizedShops(cred.accessToken);
+        console.log(`refresh-cipher shops for ${cred.shopId}:`, JSON.stringify(shopsData));
         const shops = shopsData?.shops || shopsData?.list || [];
-        if (shops.length > 0) {
-          const cipher = shops[0].cipher || shops[0].shop_cipher || null;
-          const id = shops[0].id || shops[0].shop_id || cred.shopId;
-          const name = shops[0].name || shops[0].shop_name || cred.shopName;
-          await cred.update({ shopCipher: cipher, shopId: id, shopName: name, lastHealthCheck: new Date() });
-          results.push({ shopId: cred.shopId, cipher: !!cipher, name });
+
+        // Find the matching shop by id, or fall back to first
+        const match = shops.find(s => (s.id || s.shop_id) === cred.shopId) || shops[0];
+        if (match) {
+          const cipher = match.cipher || match.shop_cipher || null;
+          // Only update cipher and name — do NOT change shopId (unique constraint)
+          await cred.update({ shopCipher: cipher, lastHealthCheck: new Date() });
+          results.push({ shopId: cred.shopId, shopName: cred.shopName, cipher: !!cipher });
+        } else {
+          results.push({ shopId: cred.shopId, error: 'No shops returned from TikTok' });
         }
       } catch (err) {
         console.error(`refresh-cipher failed for shop ${cred.shopId}:`, err.message);
+        if (err.response?.data) console.error('TikTok response:', JSON.stringify(err.response.data));
         results.push({ shopId: cred.shopId, error: err.message });
       }
     }
