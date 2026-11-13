@@ -135,10 +135,11 @@ async function getAuthorizedShops(accessToken) {
 }
 
 // Search products (POST, shop-scoped via shop_cipher) — uses 202502 version
+// page_size and page_token go in query params, not body, for 202502
 async function searchProducts(accessToken, shopCipher, pageToken = null) {
-  const body = { page_size: 20 };
-  if (pageToken) body.page_token = pageToken;
-  return request('POST', '/product/202502/products/search', accessToken, shopCipher, {}, body);
+  const queryParams = { page_size: 20 };
+  if (pageToken) queryParams.page_token = pageToken;
+  return request('POST', '/product/202502/products/search', accessToken, shopCipher, queryParams, null);
 }
 
 // Get product detail including SKUs and warehouse IDs — uses 202502 version
