@@ -103,6 +103,7 @@ export default function ListingManagement() {
   const [mapLoading, setMapLoading] = useState(false);
   const [mapError, setMapError] = useState('');
   const [productDetail, setProductDetail] = useState<any>(null);
+  const [productSearch, setProductSearch] = useState('');
 
   // Push qty dialog
   const [pushQtyOpen, setPushQtyOpen] = useState(false);
@@ -198,12 +199,23 @@ export default function ListingManagement() {
     setSelectedWarehouseId('');
     setProductDetail(null);
     setTiktokProducts([]);
+    setProductSearch(row.sku);
     if (shops.length > 0) {
       const shopId = shops[0].shopId;
       setSelectedShopId(shopId);
       await fetchTikTokProducts(shopId);
     }
     setMapOpen(true);
+  };
+
+  const disconnectShop = async (shopId: string) => {
+    if (!window.confirm(`Disconnect shop ${shopId}?`)) return;
+    try {
+      await axios.delete(`${API()}/listing-management/auth/tiktok/${shopId}`, { headers });
+      load();
+    } catch (e: any) {
+      alert('Failed to disconnect: ' + e.message);
+    }
   };
 
   const fetchTikTokProducts = async (shopId: string) => {
@@ -327,9 +339,27 @@ export default function ListingManagement() {
               Retry {failedCount} Failed
             </Button>
           )}
-          <Button variant="outlined" startIcon={<OpenInNewIcon />} onClick={connectTikTok}>
-            {shops.length > 0 ? `Connected: ${shops.map(s => s.shopName).join(', ')}` : 'Connect TikTok Shop'}
-          </Button>
+          {shops.length === 0 ? (
+            <Button variant="outlined" startIcon={<OpenInNewIcon />} onClick={connectTikTok}>
+              Connect TikTok Shop
+            </Button>
+          ) : (
+            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
+              {shops.map(s => (
+                <Chip
+                  key={s.shopId}
+                  label={s.shopName || s.shopId}
+                  color="success"
+                  size="small"
+                  onDelete={() => disconnectShop(s.shopId)}
+                  deleteIcon={<Tooltip title="Disconnect this shop"><span style={{ fontSize: 14, lineHeight: 1 }}>×</span></Tooltip>}
+                />
+              ))}
+              <Button variant="outlined" size="small" startIcon={<OpenInNewIcon />} onClick={connectTikTok}>
+                Add Shop
+              </Button>
+            </Box>
+          )}
           {shops.length > 0 && (
             <Button variant="outlined" size="small" onClick={refreshCipher} title="Re-sync shop cipher from TikTok">
               Refresh Cipher
@@ -535,15 +565,26 @@ export default function ListingManagement() {
             </Alert>
           ) : (
             <>
-              <FormControl size="small" fullWidth>
-                <InputLabel>Shop</InputLabel>
-                <Select value={selectedShopId} label="Shop"
-                  onChange={e => { setSelectedShopId(e.target.value); fetchTikTokProducts(e.target.value); }}>
-                  {shops.map(s => (
-                    <MenuItem key={s.shopId} value={s.shopId}>{s.shopName || s.shopId}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              {shops.length > 1 && (
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Shop</InputLabel>
+                  <Select value={selectedShopId} label="Shop"
+                    onChange={e => { setSelectedShopId(e.target.value); fetchTikTokProducts(e.target.value); }}>
+                    {shops.map(s => (
+                      <MenuItem key={s.shopId} value={s.shopId}>{s.shopName || s.shopId}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+
+              <TextField
+                size="small" fullWidth
+                label="Search by SKU or product name"
+                value={productSearch}
+                onChange={e => setProductSearch(e.target.value)}
+                InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
+                helperText="Pre-filled with your Inventoz SKU — edit to search differently"
+              />
 
               {tiktokLoading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center' }}><CircularProgress size={24} /></Box>
@@ -552,9 +593,15 @@ export default function ListingManagement() {
                   <InputLabel>TikTok Product</InputLabel>
                   <Select value={selectedProductId} label="TikTok Product"
                     onChange={e => { setSelectedProductId(e.target.value as string); fetchProductDetail(e.target.value as string); }}>
-                    {tiktokProducts.map((p: any) => (
-                      <MenuItem key={p.id} value={p.id}>{p.title || p.name || p.id}</MenuItem>
-                    ))}
+                    {tiktokProducts
+                      .filter(p => {
+                        if (!productSearch.trim()) return true;
+                        const q = productSearch.toLowerCase();
+                        return (p.title || p.name || '').toLowerCase().includes(q) || (p.id || '').includes(q);
+                      })
+                      .map((p: any) => (
+                        <MenuItem key={p.id} value={p.id}>{p.title || p.name || p.id}</MenuItem>
+                      ))}
                   </Select>
                 </FormControl>
               )}

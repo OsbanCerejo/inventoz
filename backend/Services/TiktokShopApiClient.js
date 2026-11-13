@@ -142,9 +142,9 @@ async function searchProducts(accessToken, shopCipher, pageToken = null) {
   return request('POST', '/product/202502/products/search', accessToken, shopCipher, queryParams, null);
 }
 
-// Get product detail including SKUs and warehouse IDs — uses 202502 version
+// Get product detail including SKUs and warehouse IDs — 202502 only covers search POST; detail GET uses 202309
 async function getProduct(accessToken, shopCipher, productId) {
-  return request('GET', `/product/202502/products/${productId}`, accessToken, shopCipher);
+  return request('GET', `/product/202309/products/${productId}`, accessToken, shopCipher);
 }
 
 // Search inventory for a list of SKU IDs
