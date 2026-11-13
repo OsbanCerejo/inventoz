@@ -18,6 +18,7 @@ import {
   OpenInNew as OpenInNewIcon,
   Sync as SyncIcon,
   DeleteOutline as DeleteIcon,
+  EditOutlined as EditIcon,
 } from '@mui/icons-material';
 import { getServerUrl } from '../config/api';
 import { useAuth } from '../context/AuthContext';
@@ -29,6 +30,9 @@ interface ManagedSkuRow {
   sku: string;
   itemName: string;
   brand: string;
+  strength: string | null;
+  sizeOz: number | null;
+  sizeMl: number | null;
   inventozQty: number;
   pendingSales: number;
   effectiveAvailable: number;
@@ -105,12 +109,11 @@ export default function ListingManagement() {
   const [productDetail, setProductDetail] = useState<any>(null);
   const [productSearch, setProductSearch] = useState('');
 
-  // Push qty dialog
-  const [pushQtyOpen, setPushQtyOpen] = useState(false);
-  const [pushQtyRow, setPushQtyRow] = useState<ManagedSkuRow | null>(null);
-  const [pushQtyValue, setPushQtyValue] = useState('');
-  const [pushQtyReason, setPushQtyReason] = useState('');
-  const [pushQtyLoading, setPushQtyLoading] = useState(false);
+  // Inline editing
+  const [editingMappingId, setEditingMappingId] = useState<number | null>(null);
+  const [editQty, setEditQty] = useState('');
+  const [editPrice, setEditPrice] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -272,26 +275,39 @@ export default function ListingManagement() {
     }
   };
 
-  const openPushQty = (row: ManagedSkuRow) => {
-    setPushQtyRow(row);
-    setPushQtyValue(String(row.mapping?.currentQty ?? ''));
-    setPushQtyReason('');
-    setPushQtyOpen(true);
+  const startEdit = (row: ManagedSkuRow) => {
+    if (!row.mapping) return;
+    setEditingMappingId(row.mapping.id);
+    setEditQty(String(row.mapping.currentQty ?? ''));
+    setEditPrice(row.mapping.currentPrice != null ? String(row.mapping.currentPrice) : '');
   };
 
-  const handlePushQty = async () => {
-    if (!pushQtyRow?.mapping) return;
-    setPushQtyLoading(true);
+  const cancelEdit = () => {
+    setEditingMappingId(null);
+    setEditQty('');
+    setEditPrice('');
+  };
+
+  const saveEdit = async (row: ManagedSkuRow) => {
+    if (!row.mapping) return;
+    setEditSaving(true);
     try {
-      await axios.post(`${API()}/listing-management/mappings/${pushQtyRow.mapping.id}/push-qty`, {
-        qty: Number(pushQtyValue), reason: pushQtyReason,
-      }, { headers });
-      setPushQtyOpen(false);
+      const calls: Promise<any>[] = [];
+      if (editQty !== '' && Number(editQty) !== row.mapping.currentQty) {
+        calls.push(axios.post(`${API()}/listing-management/mappings/${row.mapping.id}/push-qty`,
+          { qty: Number(editQty) }, { headers }));
+      }
+      if (editPrice !== '' && Number(editPrice) !== row.mapping.currentPrice) {
+        calls.push(axios.post(`${API()}/listing-management/mappings/${row.mapping.id}/push-price`,
+          { price: Number(editPrice) }, { headers }));
+      }
+      if (calls.length > 0) await Promise.all(calls);
+      cancelEdit();
       load();
     } catch (e: any) {
       alert('Failed: ' + (e.response?.data?.error || e.message));
     } finally {
-      setPushQtyLoading(false);
+      setEditSaving(false);
     }
   };
 
@@ -442,9 +458,15 @@ export default function ListingManagement() {
                       <Chip label="Generic Auction" size="small" variant="outlined" sx={{ mt: 0.3 }} />
                     )}
                   </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>{row.itemName}</Typography>
-                    <Typography variant="caption" color="text.secondary">{row.brand}</Typography>
+                  <TableCell sx={{ minWidth: 220 }}>
+                    <Typography variant="body2" fontWeight={500} sx={{ lineHeight: 1.3 }}>
+                      {[row.brand, row.itemName].filter(Boolean).join(' · ') || '—'}
+                    </Typography>
+                    {(row.strength || row.sizeOz || row.sizeMl) && (
+                      <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3 }}>
+                        {[row.strength, row.sizeOz ? `${row.sizeOz} oz` : null, row.sizeMl ? `${row.sizeMl} ml` : null].filter(Boolean).join(' · ')}
+                      </Typography>
+                    )}
                   </TableCell>
                   <TableCell align="center">
                     <Typography variant="body2" fontWeight={600}>{row.inventozQty}</Typography>
@@ -464,14 +486,33 @@ export default function ListingManagement() {
                     </Box>
                   </TableCell>
                   <TableCell align="center">
-                    {row.mapping
-                      ? <Typography variant="body2">{row.mapping.currentQty}</Typography>
-                      : <Typography variant="body2" color="text.disabled">—</Typography>}
+                    {row.mapping && editingMappingId === row.mapping.id ? (
+                      <TextField
+                        size="small" type="number" value={editQty}
+                        onChange={e => setEditQty(e.target.value)}
+                        sx={{ width: 72 }}
+                        inputProps={{ style: { textAlign: 'center', fontFamily: 'monospace', fontSize: 13, padding: '4px 6px' } }}
+                      />
+                    ) : row.mapping ? (
+                      <Typography variant="body2">{row.mapping.currentQty}</Typography>
+                    ) : (
+                      <Typography variant="body2" color="text.disabled">—</Typography>
+                    )}
                   </TableCell>
                   <TableCell align="center">
-                    {row.mapping?.currentPrice
-                      ? <Typography variant="body2">${Number(row.mapping.currentPrice).toFixed(2)}</Typography>
-                      : <Typography variant="body2" color="text.disabled">—</Typography>}
+                    {row.mapping && editingMappingId === row.mapping.id ? (
+                      <TextField
+                        size="small" type="number" value={editPrice}
+                        onChange={e => setEditPrice(e.target.value)}
+                        sx={{ width: 80 }}
+                        inputProps={{ style: { textAlign: 'center', fontFamily: 'monospace', fontSize: 13, padding: '4px 6px' } }}
+                        InputProps={{ startAdornment: <InputAdornment position="start" sx={{ mr: 0 }}>$</InputAdornment> }}
+                      />
+                    ) : row.mapping?.currentPrice ? (
+                      <Typography variant="body2">${Number(row.mapping.currentPrice).toFixed(2)}</Typography>
+                    ) : (
+                      <Typography variant="body2" color="text.disabled">—</Typography>
+                    )}
                   </TableCell>
                   <TableCell align="center">
                     {row.mapping
@@ -506,13 +547,26 @@ export default function ListingManagement() {
                           </IconButton>
                         </Tooltip>
                       )}
-                      {row.mapping && (
-                        <Tooltip title="Push quantity to TikTok">
-                          <IconButton size="small" onClick={() => openPushQty(row)} color="primary">
-                            <SyncIcon fontSize="small" />
+                      {row.mapping && editingMappingId === row.mapping.id ? (
+                        <>
+                          <Tooltip title="Save changes">
+                            <IconButton size="small" color="success" onClick={() => saveEdit(row)} disabled={editSaving}>
+                              {editSaving ? <CircularProgress size={14} /> : <CheckIcon fontSize="small" />}
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Cancel">
+                            <IconButton size="small" onClick={cancelEdit}>
+                              <ErrorIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </>
+                      ) : row.mapping ? (
+                        <Tooltip title="Edit qty / price">
+                          <IconButton size="small" onClick={() => startEdit(row)} color="primary">
+                            <EditIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                      )}
+                      ) : null}
                       <Tooltip title="Remove from Listing Management">
                         <IconButton size="small" onClick={() => handleRemoveSku(row.id, row.sku)} color="error">
                           <DeleteIcon fontSize="small" />
@@ -660,31 +714,6 @@ export default function ListingManagement() {
         </DialogActions>
       </Dialog>
 
-      {/* Push Qty Dialog */}
-      <Dialog open={pushQtyOpen} onClose={() => setPushQtyOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Push Quantity to TikTok</DialogTitle>
-        <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Typography variant="body2" color="text.secondary">
-            SKU: <strong>{pushQtyRow?.sku}</strong> · Effective available: <strong>{pushQtyRow?.effectiveAvailable}</strong>
-          </Typography>
-          <Divider />
-          <TextField
-            label="New TikTok Quantity" type="number" size="small"
-            value={pushQtyValue} onChange={e => setPushQtyValue(e.target.value)} autoFocus
-          />
-          <TextField
-            label="Reason (optional)" size="small"
-            value={pushQtyReason} onChange={e => setPushQtyReason(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPushQtyOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handlePushQty}
-            disabled={pushQtyLoading || pushQtyValue === ''}>
-            {pushQtyLoading ? <CircularProgress size={18} /> : 'Push to TikTok'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }

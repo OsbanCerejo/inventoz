@@ -53,7 +53,7 @@ router.get('/skus', auth, async (req, res) => {
       include: [
         {
           model: Products,
-          attributes: ['sku', 'itemName', 'brand', 'quantity'],
+          attributes: ['sku', 'itemName', 'brand', 'quantity', 'strength', 'sizeOz', 'sizeMl'],
         },
         {
           model: LmMarketplaceMapping,
@@ -76,6 +76,9 @@ router.get('/skus', auth, async (req, res) => {
         sku: ms.sku,
         itemName: product?.itemName,
         brand: product?.brand,
+        strength: product?.strength,
+        sizeOz: product?.sizeOz,
+        sizeMl: product?.sizeMl,
         inventozQty: product?.quantity || 0,
         pendingSales,
         effectiveAvailable,
