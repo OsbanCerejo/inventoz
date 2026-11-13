@@ -110,6 +110,7 @@ export default function ListingManagement() {
   const [addError, setAddError] = useState('');
 
   // Map to TikTok dialog
+  const [linkingRowId, setLinkingRowId] = useState<number | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
   const [mapRow, setMapRow] = useState<ManagedSkuRow | null>(null);
   const [tiktokProducts, setTiktokProducts] = useState<any[]>([]);
@@ -215,6 +216,7 @@ export default function ListingManagement() {
   };
 
   const openMapDialog = async (row: ManagedSkuRow) => {
+    setLinkingRowId(row.id);
     setMapRow(row);
     setMapError('');
     setSelectedProductId('');
@@ -224,13 +226,14 @@ export default function ListingManagement() {
     setTiktokProducts([]);
     setTiktokNextPage(null);
     setProductSearch(row.sku);
-    setSearchInput(row.sku);
+    setSearchInput('');
+    setMapOpen(true);
     if (shops.length > 0) {
       const shopId = shops[0].shopId;
       setSelectedShopId(shopId);
-      await fetchTikTokProducts(shopId, row.sku);
+      await fetchTikTokProducts(shopId);
     }
-    setMapOpen(true);
+    setLinkingRowId(null);
   };
 
   const disconnectShop = async (shopId: string) => {
@@ -604,8 +607,8 @@ export default function ListingManagement() {
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center', alignItems: 'center' }}>
                         {!row.mapping && (
                           <Tooltip title="Link to TikTok listing">
-                            <IconButton size="small" onClick={() => openMapDialog(row)} color="primary">
-                              <LinkIcon sx={{ fontSize: 17 }} />
+                            <IconButton size="small" onClick={() => openMapDialog(row)} color="primary" disabled={linkingRowId === row.id}>
+                              {linkingRowId === row.id ? <CircularProgress size={14} /> : <LinkIcon sx={{ fontSize: 17 }} />}
                             </IconButton>
                           </Tooltip>
                         )}

@@ -56,17 +56,16 @@ async function runInventorySync() {
 
       const delta = inventozQty - mapping.lastConfirmedQty;
 
-      // Always update the snapshot regardless of whether we push
-      await mapping.update({ lastConfirmedQty: inventozQty });
-
       // Skip if no change
       if (delta === 0) continue;
 
       const newTiktokQty = Math.max(0, mapping.currentQty + delta);
 
-      // If the resulting TikTok qty would exceed Inventoz qty, flag and do not push
+      // If the resulting TikTok qty would exceed Inventoz qty, flag but do NOT
+      // advance lastConfirmedQty — keeps the delta alive so the next cron run
+      // retries automatically once the situation resolves (e.g. inbound arrives)
       if (newTiktokQty > inventozQty) {
-        console.warn(`[lmInventorySync] Stock alert: mapping ${mapping.id} (SKU ${mapping.managedSku.sku}) — calculated TikTok qty ${newTiktokQty} > Inventoz qty ${inventozQty}. Skipping push, keeping listing qty at ${mapping.currentQty}.`);
+        console.warn(`[lmInventorySync] Stock alert: mapping ${mapping.id} (SKU ${mapping.managedSku.sku}) — TikTok qty ${newTiktokQty} > Inventoz qty ${inventozQty}. Holding, will retry next run.`);
         await mapping.update({ lastSyncStatus: 'failed' });
         continue;
       }
@@ -80,6 +79,9 @@ async function runInventorySync() {
         },
       });
       if (existingJob) continue;
+
+      // Advance snapshot only after confirming we're creating a new job
+      await mapping.update({ lastConfirmedQty: inventozQty });
 
       await LmSyncJob.create({
         mappingId: mapping.id,

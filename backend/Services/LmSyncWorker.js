@@ -69,16 +69,35 @@ async function processJob(job) {
     }
 
     if (job.jobType === 'qty_update') {
+      // Re-fetch current Inventoz qty at execution time to avoid pushing a stale
+      // targetQty that was computed minutes ago (e.g. during a retry after TikTok downtime)
+      const { Products } = require('../models');
+      const product = ms ? await Products.findOne({ where: { sku: ms.sku }, attributes: ['quantity'] }) : null;
+      const freshInventozQty = product?.quantity ?? null;
+
+      // Recompute targetQty using the fresh Inventoz qty + current delta from lastConfirmedQty
+      let finalQty = job.targetQty;
+      if (freshInventozQty !== null && mapping.lastConfirmedQty !== null) {
+        const freshDelta = freshInventozQty - mapping.lastConfirmedQty;
+        const freshTarget = Math.max(0, mapping.currentQty + freshDelta);
+        // Only use fresh computation if it differs — avoids pushing wrong qty on retries
+        if (freshTarget !== job.targetQty) {
+          console.log(`[LmSyncWorker] Recomputed targetQty for mapping ${mapping.id}: ${job.targetQty} → ${freshTarget} (inventoz=${freshInventozQty}, lastConfirmed=${mapping.lastConfirmedQty})`);
+          finalQty = freshTarget;
+        }
+      }
+
       await tiktokApi.updateInventory(
         cred.accessToken,
         cred.shopCipher,
         mapping.marketplaceProductId,
         mapping.marketplaceSkuId,
         mapping.warehouseId,
-        job.targetQty
+        finalQty
       );
       await mapping.update({
-        currentQty: job.targetQty,
+        currentQty: finalQty,
+        lastConfirmedQty: freshInventozQty ?? mapping.lastConfirmedQty,
         lastSyncAt: new Date(),
         lastSyncStatus: 'ok',
       });

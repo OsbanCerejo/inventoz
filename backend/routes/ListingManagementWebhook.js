@@ -84,8 +84,28 @@ async function handleOrderStatusUpdate(data, shopId) {
   const orderStatus = data.order_status;
   if (!orderId) return;
 
-  // TikTok sends order-line-level items in some webhook versions
-  const lines = data.line_items || data.order_line_list || [data];
+  // Webhook only sends order_id + order_status — fetch full order to get line items
+  let lines = data.line_items || data.order_line_list || null;
+  if (!lines || lines.length === 0) {
+    try {
+      const { LmTiktokCredential } = require('../models');
+      const cred = shopId
+        ? await LmTiktokCredential.findOne({ where: { shopId: String(shopId), isActive: true } })
+        : null;
+      if (cred) {
+        const tiktokApi = require('../Services/TiktokShopApiClient');
+        const orderDetail = await tiktokApi.getOrder(cred.accessToken, cred.shopCipher, orderId);
+        lines = orderDetail?.line_items || orderDetail?.order_line_list || [];
+      }
+    } catch (e) {
+      console.warn(`[LM Webhook] Could not fetch order detail for ${orderId}:`, e.message);
+    }
+  }
+
+  // If still no line items, record the order at the order level only
+  if (!lines || lines.length === 0) {
+    lines = [{ order_line_id: orderId, sku_id: null, quantity: 1 }];
+  }
 
   for (const line of lines) {
     const lineId = line.order_line_id || line.id || orderId;
@@ -128,8 +148,8 @@ async function handleOrderStatusUpdate(data, shopId) {
       });
     }
 
-    // Deduct inventory when order status reaches SHIPPED and not yet deducted
-    if (orderStatus === 'SHIPPED' && !order.deductedAt && inventozSku) {
+    // Deduct inventory when order is in transit (shipped) and not yet deducted
+    if ((orderStatus === 'IN_TRANSIT' || orderStatus === 'AWAITING_COLLECTION') && !order.deductedAt && inventozSku) {
       await deductInventory(order, inventozSku, quantity, mapping);
     }
   }
