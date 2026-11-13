@@ -153,13 +153,37 @@ async function getInventory(accessToken, shopCipher, skuIds) {
   return request('POST', '/fulfillment/202309/inventory/search', accessToken, shopCipher, {}, { sku_id_list: skuIds });
 }
 
-// Update inventory quantity via Partial Edit Product — POST /product/202509/products/{product_id}/partial_edit
+// Update inventory quantity — POST /product/202309/products/{product_id}/inventory/update
+// TikTok requires the SKU's existing identifier_codes to be passed through unchanged,
+// so we fetch the product detail first to extract them.
 async function updateInventory(accessToken, shopCipher, productId, skuId, warehouseId, quantity) {
   const inventoryEntry = warehouseId
     ? { warehouse_id: warehouseId, quantity }
     : { quantity };
-  return request('POST', `/product/202509/products/${productId}/partial_edit`, accessToken, shopCipher, {}, {
-    skus: [{ id: skuId, inventory: [inventoryEntry] }],
+
+  // Fetch product to get identifier_codes for this SKU
+  let identifierCodes;
+  try {
+    const product = await getProduct(accessToken, shopCipher, productId);
+    const skus = product?.skus || product?.sku_list || [];
+    const matchedSku = skus.find(s => s.id === skuId);
+    console.log(`[updateInventory] SKU ${skuId} raw:`, JSON.stringify(matchedSku));
+    if (matchedSku?.identifier_codes?.length > 0) {
+      identifierCodes = matchedSku.identifier_codes;
+    } else if (matchedSku?.identifier_code) {
+      identifierCodes = [matchedSku.identifier_code];
+    }
+  } catch (e) {
+    console.error('[updateInventory] Failed to fetch product detail:', e.message);
+  }
+
+  const skuPayload = { id: skuId, inventory: [inventoryEntry] };
+  if (identifierCodes && identifierCodes.length > 0) {
+    skuPayload.identifier_codes = identifierCodes;
+  }
+
+  return request('POST', `/product/202309/products/${productId}/inventory/update`, accessToken, shopCipher, {}, {
+    skus: [skuPayload],
   });
 }
 

@@ -12,6 +12,7 @@ const customerServiceOverdueCron = require("./cron/customerServiceOverdue");
 const { aggregateSalesSummary } = require("./cron/salesSummary");
 const lmSyncWorker = require("./Services/LmSyncWorker");
 const { refreshExpiringTokens } = require("./cron/lmTokenRefresh");
+const { runInventorySync } = require("./cron/lmInventorySync");
 const path = require("path");
 
 app.use(express.json({ limit: '5mb' }));
@@ -284,10 +285,11 @@ sequelize
     // Run sales summary aggregation once on startup, then nightly at 2AM
     aggregateSalesSummary();
 
-    // Listing Management: sync worker + token refresh
+    // Listing Management: sync worker + token refresh + auto-sync
     lmSyncWorker.start();
     setInterval(refreshExpiringTokens, 60 * 60 * 1000); // every hour
     refreshExpiringTokens(); // run once on startup
+    setInterval(runInventorySync, 5 * 60 * 1000); // every 5 minutes
 
     startServer();
   })

@@ -72,6 +72,7 @@ async function processJob(job) {
       await tiktokApi.updateInventory(
         cred.accessToken,
         cred.shopCipher,
+        mapping.marketplaceProductId,
         mapping.marketplaceSkuId,
         mapping.warehouseId,
         job.targetQty
