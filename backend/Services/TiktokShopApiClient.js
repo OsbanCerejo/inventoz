@@ -152,10 +152,13 @@ async function getInventory(accessToken, shopCipher, skuIds) {
   return request('POST', '/fulfillment/202309/inventory/search', accessToken, shopCipher, {}, { sku_id_list: skuIds });
 }
 
-// Update inventory quantity (absolute) — POST /product/202309/inventory
+// Update inventory quantity (absolute) — POST /product/202309/products/inventory
 async function updateInventory(accessToken, shopCipher, skuId, warehouseId, quantity) {
-  return request('POST', '/product/202309/inventory', accessToken, shopCipher, {}, {
-    skus: [{ id: skuId, inventory: [{ warehouse_id: warehouseId, quantity }] }],
+  const inventoryEntry = warehouseId
+    ? { warehouse_id: warehouseId, quantity }
+    : { quantity };
+  return request('POST', '/product/202309/products/inventory', accessToken, shopCipher, {}, {
+    skus: [{ id: skuId, inventory: [inventoryEntry] }],
   });
 }
 

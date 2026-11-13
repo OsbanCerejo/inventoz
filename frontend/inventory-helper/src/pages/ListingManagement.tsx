@@ -19,6 +19,8 @@ import {
   Sync as SyncIcon,
   DeleteOutline as DeleteIcon,
   EditOutlined as EditIcon,
+  Settings as SettingsIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { getServerUrl } from '../config/api';
 import { useAuth } from '../context/AuthContext';
@@ -114,6 +116,9 @@ export default function ListingManagement() {
   const [editQty, setEditQty] = useState('');
   const [editPrice, setEditPrice] = useState('');
   const [editSaving, setEditSaving] = useState(false);
+
+  // Settings panel per listing
+  const [settingsRow, setSettingsRow] = useState<ManagedSkuRow | null>(null);
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -421,165 +426,217 @@ export default function ListingManagement() {
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
       ) : filtered.length === 0 ? (
-        <Paper sx={{ p: 6, textAlign: 'center' }}>
+        <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 2 }}>
           <Typography color="text.secondary">
-            {rows.length === 0
-              ? 'No SKUs enrolled yet. Click "Add SKU" to get started.'
-              : 'No results match your filters.'}
+            {rows.length === 0 ? 'No SKUs enrolled yet. Click "+ Add SKU" to get started.' : 'No results match your filters.'}
           </Typography>
         </Paper>
       ) : (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
           <Table size="small">
             <TableHead>
-              <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: 'grey.50' } }}>
-                <TableCell>SKU</TableCell>
-                <TableCell>Product</TableCell>
-                <TableCell align="center">Inventoz Stock</TableCell>
+              <TableRow sx={{ '& th': { fontWeight: 600, fontSize: 12, color: 'text.secondary', bgcolor: 'grey.50', borderBottom: '1px solid', borderColor: 'divider', py: 1.2 } }}>
+                <TableCell>SKU & Product</TableCell>
+                <TableCell align="center">Stock</TableCell>
                 <TableCell align="center">Pending</TableCell>
-                <TableCell align="center">Effective Avail.</TableCell>
+                <TableCell align="center">Avail.</TableCell>
                 <TableCell align="center">TikTok Qty</TableCell>
                 <TableCell align="center">TikTok Price</TableCell>
-                <TableCell align="center">Listing Status</TableCell>
-                <TableCell align="center">Sync Status</TableCell>
-                <TableCell align="center">Auto-Sync</TableCell>
-                <TableCell align="center">Last Sync</TableCell>
+                <TableCell align="center">Status</TableCell>
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {filtered.map(row => (
-                <TableRow key={row.id} hover sx={{ opacity: row.isGenericAuction ? 0.6 : 1 }}>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={600} fontFamily="monospace">
-                      {row.sku}
-                    </Typography>
-                    {row.isGenericAuction && (
-                      <Chip label="Generic Auction" size="small" variant="outlined" sx={{ mt: 0.3 }} />
-                    )}
-                  </TableCell>
-                  <TableCell sx={{ minWidth: 220 }}>
-                    <Typography variant="body2" fontWeight={500} sx={{ lineHeight: 1.3 }}>
-                      {[row.brand, row.itemName].filter(Boolean).join(' · ') || '—'}
-                    </Typography>
-                    {(row.strength || row.sizeOz || row.sizeMl) && (
-                      <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3 }}>
-                        {[row.strength, row.sizeOz ? `${row.sizeOz} oz` : null, row.sizeMl ? `${row.sizeMl} ml` : null].filter(Boolean).join(' · ')}
+              {filtered.map(row => {
+                const isEditing = row.mapping && editingMappingId === row.mapping.id;
+                return (
+                  <TableRow key={row.id} hover sx={{ opacity: row.isGenericAuction ? 0.6 : 1, '& td': { py: 1.2 } }}>
+                    {/* SKU + Product */}
+                    <TableCell sx={{ minWidth: 240 }}>
+                      <Typography variant="body2" fontWeight={600} fontFamily="monospace" fontSize={12}>
+                        {row.sku}
                       </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell align="center">
-                    <Typography variant="body2" fontWeight={600}>{row.inventozQty}</Typography>
-                  </TableCell>
-                  <TableCell align="center">
-                    {row.pendingSales > 0
-                      ? <Chip label={`-${row.pendingSales}`} size="small" color="warning" />
-                      : <Typography variant="body2" color="text.secondary">0</Typography>}
-                  </TableCell>
-                  <TableCell align="center">
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Typography variant="body2" fontWeight={600}
-                        color={row.effectiveAvailable < 0 ? 'error.main' : 'inherit'}>
-                        {row.effectiveAvailable}
+                      <Typography variant="body2" color="text.secondary" fontSize={12} sx={{ lineHeight: 1.3 }}>
+                        {[row.brand, row.itemName].filter(Boolean).join(' · ') || <em>No product data</em>}
                       </Typography>
-                      <StockAlertBadge alert={row.stockAlert} />
-                    </Box>
-                  </TableCell>
-                  <TableCell align="center">
-                    {row.mapping && editingMappingId === row.mapping.id ? (
-                      <TextField
-                        size="small" type="number" value={editQty}
-                        onChange={e => setEditQty(e.target.value)}
-                        sx={{ width: 72 }}
-                        inputProps={{ style: { textAlign: 'center', fontFamily: 'monospace', fontSize: 13, padding: '4px 6px' } }}
-                      />
-                    ) : row.mapping ? (
-                      <Typography variant="body2">{row.mapping.currentQty}</Typography>
-                    ) : (
-                      <Typography variant="body2" color="text.disabled">—</Typography>
-                    )}
-                  </TableCell>
-                  <TableCell align="center">
-                    {row.mapping && editingMappingId === row.mapping.id ? (
-                      <TextField
-                        size="small" type="number" value={editPrice}
-                        onChange={e => setEditPrice(e.target.value)}
-                        sx={{ width: 80 }}
-                        inputProps={{ style: { textAlign: 'center', fontFamily: 'monospace', fontSize: 13, padding: '4px 6px' } }}
-                        InputProps={{ startAdornment: <InputAdornment position="start" sx={{ mr: 0 }}>$</InputAdornment> }}
-                      />
-                    ) : row.mapping?.currentPrice ? (
-                      <Typography variant="body2">${Number(row.mapping.currentPrice).toFixed(2)}</Typography>
-                    ) : (
-                      <Typography variant="body2" color="text.disabled">—</Typography>
-                    )}
-                  </TableCell>
-                  <TableCell align="center">
-                    {row.mapping
-                      ? <Chip label={row.mapping.listingStatus} size="small"
-                          color={row.mapping.listingStatus === 'active' ? 'success' : 'default'} />
-                      : <Typography variant="body2" color="text.disabled">Not linked</Typography>}
-                  </TableCell>
-                  <TableCell align="center">
-                    <SyncStatusChip status={row.mapping?.lastSyncStatus ?? null} />
-                  </TableCell>
-                  <TableCell align="center">
-                    <Switch
-                      size="small"
-                      checked={row.syncEnabled}
-                      onChange={() => toggleSync(row)}
-                      disabled={row.isGenericAuction}
-                    />
-                  </TableCell>
-                  <TableCell align="center">
-                    <Typography variant="caption" color="text.secondary">
-                      {row.mapping?.lastSyncAt
-                        ? new Date(row.mapping.lastSyncAt).toLocaleString()
-                        : '—'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="center">
-                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                      {!row.mapping && (
-                        <Tooltip title="Link to TikTok listing">
-                          <IconButton size="small" onClick={() => openMapDialog(row)} color="primary">
-                            <LinkIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                      {(row.strength || row.sizeOz || row.sizeMl) && (
+                        <Typography variant="caption" color="text.disabled" sx={{ lineHeight: 1.3 }}>
+                          {[row.strength, row.sizeOz ? `${row.sizeOz} oz` : null, row.sizeMl ? `${row.sizeMl} ml` : null].filter(Boolean).join(' · ')}
+                        </Typography>
                       )}
-                      {row.mapping && editingMappingId === row.mapping.id ? (
-                        <>
-                          <Tooltip title="Save changes">
-                            <IconButton size="small" color="success" onClick={() => saveEdit(row)} disabled={editSaving}>
-                              {editSaving ? <CircularProgress size={14} /> : <CheckIcon fontSize="small" />}
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Cancel">
-                            <IconButton size="small" onClick={cancelEdit}>
-                              <ErrorIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </>
+                    </TableCell>
+
+                    {/* Stock */}
+                    <TableCell align="center">
+                      <Typography variant="body2" fontWeight={600}>{row.inventozQty}</Typography>
+                    </TableCell>
+
+                    {/* Pending */}
+                    <TableCell align="center">
+                      {row.pendingSales > 0
+                        ? <Chip label={`-${row.pendingSales}`} size="small" color="warning" sx={{ fontSize: 11 }} />
+                        : <Typography variant="body2" color="text.disabled">0</Typography>}
+                    </TableCell>
+
+                    {/* Effective available */}
+                    <TableCell align="center">
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.3 }}>
+                        <Typography variant="body2" fontWeight={600}
+                          color={row.effectiveAvailable < 0 ? 'error.main' : 'inherit'}>
+                          {row.effectiveAvailable}
+                        </Typography>
+                        <StockAlertBadge alert={row.stockAlert} />
+                      </Box>
+                    </TableCell>
+
+                    {/* TikTok Qty — inline edit */}
+                    <TableCell align="center" sx={{ minWidth: 90 }}>
+                      {isEditing ? (
+                        <TextField
+                          size="small" type="number" value={editQty}
+                          onChange={e => setEditQty(e.target.value)}
+                          sx={{ width: 76 }}
+                          inputProps={{ style: { textAlign: 'center', fontFamily: 'monospace', fontSize: 13, padding: '5px 6px' } }}
+                        />
                       ) : row.mapping ? (
-                        <Tooltip title="Edit qty / price">
-                          <IconButton size="small" onClick={() => startEdit(row)} color="primary">
-                            <EditIcon fontSize="small" />
+                        <Typography variant="body2" fontWeight={500}>{row.mapping.currentQty}</Typography>
+                      ) : (
+                        <Typography variant="body2" color="text.disabled">—</Typography>
+                      )}
+                    </TableCell>
+
+                    {/* TikTok Price — inline edit */}
+                    <TableCell align="center" sx={{ minWidth: 100 }}>
+                      {isEditing ? (
+                        <TextField
+                          size="small" type="number" value={editPrice}
+                          onChange={e => setEditPrice(e.target.value)}
+                          sx={{ width: 88 }}
+                          inputProps={{ style: { textAlign: 'right', fontFamily: 'monospace', fontSize: 13, padding: '5px 6px' } }}
+                          InputProps={{ startAdornment: <InputAdornment position="start" sx={{ mr: 0, fontSize: 13 }}>$</InputAdornment> }}
+                        />
+                      ) : row.mapping?.currentPrice ? (
+                        <Typography variant="body2" fontWeight={500}>${Number(row.mapping.currentPrice).toFixed(2)}</Typography>
+                      ) : (
+                        <Typography variant="body2" color="text.disabled">—</Typography>
+                      )}
+                    </TableCell>
+
+                    {/* Status */}
+                    <TableCell align="center">
+                      {row.mapping ? (
+                        <Chip
+                          label={row.mapping.listingStatus || 'linked'}
+                          size="small"
+                          color={row.mapping.listingStatus === 'active' ? 'success' : 'default'}
+                          sx={{ fontSize: 11 }}
+                        />
+                      ) : (
+                        <Chip label="Not linked" size="small" variant="outlined" sx={{ fontSize: 11, color: 'text.disabled' }} />
+                      )}
+                    </TableCell>
+
+                    {/* Actions */}
+                    <TableCell align="center">
+                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center', alignItems: 'center' }}>
+                        {!row.mapping && (
+                          <Tooltip title="Link to TikTok listing">
+                            <IconButton size="small" onClick={() => openMapDialog(row)} color="primary">
+                              <LinkIcon sx={{ fontSize: 17 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {row.mapping && isEditing ? (
+                          <>
+                            <Tooltip title="Save">
+                              <IconButton size="small" color="success" onClick={() => saveEdit(row)} disabled={editSaving}>
+                                {editSaving ? <CircularProgress size={14} /> : <CheckIcon sx={{ fontSize: 17 }} />}
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Cancel">
+                              <IconButton size="small" onClick={cancelEdit}>
+                                <CloseIcon sx={{ fontSize: 17 }} />
+                              </IconButton>
+                            </Tooltip>
+                          </>
+                        ) : row.mapping ? (
+                          <Tooltip title="Edit qty / price">
+                            <IconButton size="small" onClick={() => startEdit(row)} color="primary">
+                              <EditIcon sx={{ fontSize: 17 }} />
+                            </IconButton>
+                          </Tooltip>
+                        ) : null}
+                        {row.mapping && (
+                          <Tooltip title="Listing settings">
+                            <IconButton size="small" onClick={() => setSettingsRow(row)}>
+                              <SettingsIcon sx={{ fontSize: 17 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        <Tooltip title="Remove from Listing Management">
+                          <IconButton size="small" onClick={() => handleRemoveSku(row.id, row.sku)} color="error">
+                            <DeleteIcon sx={{ fontSize: 17 }} />
                           </IconButton>
                         </Tooltip>
-                      ) : null}
-                      <Tooltip title="Remove from Listing Management">
-                        <IconButton size="small" onClick={() => handleRemoveSku(row.id, row.sku)} color="error">
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </TableContainer>
       )}
+
+      {/* Listing Settings Dialog */}
+      <Dialog open={!!settingsRow} onClose={() => setSettingsRow(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
+          <Box>
+            <Typography fontWeight={600} fontSize={15}>Listing Settings</Typography>
+            <Typography variant="caption" color="text.secondary" fontFamily="monospace">{settingsRow?.sku}</Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setSettingsRow(null)}><CloseIcon fontSize="small" /></IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {settingsRow?.mapping && (
+            <>
+              {/* Stats */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
+                {[
+                  { label: 'Listing status', value: settingsRow.mapping.listingStatus || '—' },
+                  { label: 'Sync status', value: settingsRow.mapping.lastSyncStatus || 'Never synced' },
+                  { label: 'Last sync', value: settingsRow.mapping.lastSyncAt ? new Date(settingsRow.mapping.lastSyncAt).toLocaleString() : '—' },
+                  { label: 'Shop', value: settingsRow.mapping.shopId },
+                ].map(item => (
+                  <Box key={item.label} sx={{ bgcolor: 'grey.50', borderRadius: 1.5, p: 1.2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">{item.label}</Typography>
+                    <Typography variant="body2" fontWeight={500} fontSize={12}>{item.value}</Typography>
+                  </Box>
+                ))}
+              </Box>
+              <Divider />
+              {/* Auto-sync toggle */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box>
+                  <Typography variant="body2" fontWeight={500}>Auto-sync</Typography>
+                  <Typography variant="caption" color="text.secondary">Automatically push qty changes to TikTok</Typography>
+                </Box>
+                <Switch
+                  checked={settingsRow.syncEnabled}
+                  onChange={async () => {
+                    await toggleSync(settingsRow);
+                    setSettingsRow(null);
+                  }}
+                  disabled={settingsRow.isGenericAuction}
+                />
+              </Box>
+              {settingsRow.isGenericAuction && (
+                <Alert severity="info" sx={{ py: 0.5, fontSize: 12 }}>Generic Auction SKUs are excluded from auto-sync.</Alert>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Add SKU Dialog */}
       <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="xs" fullWidth>

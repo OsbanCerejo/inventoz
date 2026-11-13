@@ -52,10 +52,6 @@ router.get('/skus', auth, async (req, res) => {
     const managed = await LmManagedSku.findAll({
       include: [
         {
-          model: Products,
-          attributes: ['sku', 'itemName', 'brand', 'quantity', 'strength', 'sizeOz', 'sizeMl'],
-        },
-        {
           model: LmMarketplaceMapping,
           as: 'mappings',
           where: { marketplace: 'tiktok' },
@@ -64,8 +60,18 @@ router.get('/skus', auth, async (req, res) => {
       ],
     });
 
+    // Fetch product data separately to avoid association join issues
+    const skuList = managed.map(ms => ms.sku);
+    const productList = skuList.length > 0
+      ? await Products.findAll({
+          where: { sku: skuList },
+          attributes: ['sku', 'itemName', 'brand', 'quantity', 'strength', 'sizeOz', 'sizeMl'],
+        })
+      : [];
+    const productMap = Object.fromEntries(productList.map(p => [p.sku, p]));
+
     const rows = await Promise.all(managed.map(async (ms) => {
-      const product = ms.Products;
+      const product = productMap[ms.sku] || null;
       const mapping = ms.mappings && ms.mappings[0];
       const pendingSales = await pendingSalesQuery(ms.sku);
       const effectiveAvailable = (product?.quantity || 0) - pendingSales;
