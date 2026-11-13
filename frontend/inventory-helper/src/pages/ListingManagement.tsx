@@ -243,28 +243,32 @@ export default function ListingManagement() {
     }
   };
 
-  const fetchTikTokProducts = async (shopId: string, keyword?: string, pageToken?: string) => {
-    const isLoadMore = !!pageToken;
-    if (isLoadMore) setTiktokLoadingMore(true);
-    else setTiktokLoading(true);
+  // Fetch ALL TikTok listings by auto-paginating, then search client-side
+  const fetchTikTokProducts = async (shopId: string, _keyword?: string, _pageToken?: string) => {
+    setTiktokLoading(true);
+    setTiktokNextPage(null);
     try {
-      const params: any = { shopId };
-      if (keyword) params.keyword = keyword;
-      if (pageToken) params.pageToken = pageToken;
-      const res = await axios.get(`${API()}/listing-management/tiktok/products`, { headers, params });
-      const products = res.data?.products || res.data?.list || [];
-      const nextPage = res.data?.next_page_token || null;
-      if (isLoadMore) {
-        setTiktokProducts(prev => [...prev, ...products]);
-      } else {
-        setTiktokProducts(products);
-      }
-      setTiktokNextPage(nextPage);
+      let allProducts: any[] = [];
+      let nextPage: string | null = null;
+      let page = 0;
+      const MAX_PAGES = 20; // safety cap — 20 pages × 20 items = 400 listings
+      do {
+        const params: any = { shopId };
+        if (nextPage) params.pageToken = nextPage;
+        const res = await axios.get(`${API()}/listing-management/tiktok/products`, { headers, params });
+        const products = res.data?.products || res.data?.list || [];
+        allProducts = [...allProducts, ...products];
+        nextPage = res.data?.next_page_token || null;
+        page++;
+        // Show progress as pages load
+        setTiktokProducts([...allProducts]);
+      } while (nextPage && page < MAX_PAGES);
+      setTiktokProducts(allProducts);
+      setTiktokNextPage(null); // all loaded — no manual load more needed
     } catch (e: any) {
       setMapError('Failed to load TikTok products: ' + (e.response?.data?.error || e.message));
     } finally {
       setTiktokLoading(false);
-      setTiktokLoadingMore(false);
     }
   };
 
@@ -753,26 +757,11 @@ export default function ListingManagement() {
                   size="small" fullWidth
                   label="Search TikTok listings"
                   value={searchInput}
-                  onChange={e => setSearchInput(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      setSelectedProductId('');
-                      setProductDetail(null);
-                      fetchTikTokProducts(selectedShopId, searchInput.trim() || undefined);
-                    }
-                  }}
+                  onChange={e => { setSearchInput(e.target.value); setSelectedProductId(''); setProductDetail(null); }}
                   InputProps={{
                     startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <Button size="small" sx={{ minWidth: 0, px: 1 }}
-                          onClick={() => { setSelectedProductId(''); setProductDetail(null); fetchTikTokProducts(selectedShopId, searchInput.trim() || undefined); }}>
-                          Go
-                        </Button>
-                      </InputAdornment>
-                    ),
                   }}
-                  helperText="Press Enter or Go to search all TikTok listings"
+                  helperText={tiktokLoading ? 'Loading all listings…' : `${tiktokProducts.length} listings loaded — type to filter`}
                 />
 
                 {tiktokLoading ? (
@@ -784,7 +773,14 @@ export default function ListingManagement() {
                 ) : (
                   <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                     <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, flex: 1, overflowY: 'auto', maxHeight: 320 }}>
-                      {tiktokProducts.map((p: any) => (
+                      {tiktokProducts.filter((p: any) => {
+                        if (!searchInput.trim()) return true;
+                        const q = searchInput.trim().toLowerCase();
+                        const title = (p.title || p.name || '').toLowerCase();
+                        const id = (p.id || '').toLowerCase();
+                        const skuMatch = (p.skus || p.sku_list || []).some((s: any) => (s.seller_sku || '').toLowerCase().includes(q));
+                        return title.includes(q) || id.includes(q) || skuMatch;
+                      }).map((p: any) => (
                         <Box
                           key={p.id}
                           onClick={() => { setSelectedProductId(p.id); fetchProductDetail(p.id); }}
@@ -802,12 +798,6 @@ export default function ListingManagement() {
                         </Box>
                       ))}
                     </Box>
-                    {tiktokNextPage && (
-                      <Button size="small" fullWidth variant="text" sx={{ mt: 0.5 }} disabled={tiktokLoadingMore}
-                        onClick={() => fetchTikTokProducts(selectedShopId, searchInput.trim() || undefined, tiktokNextPage)}>
-                        {tiktokLoadingMore ? <CircularProgress size={14} /> : 'Load more'}
-                      </Button>
-                    )}
                   </Box>
                 )}
               </Box>
