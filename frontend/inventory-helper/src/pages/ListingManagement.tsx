@@ -102,6 +102,8 @@ export default function ListingManagement() {
   const [mapRow, setMapRow] = useState<ManagedSkuRow | null>(null);
   const [tiktokProducts, setTiktokProducts] = useState<any[]>([]);
   const [tiktokLoading, setTiktokLoading] = useState(false);
+  const [tiktokNextPage, setTiktokNextPage] = useState<string | null>(null);
+  const [tiktokLoadingMore, setTiktokLoadingMore] = useState(false);
   const [selectedShopId, setSelectedShopId] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedSkuId, setSelectedSkuId] = useState('');
@@ -110,6 +112,7 @@ export default function ListingManagement() {
   const [mapError, setMapError] = useState('');
   const [productDetail, setProductDetail] = useState<any>(null);
   const [productSearch, setProductSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
 
   // Inline editing
   const [editingMappingId, setEditingMappingId] = useState<number | null>(null);
@@ -207,11 +210,13 @@ export default function ListingManagement() {
     setSelectedWarehouseId('');
     setProductDetail(null);
     setTiktokProducts([]);
+    setTiktokNextPage(null);
     setProductSearch(row.sku);
+    setSearchInput(row.sku);
     if (shops.length > 0) {
       const shopId = shops[0].shopId;
       setSelectedShopId(shopId);
-      await fetchTikTokProducts(shopId);
+      await fetchTikTokProducts(shopId, row.sku);
     }
     setMapOpen(true);
   };
@@ -226,17 +231,28 @@ export default function ListingManagement() {
     }
   };
 
-  const fetchTikTokProducts = async (shopId: string) => {
-    setTiktokLoading(true);
+  const fetchTikTokProducts = async (shopId: string, keyword?: string, pageToken?: string) => {
+    const isLoadMore = !!pageToken;
+    if (isLoadMore) setTiktokLoadingMore(true);
+    else setTiktokLoading(true);
     try {
-      const res = await axios.get(`${API()}/listing-management/tiktok/products`, {
-        headers, params: { shopId },
-      });
-      setTiktokProducts(res.data?.products || res.data?.list || []);
+      const params: any = { shopId };
+      if (keyword) params.keyword = keyword;
+      if (pageToken) params.pageToken = pageToken;
+      const res = await axios.get(`${API()}/listing-management/tiktok/products`, { headers, params });
+      const products = res.data?.products || res.data?.list || [];
+      const nextPage = res.data?.next_page_token || null;
+      if (isLoadMore) {
+        setTiktokProducts(prev => [...prev, ...products]);
+      } else {
+        setTiktokProducts(products);
+      }
+      setTiktokNextPage(nextPage);
     } catch (e: any) {
       setMapError('Failed to load TikTok products: ' + (e.response?.data?.error || e.message));
     } finally {
       setTiktokLoading(false);
+      setTiktokLoadingMore(false);
     }
   };
 
@@ -680,7 +696,7 @@ export default function ListingManagement() {
                 <FormControl size="small" fullWidth>
                   <InputLabel>Shop</InputLabel>
                   <Select value={selectedShopId} label="Shop"
-                    onChange={e => { setSelectedShopId(e.target.value); fetchTikTokProducts(e.target.value); }}>
+                    onChange={e => { setSelectedShopId(e.target.value); fetchTikTokProducts(e.target.value, searchInput || undefined); }}>
                     {shops.map(s => (
                       <MenuItem key={s.shopId} value={s.shopId}>{s.shopName || s.shopId}</MenuItem>
                     ))}
@@ -688,33 +704,73 @@ export default function ListingManagement() {
                 </FormControl>
               )}
 
-              <TextField
-                size="small" fullWidth
-                label="Search by SKU or product name"
-                value={productSearch}
-                onChange={e => setProductSearch(e.target.value)}
-                InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
-                helperText="Pre-filled with your Inventoz SKU — edit to search differently"
-              />
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <TextField
+                  size="small" fullWidth
+                  label="Search TikTok listings"
+                  value={searchInput}
+                  onChange={e => setSearchInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      setProductSearch(searchInput);
+                      setSelectedProductId('');
+                      setProductDetail(null);
+                      fetchTikTokProducts(selectedShopId, searchInput);
+                    }
+                  }}
+                  InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
+                  helperText="Press Enter to search TikTok — searches by keyword or SKU"
+                />
+                <Button
+                  variant="outlined" size="small" sx={{ whiteSpace: 'nowrap', alignSelf: 'flex-start', mt: 0.5 }}
+                  onClick={() => {
+                    setProductSearch(searchInput);
+                    setSelectedProductId('');
+                    setProductDetail(null);
+                    fetchTikTokProducts(selectedShopId, searchInput);
+                  }}
+                >
+                  Search
+                </Button>
+              </Box>
 
               {tiktokLoading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center' }}><CircularProgress size={24} /></Box>
+              ) : tiktokProducts.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
+                  No results. Try a different search.
+                </Typography>
               ) : (
-                <FormControl size="small" fullWidth>
-                  <InputLabel>TikTok Product</InputLabel>
-                  <Select value={selectedProductId} label="TikTok Product"
-                    onChange={e => { setSelectedProductId(e.target.value as string); fetchProductDetail(e.target.value as string); }}>
-                    {tiktokProducts
-                      .filter(p => {
-                        if (!productSearch.trim()) return true;
-                        const q = productSearch.toLowerCase();
-                        return (p.title || p.name || '').toLowerCase().includes(q) || (p.id || '').includes(q);
-                      })
-                      .map((p: any) => (
-                        <MenuItem key={p.id} value={p.id}>{p.title || p.name || p.id}</MenuItem>
-                      ))}
-                  </Select>
-                </FormControl>
+                <Box>
+                  <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, maxHeight: 220, overflowY: 'auto' }}>
+                    {tiktokProducts.map((p: any) => (
+                      <Box
+                        key={p.id}
+                        onClick={() => { setSelectedProductId(p.id); fetchProductDetail(p.id); }}
+                        sx={{
+                          px: 1.5, py: 1, cursor: 'pointer', borderBottom: '1px solid', borderColor: 'divider',
+                          bgcolor: selectedProductId === p.id ? 'primary.50' : 'transparent',
+                          '&:hover': { bgcolor: selectedProductId === p.id ? 'primary.50' : 'action.hover' },
+                          '&:last-child': { borderBottom: 'none' },
+                        }}
+                      >
+                        <Typography variant="body2" fontWeight={selectedProductId === p.id ? 600 : 400} noWrap>
+                          {p.title || p.name || p.id}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">{p.id}</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                  {tiktokNextPage && (
+                    <Button
+                      size="small" fullWidth variant="text" sx={{ mt: 0.5 }}
+                      disabled={tiktokLoadingMore}
+                      onClick={() => fetchTikTokProducts(selectedShopId, productSearch || undefined, tiktokNextPage)}
+                    >
+                      {tiktokLoadingMore ? <CircularProgress size={14} /> : 'Load more'}
+                    </Button>
+                  )}
+                </Box>
               )}
 
               {productDetail && (() => {

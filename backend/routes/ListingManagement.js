@@ -282,16 +282,16 @@ router.post('/mappings/:id/push-price', auth, async (req, res) => {
 
 // ─── TikTok product import ───────────────────────────────────────────────────
 
-// GET /listing-management/tiktok/products?shopId=xxx
+// GET /listing-management/tiktok/products?shopId=xxx&pageToken=xxx&keyword=xxx
 // Fetches the live TikTok product catalog for a connected shop
 router.get('/tiktok/products', auth, async (req, res) => {
   try {
-    const { shopId, pageToken } = req.query;
+    const { shopId, pageToken, keyword } = req.query;
     if (!shopId) return res.status(400).json({ error: 'shopId is required' });
 
     const cred = await getActiveCredential(shopId);
     if (!cred.shopCipher) return res.status(400).json({ error: 'Shop cipher not set — reconnect TikTok Shop to fix' });
-    const data = await tiktokApi.searchProducts(cred.accessToken, cred.shopCipher, pageToken || null);
+    const data = await tiktokApi.searchProducts(cred.accessToken, cred.shopCipher, pageToken || null, keyword || null);
     res.json(data);
   } catch (err) {
     console.error('TikTok products error:', err.message);

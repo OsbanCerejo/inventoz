@@ -39,36 +39,61 @@ router.get('/tiktok/callback', auth, async (req, res) => {
     let shopName = 'unknown';
     let shopCipher = null;
 
+    let savedShops = [];
+
     try {
       const shopsData = await tiktokApi.getAuthorizedShops(tokenData.access_token);
       console.log('TikTok authorized shops:', JSON.stringify(shopsData));
       const shops = shopsData?.shops || shopsData?.list || [];
+
+      for (const shop of shops) {
+        const sid = shop.id || shop.shop_id || 'unknown';
+        const sname = shop.name || shop.shop_name || sid;
+        const scipher = shop.cipher || shop.shop_cipher || null;
+
+        await LmTiktokCredential.upsert({
+          shopId: sid,
+          shopName: sname,
+          shopCipher: scipher,
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token,
+          accessTokenExpiry: accessExpiry,
+          refreshTokenExpiry: refreshExpiry,
+          isActive: true,
+          lastHealthCheck: new Date(),
+        });
+
+        savedShops.push({ shopId: sid, shopName: sname, shopCipher: !!scipher });
+      }
+
+      // Set fallback values for response (use first shop)
       if (shops.length > 0) {
-        shopId = shops[0].id || shops[0].shop_id || 'unknown';
-        shopName = shops[0].name || shops[0].shop_name || shopId;
-        shopCipher = shops[0].cipher || shops[0].shop_cipher || null;
+        shopId = savedShops[0].shopId;
+        shopName = savedShops[0].shopName;
+        shopCipher = savedShops[0].shopCipher;
       }
     } catch (shopErr) {
       console.error('Failed to fetch authorized shops (cipher unavailable):', shopErr.message);
-      // Fall back to token data fields
       const firstShop = Array.isArray(tokenData.shops) && tokenData.shops.length > 0 ? tokenData.shops[0] : null;
       shopId = firstShop?.shop_id || tokenData.open_id || tokenData.seller_id || 'unknown';
       shopName = firstShop?.shop_name || tokenData.seller_name || shopId;
+
+      await LmTiktokCredential.upsert({
+        shopId,
+        shopName,
+        shopCipher: null,
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token,
+        accessTokenExpiry: accessExpiry,
+        refreshTokenExpiry: refreshExpiry,
+        isActive: true,
+        lastHealthCheck: new Date(),
+      });
+
+      savedShops.push({ shopId, shopName, shopCipher: false });
     }
 
-    await LmTiktokCredential.upsert({
-      shopId,
-      shopName,
-      shopCipher,
-      accessToken: tokenData.access_token,
-      refreshToken: tokenData.refresh_token,
-      accessTokenExpiry: accessExpiry,
-      refreshTokenExpiry: refreshExpiry,
-      isActive: true,
-      lastHealthCheck: new Date(),
-    });
-
-    res.json({ success: true, shopId, shopName, shopCipher: !!shopCipher });
+    res.json({ success: true, shops: savedShops });
   } catch (err) {
     console.error('TikTok OAuth callback error:', err.message);
     if (err.response?.data) console.error('TikTok response:', JSON.stringify(err.response.data));
