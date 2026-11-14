@@ -4,6 +4,7 @@ module.exports = (sequelize, DataTypes) => {
     mappingId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
     jobType: { type: DataTypes.ENUM('qty_update', 'price_update', 'reconcile'), defaultValue: 'qty_update' },
     targetQty: { type: DataTypes.INTEGER, allowNull: true },
+    inventozQtySnapshot: { type: DataTypes.INTEGER, allowNull: true },
     targetPrice: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
     inventoryEventId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true },
     status: {

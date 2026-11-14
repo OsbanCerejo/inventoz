@@ -69,21 +69,30 @@ async function processJob(job) {
     }
 
     if (job.jobType === 'qty_update') {
-      // Re-fetch current Inventoz qty at execution time to avoid pushing a stale
-      // targetQty that was computed minutes ago (e.g. during a retry after TikTok downtime)
-      const { Products } = require('../models');
-      const product = ms ? await Products.findOne({ where: { sku: ms.sku }, attributes: ['quantity'] }) : null;
-      const freshInventozQty = product?.quantity ?? null;
-
-      // Recompute targetQty using the fresh Inventoz qty + current delta from lastConfirmedQty
       let finalQty = job.targetQty;
-      if (freshInventozQty !== null && mapping.lastConfirmedQty !== null) {
-        const freshDelta = freshInventozQty - mapping.lastConfirmedQty;
-        const freshTarget = Math.max(0, mapping.currentQty + freshDelta);
-        // Only use fresh computation if it differs — avoids pushing wrong qty on retries
-        if (freshTarget !== job.targetQty) {
-          console.log(`[LmSyncWorker] Recomputed targetQty for mapping ${mapping.id}: ${job.targetQty} → ${freshTarget} (inventoz=${freshInventozQty}, lastConfirmed=${mapping.lastConfirmedQty})`);
-          finalQty = freshTarget;
+
+      // On retries only: recompute using fresh Inventoz qty to avoid pushing a stale
+      // targetQty if Inventoz changed significantly during the retry window
+      if (job.attempts > 1 && job.inventozQtySnapshot !== null) {
+        const { Products } = require('../models');
+        const product = await Products.findOne({ where: { sku: ms.sku }, attributes: ['quantity'] });
+        const freshInventozQty = product?.quantity ?? null;
+
+        if (freshInventozQty !== null) {
+          // originalDelta is the change in Inventoz qty this job was created to account for
+          const originalDelta = job.targetQty - job.inventozQtySnapshot;
+          const freshTarget = Math.max(0, freshInventozQty + originalDelta);
+
+          if (freshTarget !== finalQty) {
+            console.log(`[LmSyncWorker] Retry recompute for mapping ${mapping.id}: ${finalQty} → ${freshTarget} (inventoz=${freshInventozQty}, snapshot=${job.inventozQtySnapshot})`);
+            finalQty = freshTarget;
+          }
+
+          // If fresh target would exceed current Inventoz, cap it (prevent oversell on retry)
+          if (finalQty > freshInventozQty) {
+            console.warn(`[LmSyncWorker] Capping finalQty ${finalQty} to freshInventozQty ${freshInventozQty} for mapping ${mapping.id}`);
+            finalQty = freshInventozQty;
+          }
         }
       }
 
@@ -95,12 +104,19 @@ async function processJob(job) {
         mapping.warehouseId,
         finalQty
       );
-      await mapping.update({
+      const mappingUpdate = {
         currentQty: finalQty,
-        lastConfirmedQty: freshInventozQty ?? mapping.lastConfirmedQty,
         lastSyncAt: new Date(),
         lastSyncStatus: 'ok',
-      });
+      };
+
+      // If we capped finalQty on a retry (Inventoz dropped during retry window),
+      // re-align lastConfirmedQty so the next cron computes the correct delta
+      if (job.attempts > 1 && job.inventozQtySnapshot !== null && finalQty !== job.targetQty) {
+        mappingUpdate.lastConfirmedQty = finalQty;
+      }
+
+      await mapping.update(mappingUpdate);
 
     } else if (job.jobType === 'price_update') {
       await tiktokApi.request('PUT', `/product/202309/products/${mapping.marketplaceProductId}/prices`,

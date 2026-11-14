@@ -87,6 +87,7 @@ async function runInventorySync() {
         mappingId: mapping.id,
         jobType: 'qty_update',
         targetQty: newTiktokQty,
+        inventozQtySnapshot: inventozQty,
         status: 'pending',
       });
 
