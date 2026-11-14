@@ -174,8 +174,18 @@ async function runCycle() {
 
 let workerInterval = null;
 
-function start() {
+async function start() {
   if (workerInterval) return;
+
+  // Reset jobs left in 'processing' from a prior server crash/restart
+  const stuck = await LmSyncJob.update(
+    { status: 'pending', nextRetryAt: null },
+    { where: { status: 'processing' } }
+  );
+  if (stuck[0] > 0) {
+    console.warn(`[LmSyncWorker] Reset ${stuck[0]} stuck processing job(s) to pending on startup`);
+  }
+
   workerInterval = setInterval(runCycle, 60 * 1000); // every 60 seconds
   console.log('[LmSyncWorker] Started (60s cycle)');
   runCycle(); // run immediately on start
