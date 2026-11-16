@@ -35,14 +35,8 @@ router.post('/tiktok', express.json(), async (req, res) => {
 
   try {
     if (APP_SECRET && !verifySignature(req)) {
-      console.warn('[LM Webhook] Invalid signature — headers:', JSON.stringify({
-        'x-tts-signature': req.headers['x-tts-signature'],
-        'x-tiktok-signature': req.headers['x-tiktok-signature'],
-        'x-tts-timestamp': req.headers['x-tts-timestamp'],
-        'x-nonce': req.headers['x-nonce'],
-        timestamp: req.headers['timestamp'],
-        nonce: req.headers['nonce'],
-      }));
+      console.warn('[LM Webhook] Invalid signature — all headers:', JSON.stringify(req.headers));
+      console.warn('[LM Webhook] Body:', JSON.stringify(req.body).slice(0, 300));
       return;
     }
 
