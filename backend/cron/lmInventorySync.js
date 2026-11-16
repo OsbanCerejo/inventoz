@@ -61,10 +61,17 @@ async function runInventorySync() {
 
       const newTiktokQty = Math.max(0, mapping.currentQty + delta);
 
-      // If the resulting TikTok qty would exceed Inventoz qty, flag but do NOT
-      // advance lastConfirmedQty — keeps the delta alive so the next cron run
-      // retries automatically once the situation resolves (e.g. inbound arrives)
-      if (newTiktokQty > inventozQty) {
+      // While Inventoz is still negative, suppress positive deltas — don't increase
+      // TikTok qty until stock is actually received (Inventoz crosses into positive).
+      // Negative deltas (sales/adjustments) still flow through regardless.
+      if (inventozQty < 0 && delta > 0) {
+        await mapping.update({ lastConfirmedQty: inventozQty, lastSyncStatus: 'ok' });
+        continue;
+      }
+
+      // Stock alert: if resulting TikTok qty would exceed actual available stock,
+      // hold and retry next run. Only applies when Inventoz qty is non-negative.
+      if (inventozQty >= 0 && newTiktokQty > inventozQty) {
         console.warn(`[lmInventorySync] Stock alert: mapping ${mapping.id} (SKU ${mapping.managedSku.sku}) — TikTok qty ${newTiktokQty} > Inventoz qty ${inventozQty}. Holding, will retry next run.`);
         await mapping.update({ lastSyncStatus: 'failed' });
         continue;
