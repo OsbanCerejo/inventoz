@@ -431,7 +431,7 @@ const TikTokFulfillment = () => {
   const [lunchModeReleaseAt, setLunchModeReleaseAt] = useState<string | null>(null);
   const [lunchModeSimulate, setLunchModeSimulate] = useState(false);
 
-  // Poll lunch mode status every 30s, and check immediately on mount
+  // Poll lunch mode status every 30s
   useEffect(() => {
     const checkLunchMode = async () => {
       try {
@@ -442,8 +442,12 @@ const TikTokFulfillment = () => {
           getApiUrl(`lunch-mode/status${params.toString() ? `?${params}` : ""}`),
           { headers: token ? { Authorization: `Bearer ${token}` } : {} }
         );
-        // Only poll-activate (auto-release); never auto-activate from poll — activation happens on shipment close
-        if (lunchModeActive && !data.enabled) {
+        if (data.shouldShow && !activeShipment && !lunchModeActive) {
+          // No open shipment and lunch window is open — show immediately
+          setLunchModeReleaseAt(data.releaseAt);
+          setLunchModeActive(true);
+        } else if (lunchModeActive && !data.enabled) {
+          // Auto-release at 2 PM
           setLunchModeActive(false);
           setLunchModeReleaseAt(null);
         }
@@ -452,7 +456,7 @@ const TikTokFulfillment = () => {
     checkLunchMode();
     const id = setInterval(checkLunchMode, 30_000);
     return () => clearInterval(id);
-  }, [lunchModeActive, lunchModeSimulate]);
+  }, [lunchModeActive, lunchModeSimulate, activeShipment]);
 
   const [shows, setShows] = useState<ShowItem[]>([]);
   const [showsLoading, setShowsLoading] = useState(false);
@@ -981,7 +985,7 @@ const TikTokFulfillment = () => {
           getApiUrl(`lunch-mode/status${params.toString() ? `?${params}` : ""}`),
           { headers: token ? { Authorization: `Bearer ${token}` } : {} }
         );
-        if (data.enabled || data.simulate) {
+        if (data.shouldShow) {
           setLunchModeReleaseAt(data.releaseAt);
           setLunchModeActive(true);
           return; // don't re-focus tracking — user is locked out
@@ -2035,18 +2039,24 @@ const TikTokFulfillment = () => {
             variant="outlined"
             color="warning"
             onClick={async () => {
-              // Simulate: pretend lunch mode is on and a shipment was just closed
               const token = localStorage.getItem("token");
               const { data } = await axios.get(getApiUrl("lunch-mode/status?simulate=1"), {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
               });
               setLunchModeSimulate(true);
-              setLunchModeReleaseAt(data.releaseAt);
-              setLunchModeActive(true);
+              if (!activeShipment) {
+                // No open shipment — show immediately
+                setLunchModeReleaseAt(data.releaseAt);
+                setLunchModeActive(true);
+              }
+              // If a shipment is open, lunchModeSimulate=true means the post-close check
+              // will fire after the user closes it
             }}
             sx={{ opacity: 0.7, fontSize: 11 }}
           >
-            🧪 Simulate Lunch
+            {lunchModeSimulate && activeShipment
+              ? "🧪 Fires on Next Close"
+              : "🧪 Simulate Lunch"}
           </Button>
         </Box>
       )}

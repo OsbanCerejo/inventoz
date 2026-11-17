@@ -3,17 +3,30 @@ const router = express.Router();
 const { auth } = require("../middleware/auth");
 const { User } = require("../models");
 
-// EST release time: 2:00 PM
-const LUNCH_RELEASE_HOUR_EST = 14; // 14:00
+// EST offsets
+const EST_OFFSET = -5; // UTC-5; change to -4 during EDT if needed
+const LUNCH_START_HOUR_EST  = 13; // 1:00 PM
+const LUNCH_START_MIN_EST   = 30; // :30
+const LUNCH_RELEASE_HOUR_EST = 14; // 2:00 PM
 
-// Returns true if the current wall clock (EST) is past 2:00 PM
-function isPastReleaseTime(simulate = false) {
-  if (simulate) return false; // in simulate mode we never auto-release
+function getEstTime() {
   const now = new Date();
-  // Convert to EST (UTC-5) / EDT (UTC-4) — using fixed UTC-5 offset for simplicity
-  // For production accuracy the server should be in UTC; we do the offset here.
-  const estOffset = -5; // EST; adjust to -4 for EDT if needed
-  const estHour = (now.getUTCHours() + 24 + estOffset) % 24;
+  const estHour = (now.getUTCHours() + 24 + EST_OFFSET) % 24;
+  const estMin  = now.getUTCMinutes();
+  return { estHour, estMin };
+}
+
+// True when current EST time >= 1:30 PM (lunch window open)
+function isLunchWindowOpen(simulate = false) {
+  if (simulate) return true;
+  const { estHour, estMin } = getEstTime();
+  return estHour > LUNCH_START_HOUR_EST || (estHour === LUNCH_START_HOUR_EST && estMin >= LUNCH_START_MIN_EST);
+}
+
+// True when current EST time >= 2:00 PM (auto-release)
+function isPastReleaseTime(simulate = false) {
+  if (simulate) return false;
+  const { estHour } = getEstTime();
   return estHour >= LUNCH_RELEASE_HOUR_EST;
 }
 
@@ -52,8 +65,13 @@ router.get("/status", auth, async (req, res) => {
       return res.json({ enabled: false, releaseAt: null, simulate: false });
     }
 
+    const enabled = simulate ? true : user.lunchModeEnabled;
+    // shouldShow = enabled AND it's past 1:30 PM EST (lunch window open)
+    const shouldShow = enabled && isLunchWindowOpen(simulate);
+
     return res.json({
-      enabled: simulate ? true : user.lunchModeEnabled,
+      enabled,
+      shouldShow,
       enabledAt: simulate ? new Date().toISOString() : user.lunchModeEnabledAt,
       releaseAt: (simulate || user.lunchModeEnabled) ? getReleaseTime() : null,
       simulate,

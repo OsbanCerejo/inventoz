@@ -1764,7 +1764,7 @@ router.get("/sorting-shows", auth, checkPermission("tiktokSortingAnalytics", "vi
         AND ss.shipmentId = tsi.shipmentId
       WHERE ss.closedAt IS NOT NULL
         AND ss.closedAt >= :from AND ss.closedAt < :to
-      ORDER BY ts.name ASC
+      ORDER BY ts.id DESC
     `, { replacements: { from: range.from, to: range.to }, type: sequelize.QueryTypes.SELECT });
     return res.json(rows.map(r => ({ showId: Number(r.showId), showName: r.showName })));
   } catch (err) {

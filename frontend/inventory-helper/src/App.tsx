@@ -1,5 +1,5 @@
-import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { BrowserRouter as Router, Route, Routes, useLocation } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import Home from "./pages/Home";
 import Products from "./pages/Products";
@@ -26,6 +26,7 @@ import WhatnotFulfillmentAnalytics from "./pages/WhatnotFulfillmentAnalytics";
 import TikTokFulfillmentAnalytics from "./pages/TikTokFulfillmentAnalytics";
 import TikTokSortingAnalytics from "./pages/TikTokSortingAnalytics";
 import LunchModeAdmin from "./pages/LunchModeAdmin";
+import LunchModeOverlay from "./components/LunchModeOverlay";
 import SortingAnalytics from "./pages/SortingAnalytics";
 import OperationsCost from "./pages/OperationsCost";
 import WalmartIntegration from "./pages/WalmartIntegration";
@@ -55,7 +56,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import RoleBasedHome from "./components/RoleBasedHome";
 import { useAuth } from "./context/AuthContext";
 import { CircularProgress, Box, Alert, Button, Collapse, Stack } from "@mui/material";
-import { getServerUrl } from "./config/api";
+import { getServerUrl, getApiUrl } from "./config/api";
 
 const FRONTEND_BUILD_ID = import.meta.env.VITE_APP_BUILD_ID || "development";
 const UPDATE_DISMISS_KEY = "dismissed_update_build_id";
@@ -145,6 +146,51 @@ function BuildUpdateBanner() {
   );
 }
 
+// Global lunch mode poller — shows overlay on every page except /tiktok-fulfillment
+// (TikTok Fulfillment manages its own overlay, waiting for shipment close)
+function LunchModeGate() {
+  const { isAuthenticated } = useAuth();
+  const location = useLocation();
+  const [active, setActive] = useState(false);
+  const [releaseAt, setReleaseAt] = useState<string | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const isTikTokFulfillment = location.pathname === "/tiktok-fulfillment";
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const check = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const { data } = await axios.get(
+          getApiUrl("lunch-mode/status"),
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        );
+        if (data.shouldShow && !isTikTokFulfillment) {
+          setReleaseAt(data.releaseAt);
+          setActive(true);
+        } else if (!data.enabled) {
+          setActive(false);
+          setReleaseAt(null);
+        }
+      } catch { /* ignore */ }
+    };
+
+    check();
+    intervalRef.current = setInterval(check, 30_000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [isAuthenticated, isTikTokFulfillment]);
+
+  if (!active) return null;
+  return (
+    <LunchModeOverlay
+      releaseAt={releaseAt}
+      onUnlocked={() => { setActive(false); setReleaseAt(null); }}
+    />
+  );
+}
+
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
 
@@ -166,6 +212,7 @@ function AppContent() {
     <div className="app-container">
       <Router>
         {isAuthenticated && <NavBar />}
+        {isAuthenticated && <LunchModeGate />}
         <BuildUpdateBanner />
         <div className="main-content">
           <Routes>
