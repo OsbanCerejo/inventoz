@@ -29,6 +29,12 @@ interface ItemTypeRow {
   itemCategory: string; shipmentCount: number; lineCount: number; totalUnits: number;
   avgScanGapSeconds: number | null; avgHandlingMinutes: number | null;
 }
+interface PaceRow { showId: number; showName: string; avgShipmentsPerHour: number; activeHours: number; totalShipments: number; }
+interface SizeRow {
+  lineCount: number; shipmentCount: number; totalUnits: number;
+  avgHandlingMinutes: number | null; avgScanGapSeconds: number | null;
+  minHandlingMinutes: number | null; maxHandlingMinutes: number | null;
+}
 interface HeatmapRow { dayIndex: number; hourOfDay: number; shipmentsClosed: number; totalUnits: number; }
 interface ShipmentRow {
   showId: number; importId: number; shipmentId: string; closedAt: string | null;
@@ -143,6 +149,8 @@ export default function TikTokSortingAnalytics() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
   const [daily, setDaily] = useState<DailyRow[]>([]);
   const [itemTypes, setItemTypes] = useState<ItemTypeRow[]>([]);
+  const [pace, setPace] = useState<PaceRow[]>([]);
+  const [sizeRows, setSizeRows] = useState<SizeRow[]>([]);
   const [heatmap, setHeatmap] = useState<HeatmapRow[]>([]);
   const [shipments, setShipments] = useState<ShipmentRow[]>([]);
   const [throughput, setThroughput] = useState<Throughput | null>(null);
@@ -168,11 +176,13 @@ export default function TikTokSortingAnalytics() {
         axios.get(API("sorting-daily"), { params, headers }),
         axios.get(API("sorting-item-types"), { params, headers }),
         axios.get(API("sorting-heatmap"), { params, headers }),
-        axios.get(API("sorting-shipments"), { params: { ...params, limit: 150 }, headers }),
+        axios.get(API("sorting-shipments"), { params: { ...params, limit: 500 }, headers }),
         axios.get(API("sorting-shows"), { params: dateParams, headers }),
         axios.get(API("sorting-throughput"), { params, headers }),
+        axios.get(API("sorting-pace"), { params, headers }),
+        axios.get(API("sorting-by-size"), { params, headers }),
       ]);
-      const [ov, lb, dy, it, hm, sh, sw, tp] = results;
+      const [ov, lb, dy, it, hm, sh, sw, tp, pc, sz] = results;
       if (ov.status === "fulfilled") setOverview(ov.value.data);
       if (lb.status === "fulfilled") setLeaderboard(lb.value.data || []);
       if (dy.status === "fulfilled") setDaily(dy.value.data || []);
@@ -181,6 +191,8 @@ export default function TikTokSortingAnalytics() {
       if (sh.status === "fulfilled") setShipments(sh.value.data || []);
       if (sw.status === "fulfilled") setShows(sw.value.data || []);
       if (tp.status === "fulfilled") setThroughput(tp.value.data || null);
+      if (pc.status === "fulfilled") setPace(pc.value.data || []);
+      if (sz.status === "fulfilled") setSizeRows(sz.value.data || []);
       const failed = [
         { n: "overview", r: ov }, { n: "leaderboard", r: lb }, { n: "daily", r: dy },
         { n: "item-types", r: it }, { n: "heatmap", r: hm }, { n: "shipments", r: sh },
@@ -281,7 +293,7 @@ export default function TikTokSortingAnalytics() {
               <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
                 <Tab label="Overview" />
                 <Tab label="Sorters" />
-                <Tab label="Item Types" />
+                <Tab label="Shipment Size" />
                 <Tab label="Heatmap" />
                 <Tab label="Shipments" />
               </Tabs>
@@ -368,6 +380,50 @@ export default function TikTokSortingAnalytics() {
                       maxItems={10}
                       fmtVal={v => `${fmt(v)} shipments`}
                     />
+                  </Paper>
+                </Grid>
+
+                {/* Pace per show */}
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 2, borderRadius: 2 }}>
+                    <Typography variant="h6" sx={{ mb: 0.5 }}>Pace By Show</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+                      Avg shipments closed per active hour
+                    </Typography>
+                    {pace.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">No data.</Typography>
+                    ) : (
+                      <HBar
+                        items={pace}
+                        labelKey="showName"
+                        valueKey="avgShipmentsPerHour"
+                        color="#ef6c00"
+                        maxItems={15}
+                        fmtVal={v => `${v.toFixed(1)} / hr`}
+                      />
+                    )}
+                  </Paper>
+                </Grid>
+
+                {/* Shipment size quick view */}
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 2, borderRadius: 2 }}>
+                    <Typography variant="h6" sx={{ mb: 0.5 }}>Avg Handling By Shipment Size</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+                      How long shipments take based on number of items
+                    </Typography>
+                    {sizeRows.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">No data.</Typography>
+                    ) : (
+                      <HBar
+                        items={sizeRows.filter(r => r.avgHandlingMinutes != null).map(r => ({ ...r, label: `${r.lineCount} item${r.lineCount === 1 ? "" : "s"}` }))}
+                        labelKey="label"
+                        valueKey="avgHandlingMinutes"
+                        color="#2e7d32"
+                        maxItems={15}
+                        fmtVal={v => fmtMinutes(v)}
+                      />
+                    )}
                   </Paper>
                 </Grid>
               </Grid>
@@ -547,33 +603,48 @@ export default function TikTokSortingAnalytics() {
               </Grid>
             )}
 
-            {/* Tab 2 — Item Types */}
+            {/* Tab 2 — Shipment Size */}
             {activeTab === 2 && (
               <Grid container spacing={2}>
-                <Grid item xs={12} md={7}>
+                <Grid item xs={12} lg={8}>
                   <Paper sx={{ p: 2, borderRadius: 2 }}>
-                    <Typography variant="h6" sx={{ mb: 1.5 }}>Item Type Breakdown</Typography>
+                    <Typography variant="h6" sx={{ mb: 0.5 }}>Handling Time By Shipment Size</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+                      Average time to sort a shipment based on how many items it contains
+                    </Typography>
                     <TableContainer>
                       <Table size="small">
                         <TableHead>
                           <TableRow>
-                            <TableCell>Type</TableCell>
+                            <TableCell>Items in Shipment</TableCell>
                             <TableCell align="right">Shipments</TableCell>
-                            <TableCell align="right">Items</TableCell>
-                            <TableCell align="right">Avg Scan Gap</TableCell>
                             <TableCell align="right">Avg Handling</TableCell>
+                            <TableCell align="right">Min Handling</TableCell>
+                            <TableCell align="right">Max Handling</TableCell>
+                            <TableCell align="right">Avg Scan Gap</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {itemTypes.length === 0 ? (
-                            <TableRow><TableCell colSpan={5}><Typography variant="body2" color="text.secondary">No data.</Typography></TableCell></TableRow>
-                          ) : itemTypes.map(r => (
-                            <TableRow key={r.itemCategory}>
-                              <TableCell><Chip label={categoryLabel(r.itemCategory)} size="small" variant="outlined" /></TableCell>
+                          {sizeRows.length === 0 ? (
+                            <TableRow><TableCell colSpan={6}><Typography variant="body2" color="text.secondary">No data.</Typography></TableCell></TableRow>
+                          ) : sizeRows.map(r => (
+                            <TableRow key={r.lineCount}>
+                              <TableCell>
+                                <Chip
+                                  label={`${r.lineCount} item${r.lineCount === 1 ? "" : "s"}`}
+                                  size="small"
+                                  sx={{ fontWeight: 700 }}
+                                />
+                              </TableCell>
                               <TableCell align="right">{fmt(r.shipmentCount)}</TableCell>
-                              <TableCell align="right">{fmt(r.totalUnits)}</TableCell>
+                              <TableCell align="right">
+                                <Typography variant="body2" sx={{ fontWeight: 700, color: "#2e7d32" }}>
+                                  {fmtMinutes(r.avgHandlingMinutes)}
+                                </Typography>
+                              </TableCell>
+                              <TableCell align="right">{fmtMinutes(r.minHandlingMinutes)}</TableCell>
+                              <TableCell align="right">{fmtMinutes(r.maxHandlingMinutes)}</TableCell>
                               <TableCell align="right">{fmtSeconds(r.avgScanGapSeconds)}</TableCell>
-                              <TableCell align="right">{fmtMinutes(r.avgHandlingMinutes)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -582,44 +653,44 @@ export default function TikTokSortingAnalytics() {
                   </Paper>
                 </Grid>
 
-                <Grid item xs={12} md={5}>
+                <Grid item xs={12} lg={4}>
                   <Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}>
-                    <Typography variant="h6" sx={{ mb: 1.5 }}>Items By Type</Typography>
+                    <Typography variant="h6" sx={{ mb: 1.5 }}>Avg Handling By Size <Typography component="span" variant="caption" color="text.secondary">(chart)</Typography></Typography>
                     <HBar
-                      items={itemTypes}
-                      labelKey="itemCategory"
-                      valueKey="totalUnits"
-                      color="#1565c0"
-                      maxItems={10}
-                      fmtVal={v => `${fmt(v)} items`}
+                      items={sizeRows.filter(r => r.avgHandlingMinutes != null).map(r => ({ ...r, label: `${r.lineCount} item${r.lineCount === 1 ? "" : "s"}` }))}
+                      labelKey="label"
+                      valueKey="avgHandlingMinutes"
+                      color="#2e7d32"
+                      maxItems={20}
+                      fmtVal={v => fmtMinutes(v)}
                     />
                   </Paper>
                 </Grid>
 
                 <Grid item xs={12} md={6}>
                   <Paper sx={{ p: 2, borderRadius: 2 }}>
-                    <Typography variant="h6" sx={{ mb: 1.5 }}>Avg Scan Gap By Item Type <Typography component="span" variant="caption" color="text.secondary">(lower = faster)</Typography></Typography>
+                    <Typography variant="h6" sx={{ mb: 1.5 }}>Shipment Count By Size</Typography>
                     <HBar
-                      items={[...itemTypes].filter(r => r.avgScanGapSeconds != null).sort((a, b) => (a.avgScanGapSeconds ?? 999) - (b.avgScanGapSeconds ?? 999)).map(r => ({ ...r, label: categoryLabel(r.itemCategory), displayVal: r.avgScanGapSeconds ?? 0 }))}
+                      items={[...sizeRows].sort((a, b) => b.shipmentCount - a.shipmentCount).map(r => ({ ...r, label: `${r.lineCount} item${r.lineCount === 1 ? "" : "s"}` }))}
+                      labelKey="label"
+                      valueKey="shipmentCount"
+                      color="#1565c0"
+                      maxItems={15}
+                      fmtVal={v => `${fmt(v)} shipments`}
+                    />
+                  </Paper>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 2, borderRadius: 2 }}>
+                    <Typography variant="h6" sx={{ mb: 1.5 }}>Avg Scan Gap By Size <Typography component="span" variant="caption" color="text.secondary">(lower = faster)</Typography></Typography>
+                    <HBar
+                      items={sizeRows.filter(r => r.avgScanGapSeconds != null).map(r => ({ ...r, label: `${r.lineCount} item${r.lineCount === 1 ? "" : "s"}`, displayVal: r.avgScanGapSeconds ?? 0 }))}
                       labelKey="label"
                       valueKey="displayVal"
                       color="#00838f"
-                      maxItems={10}
+                      maxItems={15}
                       fmtVal={v => fmtSeconds(v)}
-                    />
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2, borderRadius: 2 }}>
-                    <Typography variant="h6" sx={{ mb: 1.5 }}>Avg Handling Time By Item Type</Typography>
-                    <HBar
-                      items={[...itemTypes].filter(r => r.avgHandlingMinutes != null).sort((a, b) => (a.avgHandlingMinutes ?? 999) - (b.avgHandlingMinutes ?? 999)).map(r => ({ ...r, label: categoryLabel(r.itemCategory), displayVal: r.avgHandlingMinutes ?? 0 }))}
-                      labelKey="label"
-                      valueKey="displayVal"
-                      color="#ef6c00"
-                      maxItems={10}
-                      fmtVal={v => fmtMinutes(v)}
                     />
                   </Paper>
                 </Grid>

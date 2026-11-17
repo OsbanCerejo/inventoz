@@ -2013,7 +2013,7 @@ router.get("/sorting-heatmap", auth, checkPermission("tiktokSortingAnalytics", "
 router.get("/sorting-shipments", auth, checkPermission("tiktokSortingAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
-  const limit = Math.min(Number(req.query.limit || 100), 500);
+  const limit = Math.min(Number(req.query.limit || 500), 1000);
   const sorterId = req.query.sorterId ? String(req.query.sorterId).trim() : null;
   const { clause: showClause, extra: showExtra } = sortingShowFilter(req.query.showId);
   const replacements = { from: range.from, to: range.to, limit, sorterId, ...showExtra };
@@ -2069,6 +2069,96 @@ router.get("/sorting-shipments", auth, checkPermission("tiktokSortingAnalytics",
   } catch (err) {
     console.error("TikTok sorting-shipments error:", err);
     return res.status(500).json({ error: "Failed to fetch sorting shipments" });
+  }
+});
+
+// GET /tiktok/analytics/sorting-pace
+// Avg shipments closed per hour per show (for the Overview pace chart)
+router.get("/sorting-pace", auth, checkPermission("tiktokSortingAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) return res.status(400).json({ error: "Invalid date range" });
+  const { clause: showClause, extra: showExtra } = sortingShowFilter(req.query.showId);
+  const replacements = { from: range.from, to: range.to, ...showExtra };
+
+  try {
+    const rows = await sequelize.query(`
+      SELECT
+        hourly.tiktokShowId AS showId,
+        ts.name AS showName,
+        AVG(hourly.shipmentsInHour) AS avgShipmentsPerHour,
+        COUNT(*)                    AS activeHours,
+        SUM(hourly.shipmentsInHour) AS totalShipments
+      FROM (
+        SELECT
+          ss.tiktokShowId,
+          DATE_FORMAT(ss.closedAt, '%Y-%m-%d %H:00:00') AS hourBucket,
+          COUNT(*) AS shipmentsInHour
+        FROM ${SORTING_SHIPMENT_SUBQUERY} ss
+        WHERE ss.closedAt IS NOT NULL
+          AND ss.closedAt >= :from AND ss.closedAt < :to
+          ${showClause}
+        GROUP BY ss.tiktokShowId, hourBucket
+      ) hourly
+      JOIN ${TABLES.shows} ts ON ts.id = hourly.tiktokShowId
+      GROUP BY hourly.tiktokShowId, ts.name
+      ORDER BY avgShipmentsPerHour DESC
+    `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+    return res.json(rows.map(r => ({
+      showId: Number(r.showId),
+      showName: r.showName,
+      avgShipmentsPerHour: Math.round(Number(r.avgShipmentsPerHour) * 10) / 10,
+      activeHours: Number(r.activeHours),
+      totalShipments: Number(r.totalShipments),
+    })));
+  } catch (err) {
+    console.error("TikTok sorting-pace error:", err);
+    return res.status(500).json({ error: "Failed to fetch pace" });
+  }
+});
+
+// GET /tiktok/analytics/sorting-by-size
+// Avg handling time grouped by number of line items in shipment
+router.get("/sorting-by-size", auth, checkPermission("tiktokSortingAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) return res.status(400).json({ error: "Invalid date range" });
+  const { clause: showClause, extra: showExtra } = sortingShowFilter(req.query.showId);
+  const replacements = { from: range.from, to: range.to, ...showExtra };
+
+  try {
+    const rows = await sequelize.query(`
+      SELECT
+        ss.lineCount,
+        COUNT(*)                              AS shipmentCount,
+        COALESCE(SUM(ss.totalUnits), 0)       AS totalUnits,
+        AVG(st.handlingMinutes)               AS avgHandlingMinutes,
+        AVG(st.avgSecondsBetweenScans)        AS avgScanGapSeconds,
+        MIN(st.handlingMinutes)               AS minHandlingMinutes,
+        MAX(st.handlingMinutes)               AS maxHandlingMinutes
+      FROM ${SORTING_SHIPMENT_SUBQUERY} ss
+      LEFT JOIN ${SORTING_SCAN_TIMING_SUBQUERY} st
+        ON st.tiktokShowId = ss.tiktokShowId
+        AND st.importId    = ss.importId
+        AND st.shipmentId  = ss.shipmentId
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from AND ss.closedAt < :to
+        ${showClause}
+      GROUP BY ss.lineCount
+      ORDER BY ss.lineCount ASC
+    `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+    return res.json(rows.map(r => ({
+      lineCount: Number(r.lineCount),
+      shipmentCount: Number(r.shipmentCount),
+      totalUnits: Number(r.totalUnits),
+      avgHandlingMinutes: r.avgHandlingMinutes != null ? Math.round(Number(r.avgHandlingMinutes) * 100) / 100 : null,
+      avgScanGapSeconds: r.avgScanGapSeconds != null ? Math.round(Number(r.avgScanGapSeconds) * 10) / 10 : null,
+      minHandlingMinutes: r.minHandlingMinutes != null ? Math.round(Number(r.minHandlingMinutes) * 100) / 100 : null,
+      maxHandlingMinutes: r.maxHandlingMinutes != null ? Math.round(Number(r.maxHandlingMinutes) * 100) / 100 : null,
+    })));
+  } catch (err) {
+    console.error("TikTok sorting-by-size error:", err);
+    return res.status(500).json({ error: "Failed to fetch shipment size breakdown" });
   }
 });
 
