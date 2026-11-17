@@ -3,11 +3,10 @@ import axios from "axios";
 import {
   Alert, Box, Button, Chip, CircularProgress, Paper,
   Stack, Switch, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Tooltip, Typography,
+  TableHead, TableRow, TextField, Typography,
 } from "@mui/material";
 import LunchDiningIcon from "@mui/icons-material/LunchDining";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import BugReportIcon from "@mui/icons-material/BugReport";
 import { getApiUrl } from "../config/api";
 
 interface UserRow {
@@ -17,6 +16,7 @@ interface UserRow {
   role: string;
   lunchModeEnabled: boolean;
   lunchModeEnabledAt: string | null;
+  lunchModeEndsAt: string | null;
   lunchModeEnabledBy: number | null;
 }
 
@@ -26,12 +26,22 @@ function fmtTime(iso: string | null) {
   return isNaN(d.getTime()) ? "—" : d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
+// Returns "HH:MM" in local time for a datetime-local input default
+function defaultEndTime() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() + 30);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
 export default function LunchModeAdmin() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [toggling, setToggling] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
-  const [simulateUserId, setSimulateUserId] = useState<number | null>(null);
+  // Per-user end time input (only shown when enabling)
+  const [endTimes, setEndTimes] = useState<Record<number, string>>({});
 
   const headers = () => {
     const token = localStorage.getItem("token");
@@ -52,21 +62,47 @@ export default function LunchModeAdmin() {
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-  // Auto-refresh every 30s
   useEffect(() => {
     const id = setInterval(fetchUsers, 30_000);
     return () => clearInterval(id);
   }, [fetchUsers]);
 
-  const toggle = async (userId: number) => {
-    setToggling(t => ({ ...t, [userId]: true }));
-    try {
-      await axios.post(getApiUrl(`lunch-mode/toggle/${userId}`), {}, { headers: headers() });
-      await fetchUsers();
-    } catch (e: any) {
-      setError(e?.response?.data?.error || "Toggle failed");
-    } finally {
-      setToggling(t => ({ ...t, [userId]: false }));
+  const toggle = async (user: UserRow) => {
+    if (!user.lunchModeEnabled) {
+      // Enabling — need an end time
+      const timeStr = endTimes[user.id] || defaultEndTime();
+      // Build a full datetime from today + the chosen time
+      const [hh, mm] = timeStr.split(":").map(Number);
+      const endsAt = new Date();
+      endsAt.setHours(hh, mm, 0, 0);
+      if (endsAt <= new Date()) {
+        setError(`End time for ${user.name} must be in the future`);
+        return;
+      }
+      setToggling(t => ({ ...t, [user.id]: true }));
+      try {
+        await axios.post(
+          getApiUrl(`lunch-mode/toggle/${user.id}`),
+          { endsAt: endsAt.toISOString() },
+          { headers: headers() }
+        );
+        await fetchUsers();
+      } catch (e: any) {
+        setError(e?.response?.data?.error || "Failed to enable lunch mode");
+      } finally {
+        setToggling(t => ({ ...t, [user.id]: false }));
+      }
+    } else {
+      // Disabling — no end time needed
+      setToggling(t => ({ ...t, [user.id]: true }));
+      try {
+        await axios.post(getApiUrl(`lunch-mode/toggle/${user.id}`), {}, { headers: headers() });
+        await fetchUsers();
+      } catch (e: any) {
+        setError(e?.response?.data?.error || "Failed to disable lunch mode");
+      } finally {
+        setToggling(t => ({ ...t, [user.id]: false }));
+      }
     }
   };
 
@@ -82,38 +118,33 @@ export default function LunchModeAdmin() {
             <Box>
               <Typography variant="h5" sx={{ fontWeight: 700 }}>Lunch Mode</Typography>
               <Typography variant="body2" color="text.secondary">
-                Toggle lunch lockout for TikTok fulfilment users. Activates after their next shipment close.
+                Lock a user's screen with a break overlay. Set the end time and toggle it on — the overlay fires within 30 seconds on their screen.
               </Typography>
             </Box>
           </Stack>
-          <Stack direction="row" spacing={1}>
-            <Button size="small" startIcon={<RefreshIcon />} onClick={fetchUsers} disabled={loading}>
-              Refresh
-            </Button>
-          </Stack>
+          <Button size="small" startIcon={<RefreshIcon />} onClick={fetchUsers} disabled={loading}>Refresh</Button>
         </Box>
 
-        {/* Status bar */}
         {activeCount > 0 && (
           <Alert severity="info" icon={<LunchDiningIcon />}>
-            <strong>{activeCount} user{activeCount > 1 ? "s are" : " is"} in lunch mode</strong> — their screen will show the lockout after their current shipment is closed. Auto-releases at 2:00 PM EST.
+            <strong>{activeCount} user{activeCount > 1 ? "s are" : " is"} in lunch mode.</strong>
+            {" "}The overlay clears automatically when the end time is reached, or when you toggle it off (clears within ~30 seconds).
           </Alert>
         )}
 
         {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
 
-        {/* Table */}
         <Paper sx={{ borderRadius: 2 }}>
           <TableContainer>
             <Table>
               <TableHead>
                 <TableRow>
                   <TableCell>Name</TableCell>
-                  <TableCell>Username</TableCell>
                   <TableCell>Role</TableCell>
+                  <TableCell>End Time</TableCell>
+                  <TableCell>Started At</TableCell>
+                  <TableCell>Ends At</TableCell>
                   <TableCell>Lunch Mode</TableCell>
-                  <TableCell>Enabled At</TableCell>
-                  <TableCell>Simulate</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -128,13 +159,39 @@ export default function LunchModeAdmin() {
                 ) : users.map(u => (
                   <TableRow key={u.id} sx={{ bgcolor: u.lunchModeEnabled ? "rgba(245,158,11,0.06)" : undefined }}>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{u.name}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">{u.username}</Typography>
+                      <Stack>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{u.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">{u.username}</Typography>
+                      </Stack>
                     </TableCell>
                     <TableCell>
                       <Chip label={u.role} size="small" variant="outlined" />
+                    </TableCell>
+                    <TableCell>
+                      {u.lunchModeEnabled ? (
+                        <Typography variant="body2" color="text.secondary">—</Typography>
+                      ) : (
+                        <TextField
+                          type="time"
+                          size="small"
+                          value={endTimes[u.id] ?? defaultEndTime()}
+                          onChange={e => setEndTimes(t => ({ ...t, [u.id]: e.target.value }))}
+                          inputProps={{ step: 300 }}
+                          sx={{ width: 130 }}
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">{fmtTime(u.lunchModeEnabledAt)}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      {u.lunchModeEnabled && u.lunchModeEndsAt ? (
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: "#f59e0b" }}>
+                          {fmtTime(u.lunchModeEndsAt)}
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">—</Typography>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={1} alignItems="center">
@@ -143,38 +200,19 @@ export default function LunchModeAdmin() {
                         ) : (
                           <Switch
                             checked={u.lunchModeEnabled}
-                            onChange={() => toggle(u.id)}
+                            onChange={() => toggle(u)}
                             color="warning"
                             size="small"
                           />
                         )}
                         {u.lunchModeEnabled && (
                           <Chip
-                            label="ACTIVE"
+                            label="ON"
                             size="small"
                             sx={{ bgcolor: "#f59e0b", color: "#fff", fontWeight: 700, fontSize: 10 }}
                           />
                         )}
                       </Stack>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {fmtTime(u.lunchModeEnabledAt)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip title="Simulate lunch mode for this user — their next page load will show the lockout even if it's not 1:30 PM">
-                        <Button
-                          size="small"
-                          variant={simulateUserId === u.id ? "contained" : "outlined"}
-                          color="secondary"
-                          startIcon={<BugReportIcon />}
-                          onClick={() => setSimulateUserId(simulateUserId === u.id ? null : u.id)}
-                          sx={{ fontSize: 11 }}
-                        >
-                          {simulateUserId === u.id ? "Simulating" : "Simulate"}
-                        </Button>
-                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -183,32 +221,17 @@ export default function LunchModeAdmin() {
           </TableContainer>
         </Paper>
 
-        {/* Simulate instructions */}
-        {simulateUserId !== null && (
-          <Alert severity="warning" icon={<BugReportIcon />}>
-            <strong>Simulate mode active for user {simulateUserId}.</strong>
-            {" "}Open TikTok Fulfillment as that user (or use the simulate button on the fulfillment page) to trigger the lockout screen immediately after any shipment close.
-            To test: on the TikTok Fulfillment page, hold{" "}
-            <code style={{ background: "rgba(0,0,0,0.08)", padding: "1px 4px", borderRadius: 3 }}>Shift</code>
-            {" "}and click the Close button — it will act as if lunch mode fired.
-          </Alert>
-        )}
-
-        {/* How it works */}
         <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "rgba(0,0,0,0.02)" }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>How It Works</Typography>
           <Stack spacing={0.5}>
             {[
-              "Toggle a user ON at 1:30 PM — lunch mode is 'pending' for them.",
-              "The lockout screen appears after their NEXT shipment close (doesn't interrupt active sorting).",
-              "The user's screen shows 'Time For A Break' with a countdown to 2:00 PM EST.",
-              "A manager walks up, enters their user ID and password to unlock early.",
-              "At 2:00 PM EST the lockout clears automatically on the next status poll.",
-              "Toggle a user OFF at any time to cancel before it fires.",
+              "Set the end time, then toggle ON — the overlay fires on their screen within ~30 seconds.",
+              "Toggle OFF at any time — the overlay clears on their next poll (~30 seconds), no refresh needed.",
+              "Overlay auto-clears when the end time is reached.",
+              "A manager enters their user ID and password on the locked screen to unlock early.",
+              "Admins are never subject to lunch mode.",
             ].map((text, i) => (
-              <Typography key={i} variant="body2" color="text.secondary">
-                {i + 1}. {text}
-              </Typography>
+              <Typography key={i} variant="body2" color="text.secondary">{i + 1}. {text}</Typography>
             ))}
           </Stack>
         </Paper>

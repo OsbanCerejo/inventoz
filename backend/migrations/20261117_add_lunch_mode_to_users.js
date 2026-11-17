@@ -20,9 +20,16 @@ module.exports = {
       defaultValue: null,
       after: "lunchModeEnabledAt",
     });
+    await queryInterface.addColumn("Users", "lunchModeEndsAt", {
+      type: Sequelize.DATE,
+      allowNull: true,
+      defaultValue: null,
+      after: "lunchModeEnabledBy",
+    });
   },
 
   async down(queryInterface) {
+    await queryInterface.removeColumn("Users", "lunchModeEndsAt");
     await queryInterface.removeColumn("Users", "lunchModeEnabledBy");
     await queryInterface.removeColumn("Users", "lunchModeEnabledAt");
     await queryInterface.removeColumn("Users", "lunchModeEnabled");
