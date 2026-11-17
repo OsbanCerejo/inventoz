@@ -2072,5 +2072,184 @@ router.get("/sorting-shipments", auth, checkPermission("tiktokSortingAnalytics",
   }
 });
 
+// ── Throughput helpers (run in JS, not SQL) ───────────────────────────────────
+
+const GAP_THRESHOLD_MS  = 30 * 60 * 1000; // 30 min gap = break or straggler boundary
+const OUTLIER_HANDLING_MIN = 10;           // shipments taking >10 min = outlier, excluded from orders/hr
+const STRAGGLER_PCT     = 0.05;            // ≤5% of shipments after final gap = straggler tail
+
+// Split a sorted array of timestamps into segments separated by gaps >= GAP_THRESHOLD_MS.
+// Returns [{start, end, count}]
+function segmentTimestamps(sortedTs) {
+  if (!sortedTs.length) return [];
+  const segs = [];
+  let segStart = sortedTs[0], segEnd = sortedTs[0], count = 1;
+  for (let i = 1; i < sortedTs.length; i++) {
+    const gap = sortedTs[i] - sortedTs[i - 1];
+    if (gap >= GAP_THRESHOLD_MS) {
+      segs.push({ start: segStart, end: segEnd, count });
+      segStart = sortedTs[i]; count = 1;
+    } else {
+      count++;
+    }
+    segEnd = sortedTs[i];
+  }
+  segs.push({ start: segStart, end: segEnd, count });
+  return segs;
+}
+
+// Given shipment close timestamps for a show, compute net active duration (ms)
+// and the lunch/break gaps (each with lastScanBefore, firstScanAfter).
+function computeShowDuration(sortedCloseTs) {
+  const segs = segmentTimestamps(sortedCloseTs);
+  if (!segs.length) return { netMs: 0, gaps: [] };
+
+  const totalShipments = sortedCloseTs.length;
+  // Identify the straggler tail: last segment(s) that together have <= STRAGGLER_PCT of total
+  let tailCount = 0;
+  let mainSegs = [...segs];
+  while (mainSegs.length > 1) {
+    const last = mainSegs[mainSegs.length - 1];
+    if ((tailCount + last.count) / totalShipments <= STRAGGLER_PCT) {
+      tailCount += last.count;
+      mainSegs.pop();
+    } else {
+      break;
+    }
+  }
+
+  // Net active time = sum of each main segment's duration (end - start)
+  let netMs = 0;
+  for (const seg of mainSegs) {
+    netMs += (seg.end - seg.start);
+  }
+
+  // Collect gaps between main segments (these are breaks/lunch — not stragglers)
+  const gaps = [];
+  for (let i = 1; i < mainSegs.length; i++) {
+    gaps.push({
+      lastScanBefore: new Date(mainSegs[i - 1].end).toISOString(),
+      firstScanAfter: new Date(mainSegs[i].start).toISOString(),
+      gapMinutes: Math.round((mainSegs[i].start - mainSegs[i - 1].end) / 60000),
+    });
+  }
+
+  return { netMs, gaps };
+}
+
+// GET /tiktok/analytics/sorting-throughput
+router.get("/sorting-throughput", auth, checkPermission("tiktokSortingAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) return res.status(400).json({ error: "Invalid date range" });
+  const showIdFilter = req.query.showId ? Number(req.query.showId) : null;
+
+  try {
+    // 1. Pull all shipments in range with their close time, sorter, and handling time
+    const shipmentRows = await sequelize.query(`
+      SELECT
+        ss.tiktokShowId,
+        ss.importId,
+        ss.shipmentId,
+        ss.closedAt,
+        ss.closedBy,
+        st.firstScanAt,
+        st.lastScanAt,
+        TIMESTAMPDIFF(SECOND, st.firstScanAt, ss.closedAt) / 60.0 AS handlingMinutes
+      FROM ${SORTING_SHIPMENT_SUBQUERY} ss
+      JOIN ${SORTING_SCAN_TIMING_SUBQUERY} st
+        ON st.tiktokShowId = ss.tiktokShowId
+        AND st.importId    = ss.importId
+        AND st.shipmentId  = ss.shipmentId
+        AND st.userId      = ss.closedBy
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from AND ss.closedAt < :to
+        AND ss.closedBy IS NOT NULL AND ss.closedBy <> ''
+        ${showIdFilter ? "AND ss.tiktokShowId = :showId" : ""}
+    `, {
+      replacements: { from: range.from, to: range.to, ...(showIdFilter ? { showId: showIdFilter } : {}) },
+      type: sequelize.QueryTypes.SELECT,
+    });
+
+    // 2. Pull all scan timestamps for the same range (for show-level duration)
+    const scanRows = await sequelize.query(`
+      SELECT tss.tiktokShowId, tss.createdAt
+      FROM ${TABLES.shipmentScans} tss
+      WHERE tss.shipmentId IS NOT NULL AND tss.shipmentId <> ''
+        AND tss.createdAt >= :from AND tss.createdAt < :to
+        ${showIdFilter ? "AND tss.tiktokShowId = :showId" : ""}
+      ORDER BY tss.tiktokShowId, tss.createdAt ASC
+    `, {
+      replacements: { from: range.from, to: range.to, ...(showIdFilter ? { showId: showIdFilter } : {}) },
+      type: sequelize.QueryTypes.SELECT,
+    });
+
+    // ── Orders / hour per sorter ──────────────────────────────────────────────
+    // Group non-outlier shipments by sorter → bucket by calendar hour of closedAt
+    // → count per hour → average those counts
+    const sorterHourBuckets = {}; // sorterId → Map<hourKey, count>
+    for (const r of shipmentRows) {
+      const handling = r.handlingMinutes != null ? Number(r.handlingMinutes) : null;
+      if (handling !== null && handling > OUTLIER_HANDLING_MIN) continue; // outlier
+      const sorterId = String(r.closedBy || "");
+      if (!sorterId) continue;
+      const d = new Date(r.closedAt);
+      const hourKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}`;
+      if (!sorterHourBuckets[sorterId]) sorterHourBuckets[sorterId] = new Map();
+      sorterHourBuckets[sorterId].set(hourKey, (sorterHourBuckets[sorterId].get(hourKey) || 0) + 1);
+    }
+
+    const sorterThroughput = Object.entries(sorterHourBuckets).map(([sorterId, buckets]) => {
+      const counts = Array.from(buckets.values());
+      const avgOrdersPerHour = counts.length > 0
+        ? counts.reduce((s, c) => s + c, 0) / counts.length
+        : 0;
+      return { sorterId, avgOrdersPerHour: Math.round(avgOrdersPerHour * 10) / 10, activeHours: counts.length };
+    });
+
+    // ── Show duration ─────────────────────────────────────────────────────────
+    // Group scan timestamps by show → segmentTimestamps → computeShowDuration
+    const scansByShow = {};
+    for (const r of scanRows) {
+      const sid = Number(r.tiktokShowId);
+      if (!scansByShow[sid]) scansByShow[sid] = [];
+      scansByShow[sid].push(new Date(r.createdAt).getTime());
+    }
+
+    const showDurations = Object.entries(scansByShow).map(([showId, ts]) => {
+      const sorted = ts.sort((a, b) => a - b);
+      const { netMs, gaps } = computeShowDuration(sorted);
+      return {
+        showId: Number(showId),
+        firstScanAt: new Date(sorted[0]).toISOString(),
+        lastMainScanAt: gaps.length
+          ? gaps[gaps.length - 1].lastScanBefore
+          : new Date(sorted[sorted.length - 1]).toISOString(),
+        netDurationMinutes: Math.round(netMs / 60000),
+        breaks: gaps,
+      };
+    });
+
+    // Overall avg orders/hour (across all sorters, weighted by active hours)
+    const totalWeightedRate = sorterThroughput.reduce((s, r) => s + r.avgOrdersPerHour * r.activeHours, 0);
+    const totalHours = sorterThroughput.reduce((s, r) => s + r.activeHours, 0);
+    const overallAvgOrdersPerHour = totalHours > 0 ? Math.round((totalWeightedRate / totalHours) * 10) / 10 : null;
+
+    // Avg show duration
+    const avgShowDurationMinutes = showDurations.length > 0
+      ? Math.round(showDurations.reduce((s, r) => s + r.netDurationMinutes, 0) / showDurations.length)
+      : null;
+
+    return res.json({
+      overallAvgOrdersPerHour,
+      avgShowDurationMinutes,
+      sorterThroughput,
+      showDurations,
+    });
+  } catch (err) {
+    console.error("TikTok sorting-throughput error:", err);
+    return res.status(500).json({ error: "Failed to compute throughput" });
+  }
+});
+
 module.exports = router;
 

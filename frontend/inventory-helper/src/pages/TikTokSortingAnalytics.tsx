@@ -36,6 +36,18 @@ interface ShipmentRow {
   categories: string; totalScans: number | null; avgScanGapSeconds: number | null;
   handlingMinutes: number | null; firstScanAt: string | null; lastScanAt: string | null;
 }
+interface SorterThroughputRow { sorterId: string; avgOrdersPerHour: number; activeHours: number; }
+interface ShowDurationRow {
+  showId: number; firstScanAt: string; lastMainScanAt: string;
+  netDurationMinutes: number;
+  breaks: { lastScanBefore: string; firstScanAfter: string; gapMinutes: number }[];
+}
+interface Throughput {
+  overallAvgOrdersPerHour: number | null;
+  avgShowDurationMinutes: number | null;
+  sorterThroughput: SorterThroughputRow[];
+  showDurations: ShowDurationRow[];
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -133,6 +145,7 @@ export default function TikTokSortingAnalytics() {
   const [itemTypes, setItemTypes] = useState<ItemTypeRow[]>([]);
   const [heatmap, setHeatmap] = useState<HeatmapRow[]>([]);
   const [shipments, setShipments] = useState<ShipmentRow[]>([]);
+  const [throughput, setThroughput] = useState<Throughput | null>(null);
 
   const params = useMemo(() => ({
     from, to,
@@ -157,8 +170,9 @@ export default function TikTokSortingAnalytics() {
         axios.get(API("sorting-heatmap"), { params, headers }),
         axios.get(API("sorting-shipments"), { params: { ...params, limit: 150 }, headers }),
         axios.get(API("sorting-shows"), { params: dateParams, headers }),
+        axios.get(API("sorting-throughput"), { params, headers }),
       ]);
-      const [ov, lb, dy, it, hm, sh, sw] = results;
+      const [ov, lb, dy, it, hm, sh, sw, tp] = results;
       if (ov.status === "fulfilled") setOverview(ov.value.data);
       if (lb.status === "fulfilled") setLeaderboard(lb.value.data || []);
       if (dy.status === "fulfilled") setDaily(dy.value.data || []);
@@ -166,6 +180,7 @@ export default function TikTokSortingAnalytics() {
       if (hm.status === "fulfilled") setHeatmap(hm.value.data || []);
       if (sh.status === "fulfilled") setShipments(sh.value.data || []);
       if (sw.status === "fulfilled") setShows(sw.value.data || []);
+      if (tp.status === "fulfilled") setThroughput(tp.value.data || null);
       const failed = [
         { n: "overview", r: ov }, { n: "leaderboard", r: lb }, { n: "daily", r: dy },
         { n: "item-types", r: it }, { n: "heatmap", r: hm }, { n: "shipments", r: sh },
@@ -193,8 +208,18 @@ export default function TikTokSortingAnalytics() {
     { label: "Items Sorted", value: overview?.totalUnits || 0, color: "#2e7d32", sub: `${Number(overview?.avgUnitsPerShipment || 0).toFixed(1)} avg per shipment` },
     { label: "Active Sorters", value: overview?.activeSorters || 0, color: "#6a1b9a", sub: `${Number(overview?.avgShipmentsPerDay || 0).toFixed(1)} shipments/day` },
     { label: "Total Scans", value: overview?.totalScans || 0, color: "#ef6c00", sub: "item scans recorded" },
-    { label: "Avg Scan Gap", value: overview?.avgScanGapSeconds != null ? fmtSeconds(overview.avgScanGapSeconds) : "—", color: "#00838f", sub: overview?.avgHandlingMinutes != null ? `${fmtMinutes(overview.avgHandlingMinutes)} avg handling` : "scan timing" },
-    { label: "Shipments / Day", value: Number(overview?.avgShipmentsPerDay || 0).toFixed(1), color: "#c62828", sub: `over ${fmt(overview?.activeDays || 0)} active day(s)` },
+    {
+      label: "Avg Orders / Hour",
+      value: throughput?.overallAvgOrdersPerHour != null ? `${throughput.overallAvgOrdersPerHour}` : "—",
+      color: "#c62828",
+      sub: "excl. outliers >10 min",
+    },
+    {
+      label: "Avg Show Duration",
+      value: throughput?.avgShowDurationMinutes != null ? fmtMinutes(throughput.avgShowDurationMinutes) : "—",
+      color: "#00838f",
+      sub: "net active time, excl. breaks",
+    },
   ];
 
   return (
@@ -429,6 +454,96 @@ export default function TikTokSortingAnalytics() {
                     />
                   </Paper>
                 </Grid>
+
+                {/* Orders / hour per sorter */}
+                {throughput && throughput.sorterThroughput.length > 0 && (
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, borderRadius: 2 }}>
+                      <Typography variant="h6" sx={{ mb: 0.5 }}>Orders / Hour Per Sorter</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+                        Avg shipments closed per active hour — outliers &gt;10 min excluded
+                      </Typography>
+                      <HBar
+                        items={throughput.sorterThroughput
+                          .map(t => ({
+                            ...t,
+                            sorterName: leaderboard.find(l => l.sorterId === t.sorterId)?.sorterName || t.sorterId,
+                          }))
+                          .sort((a, b) => b.avgOrdersPerHour - a.avgOrdersPerHour)}
+                        labelKey="sorterName"
+                        valueKey="avgOrdersPerHour"
+                        color="#c62828"
+                        maxItems={10}
+                        fmtVal={v => `${v.toFixed(1)} / hr`}
+                      />
+                    </Paper>
+                  </Grid>
+                )}
+
+                {/* Show durations */}
+                {throughput && throughput.showDurations.length > 0 && (
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, borderRadius: 2 }}>
+                      <Typography variant="h6" sx={{ mb: 0.5 }}>Show Duration Breakdown</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+                        Net active sorting time per show — breaks &amp; stragglers excluded
+                      </Typography>
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Show</TableCell>
+                              <TableCell align="right">First Scan</TableCell>
+                              <TableCell align="right">Last Main Scan</TableCell>
+                              <TableCell align="right">Net Duration</TableCell>
+                              <TableCell align="right">Breaks</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {throughput.showDurations.map(d => {
+                              const showName = shows.find(s => s.showId === d.showId)?.showName || `Show ${d.showId}`;
+                              return (
+                                <TableRow key={d.showId}>
+                                  <TableCell>
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{showName}</Typography>
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    <Typography variant="body2" color="text.secondary">
+                                      {fmtDateTime(d.firstScanAt)}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    <Typography variant="body2" color="text.secondary">
+                                      {fmtDateTime(d.lastMainScanAt)}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    <Typography variant="body2" sx={{ fontWeight: 700, color: "#00838f" }}>
+                                      {fmtMinutes(d.netDurationMinutes)}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    {d.breaks.length === 0 ? (
+                                      <Typography variant="body2" color="text.secondary">—</Typography>
+                                    ) : (
+                                      <Stack spacing={0.3}>
+                                        {d.breaks.map((b, i) => (
+                                          <Typography key={i} variant="caption" color="text.secondary">
+                                            {fmtDateTime(b.lastScanBefore)} → {fmtDateTime(b.firstScanAfter)} ({b.gapMinutes}m)
+                                          </Typography>
+                                        ))}
+                                      </Stack>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Paper>
+                  </Grid>
+                )}
               </Grid>
             )}
 
