@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import {
-  Alert, Box, Button, Chip, CircularProgress, Paper,
-  Stack, Switch, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, TextField, Typography,
+  Alert, Box, Button, Chip, CircularProgress, MenuItem, Paper,
+  Select, Stack, Switch, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, Typography,
 } from "@mui/material";
 import LunchDiningIcon from "@mui/icons-material/LunchDining";
 import RefreshIcon from "@mui/icons-material/Refresh";
@@ -26,13 +26,64 @@ function fmtTime(iso: string | null) {
   return isNaN(d.getTime()) ? "—" : d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
-// Returns "HH:MM" in local time for a datetime-local input default
+// { h: 0-23, m: 0|15|30|45 }
 function defaultEndTime() {
   const d = new Date();
   d.setMinutes(d.getMinutes() + 30);
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
+  const m = Math.round(d.getMinutes() / 15) * 15 % 60;
+  return { h: d.getHours(), m };
+}
+
+const MINUTES = [0, 15, 30, 45];
+
+interface TimeVal { h: number; m: number }
+
+function TimePicker({ value, onChange }: { value: TimeVal; onChange: (v: TimeVal) => void }) {
+  const h12 = value.h % 12 === 0 ? 12 : value.h % 12;
+  const ampm = value.h < 12 ? "AM" : "PM";
+  return (
+    <Stack direction="row" spacing={0.5} alignItems="center">
+      <Select
+        size="small"
+        value={h12}
+        onChange={e => {
+          const newH12 = Number(e.target.value);
+          const newH = ampm === "AM" ? (newH12 === 12 ? 0 : newH12) : (newH12 === 12 ? 12 : newH12 + 12);
+          onChange({ ...value, h: newH });
+        }}
+        sx={{ width: 70 }}
+      >
+        {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(h => (
+          <MenuItem key={h} value={h}>{h}</MenuItem>
+        ))}
+      </Select>
+      <Select
+        size="small"
+        value={value.m}
+        onChange={e => onChange({ ...value, m: Number(e.target.value) })}
+        sx={{ width: 70 }}
+      >
+        {MINUTES.map(m => (
+          <MenuItem key={m} value={m}>{String(m).padStart(2, "0")}</MenuItem>
+        ))}
+      </Select>
+      <Select
+        size="small"
+        value={ampm}
+        onChange={e => {
+          const newAmpm = e.target.value as "AM" | "PM";
+          let newH = value.h;
+          if (newAmpm === "AM" && value.h >= 12) newH = value.h - 12;
+          if (newAmpm === "PM" && value.h < 12) newH = value.h + 12;
+          onChange({ ...value, h: newH });
+        }}
+        sx={{ width: 70 }}
+      >
+        <MenuItem value="AM">AM</MenuItem>
+        <MenuItem value="PM">PM</MenuItem>
+      </Select>
+    </Stack>
+  );
 }
 
 export default function LunchModeAdmin() {
@@ -40,8 +91,7 @@ export default function LunchModeAdmin() {
   const [loading, setLoading] = useState(false);
   const [toggling, setToggling] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
-  // Per-user end time input (only shown when enabling)
-  const [endTimes, setEndTimes] = useState<Record<number, string>>({});
+  const [endTimes, setEndTimes] = useState<Record<number, TimeVal>>({});
 
   const headers = () => {
     const token = localStorage.getItem("token");
@@ -69,12 +119,9 @@ export default function LunchModeAdmin() {
 
   const toggle = async (user: UserRow) => {
     if (!user.lunchModeEnabled) {
-      // Enabling — need an end time
-      const timeStr = endTimes[user.id] || defaultEndTime();
-      // Build a full datetime from today + the chosen time
-      const [hh, mm] = timeStr.split(":").map(Number);
+      const tv = endTimes[user.id] ?? defaultEndTime();
       const endsAt = new Date();
-      endsAt.setHours(hh, mm, 0, 0);
+      endsAt.setHours(tv.h, tv.m, 0, 0);
       if (endsAt <= new Date()) {
         setError(`End time for ${user.name} must be in the future`);
         return;
@@ -171,13 +218,9 @@ export default function LunchModeAdmin() {
                       {u.lunchModeEnabled ? (
                         <Typography variant="body2" color="text.secondary">—</Typography>
                       ) : (
-                        <TextField
-                          type="time"
-                          size="small"
+                        <TimePicker
                           value={endTimes[u.id] ?? defaultEndTime()}
-                          onChange={e => setEndTimes(t => ({ ...t, [u.id]: e.target.value }))}
-                          inputProps={{ step: 300 }}
-                          sx={{ width: 130 }}
+                          onChange={v => setEndTimes(t => ({ ...t, [u.id]: v }))}
                         />
                       )}
                     </TableCell>
