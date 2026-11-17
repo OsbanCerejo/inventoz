@@ -15,13 +15,19 @@ interface Props {
   onUnlocked: () => void;
 }
 
-function useCountdown(releaseAt: string | null) {
+function useCountdown(releaseAt: string | null, onExpired: () => void) {
   const [remaining, setRemaining] = useState("");
+  const firedRef = useRef(false);
   useEffect(() => {
+    firedRef.current = false;
     if (!releaseAt) { setRemaining(""); return; }
     const tick = () => {
       const diff = new Date(releaseAt).getTime() - Date.now();
-      if (diff <= 0) { setRemaining("00:00"); return; }
+      if (diff <= 0) {
+        setRemaining("00:00");
+        if (!firedRef.current) { firedRef.current = true; onExpired(); }
+        return;
+      }
       const m = Math.floor(diff / 60000);
       const s = Math.floor((diff % 60000) / 1000);
       setRemaining(`${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
@@ -39,7 +45,7 @@ export default function LunchModeOverlay({ releaseAt, onUnlocked }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const countdown = useCountdown(releaseAt);
+  const countdown = useCountdown(releaseAt, onUnlocked);
   const passwordRef = useRef<HTMLInputElement>(null);
 
   const handleUnlock = async () => {
@@ -87,7 +93,12 @@ export default function LunchModeOverlay({ releaseAt, onUnlocked }: Props) {
           Time For A Break
         </Typography>
         <Typography variant="body1" sx={{ color: "#94a3b8", textAlign: "center" }}>
-          Step away and enjoy your lunch. Your screen will unlock automatically at 2:00 PM EST.
+          Step away and enjoy your lunch. Your screen will unlock automatically at{" "}
+          <span style={{ color: "#f59e0b", fontWeight: 600 }}>
+            {releaseAt
+              ? new Date(releaseAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
+              : "the scheduled time"}
+          </span>.
         </Typography>
 
         {/* Countdown */}
