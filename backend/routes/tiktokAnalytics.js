@@ -1743,6 +1743,35 @@ const SORTING_SCAN_TIMING_SUBQUERY = `
   )
 `;
 
+// Same as SORTING_SCAN_TIMING_SUBQUERY but excludes outlier shipments (handling >= 15 min).
+// Use this for all average calculations; use the raw version only for drilldown display.
+const SORTING_SCAN_TIMING_CLEAN = `
+  (
+    SELECT
+      tss.tiktokShowId,
+      tss.importId,
+      tss.shipmentId,
+      tss.userId,
+      COUNT(*) AS totalScans,
+      MIN(tss.createdAt) AS firstScanAt,
+      MAX(tss.createdAt) AS lastScanAt,
+      CASE
+        WHEN COUNT(*) > 1
+        THEN TIMESTAMPDIFF(SECOND, MIN(tss.createdAt), MAX(tss.createdAt)) / (COUNT(*) - 1)
+        ELSE NULL
+      END AS avgSecondsBetweenScans,
+      CASE
+        WHEN COUNT(*) > 1
+        THEN TIMESTAMPDIFF(SECOND, MIN(tss.createdAt), MAX(tss.createdAt)) / 60.0
+        ELSE 0
+      END AS handlingMinutes
+    FROM ${TABLES.shipmentScans} tss
+    WHERE tss.shipmentId IS NOT NULL AND tss.shipmentId <> ''
+    GROUP BY tss.tiktokShowId, tss.importId, tss.shipmentId, tss.userId
+    HAVING handlingMinutes < 15 OR handlingMinutes = 0
+  )
+`;
+
 // Helper: build a show filter clause + replacement key
 function sortingShowFilter(showId) {
   if (!showId) return { clause: "", extra: {} };
@@ -1798,7 +1827,7 @@ router.get("/sorting-overview", auth, checkPermission("tiktokSortingAnalytics", 
         COUNT(*) AS totalScans,
         AVG(st.avgSecondsBetweenScans) AS avgScanGap,
         AVG(st.handlingMinutes) AS avgHandlingMinutes
-      FROM ${SORTING_SCAN_TIMING_SUBQUERY} st
+      FROM ${SORTING_SCAN_TIMING_CLEAN} st
       JOIN ${SORTING_SHIPMENT_SUBQUERY} ss
         ON ss.tiktokShowId = st.tiktokShowId
         AND ss.importId = st.importId
@@ -1854,7 +1883,7 @@ router.get("/sorting-leaderboard", auth, checkPermission("tiktokSortingAnalytics
         MAX(ss.closedAt) AS lastClosedAt
       FROM ${SORTING_SHIPMENT_SUBQUERY} ss
       LEFT JOIN ${TABLES.users} u ON CAST(u.id AS CHAR) = ss.closedBy
-      LEFT JOIN ${SORTING_SCAN_TIMING_SUBQUERY} st
+      LEFT JOIN ${SORTING_SCAN_TIMING_CLEAN} st
         ON st.tiktokShowId = ss.tiktokShowId
         AND st.importId = ss.importId
         AND st.shipmentId = ss.shipmentId
@@ -1904,7 +1933,7 @@ router.get("/sorting-daily", auth, checkPermission("tiktokSortingAnalytics", "vi
         AVG(st.avgSecondsBetweenScans) AS avgScanGapSeconds,
         SUM(st.totalScans) AS totalScans
       FROM ${SORTING_SHIPMENT_SUBQUERY} ss
-      LEFT JOIN ${SORTING_SCAN_TIMING_SUBQUERY} st
+      LEFT JOIN ${SORTING_SCAN_TIMING_CLEAN} st
         ON st.tiktokShowId = ss.tiktokShowId
         AND st.importId = ss.importId
         AND st.shipmentId = ss.shipmentId
@@ -1950,7 +1979,7 @@ router.get("/sorting-item-types", auth, checkPermission("tiktokSortingAnalytics"
         ON ss.tiktokShowId = tsi.tiktokShowId
         AND ss.importId = tsi.importId
         AND ss.shipmentId = tsi.shipmentId
-      LEFT JOIN ${SORTING_SCAN_TIMING_SUBQUERY} st
+      LEFT JOIN ${SORTING_SCAN_TIMING_CLEAN} st
         ON st.tiktokShowId = tsi.tiktokShowId
         AND st.importId = tsi.importId
         AND st.shipmentId = tsi.shipmentId
@@ -2109,7 +2138,7 @@ router.get("/sorting-pace", auth, checkPermission("tiktokSortingAnalytics", "vie
       SELECT
         st.tiktokShowId,
         AVG(st.avgSecondsBetweenScans) AS avgScanGapSeconds
-      FROM ${SORTING_SCAN_TIMING_SUBQUERY} st
+      FROM ${SORTING_SCAN_TIMING_CLEAN} st
       JOIN ${SORTING_SHIPMENT_SUBQUERY} ss
         ON ss.tiktokShowId = st.tiktokShowId
         AND ss.importId    = st.importId
@@ -2155,7 +2184,7 @@ router.get("/sorting-by-size", auth, checkPermission("tiktokSortingAnalytics", "
         MIN(st.handlingMinutes)               AS minHandlingMinutes,
         MAX(st.handlingMinutes)               AS maxHandlingMinutes
       FROM ${SORTING_SHIPMENT_SUBQUERY} ss
-      LEFT JOIN ${SORTING_SCAN_TIMING_SUBQUERY} st
+      LEFT JOIN ${SORTING_SCAN_TIMING_CLEAN} st
         ON st.tiktokShowId = ss.tiktokShowId
         AND st.importId    = ss.importId
         AND st.shipmentId  = ss.shipmentId
@@ -2265,7 +2294,7 @@ router.get("/sorting-throughput", auth, checkPermission("tiktokSortingAnalytics"
         st.lastScanAt,
         TIMESTAMPDIFF(SECOND, st.firstScanAt, ss.closedAt) / 60.0 AS handlingMinutes
       FROM ${SORTING_SHIPMENT_SUBQUERY} ss
-      JOIN ${SORTING_SCAN_TIMING_SUBQUERY} st
+      JOIN ${SORTING_SCAN_TIMING_CLEAN} st
         ON st.tiktokShowId = ss.tiktokShowId
         AND st.importId    = ss.importId
         AND st.shipmentId  = ss.shipmentId

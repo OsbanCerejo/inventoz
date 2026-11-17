@@ -74,6 +74,56 @@ const fmtSeconds = (v: number | null | undefined) => {
   const h = Math.floor(m / 60), rm = m % 60;
   return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
 };
+function ShowLineChart({
+  data,
+  valueKey,
+  color,
+  fmtVal,
+}: {
+  data: PaceRow[];
+  valueKey: keyof PaceRow;
+  color: string;
+  fmtVal: (v: number) => string;
+}) {
+  if (!data.length) return <Typography variant="body2" color="text.secondary">No data.</Typography>;
+  const vals = data.map(r => Number(r[valueKey] ?? 0));
+  const minV = Math.min(...vals);
+  const maxV = Math.max(...vals);
+  const range = maxV - minV || 1;
+  const W = 480, H = 120, PAD_L = 8, PAD_R = 8, PAD_T = 20, PAD_B = 36;
+  const n = data.length;
+  const xOf = (i: number) => PAD_L + (i / Math.max(n - 1, 1)) * (W - PAD_L - PAD_R);
+  const yOf = (v: number) => PAD_T + (1 - (v - minV) / range) * (H - PAD_T - PAD_B);
+  const pts = vals.map((v, i) => `${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(" ");
+  return (
+    <Box sx={{ overflowX: "auto" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", minWidth: 260 }}>
+        {/* line */}
+        <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" opacity={0.85} />
+        {/* dots + labels */}
+        {vals.map((v, i) => {
+          const x = xOf(i), y = yOf(v);
+          const label = fmtVal(v);
+          const showName = data[i].showName.length > 10 ? data[i].showName.slice(0, 10) + "…" : data[i].showName;
+          return (
+            <g key={i}>
+              <circle cx={x} cy={y} r={3.5} fill={color} opacity={0.9} />
+              <text x={x} y={y - 6} textAnchor="middle" fontSize={9} fill={color} opacity={0.9}>{label}</text>
+              <text
+                x={x} y={H - 4}
+                textAnchor="end"
+                fontSize={9}
+                fill="#94a3b8"
+                transform={`rotate(-40, ${x}, ${H - 4})`}
+              >{showName}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </Box>
+  );
+}
+
 const fmtMinutes = (v: number | null | undefined) => {
   if (v == null) return "—";
   const n = Number(v);
@@ -368,79 +418,25 @@ export default function TikTokSortingAnalytics() {
                   </Paper>
                 </Grid>
 
-                {/* Pace trend per show */}
-                <Grid item xs={12} lg={6}>
+                {/* Pace + Scan Gap line charts */}
+                <Grid item xs={12}>
                   <Paper sx={{ p: 2, borderRadius: 2 }}>
-                    <Typography variant="h6" sx={{ mb: 0.5 }}>Pace By Show (Trend)</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
-                      Avg shipments / hour per show — oldest → newest
-                    </Typography>
-                    {pace.length === 0 ? (
-                      <Typography variant="body2" color="text.secondary">No data.</Typography>
-                    ) : (() => {
-                      const max = Math.max(1, ...pace.map(r => r.avgShipmentsPerHour));
-                      const BAR_W = Math.max(20, Math.min(52, Math.floor(480 / Math.max(pace.length, 1))));
-                      return (
-                        <Box sx={{ overflowX: "auto" }}>
-                          <Box sx={{ display: "flex", alignItems: "flex-end", gap: "3px", minHeight: 140, pb: 1 }}>
-                            {pace.map(r => {
-                              const h = Math.max(4, Math.round((r.avgShipmentsPerHour / max) * 110));
-                              return (
-                                <Box key={r.showId} sx={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: BAR_W }}>
-                                  <Typography variant="caption" sx={{ fontSize: 9, color: "#64748b", mb: 0.3 }}>{r.avgShipmentsPerHour.toFixed(1)}</Typography>
-                                  <Box
-                                    title={`${r.showName}: ${r.avgShipmentsPerHour.toFixed(1)} shipments/hr over ${r.activeHours} active hr(s)`}
-                                    sx={{ width: BAR_W - 4, height: h, bgcolor: "#ef6c00", borderRadius: "3px 3px 0 0", opacity: 0.85 }}
-                                  />
-                                  <Typography variant="caption" sx={{ fontSize: 9, color: "#94a3b8", mt: 0.3, transform: "rotate(-45deg)", transformOrigin: "top left", whiteSpace: "nowrap", ml: 1 }}>
-                                    {r.showName.length > 12 ? r.showName.slice(0, 12) + "…" : r.showName}
-                                  </Typography>
-                                </Box>
-                              );
-                            })}
-                          </Box>
-                        </Box>
-                      );
-                    })()}
-                  </Paper>
-                </Grid>
-
-                {/* Avg scan gap per show trend */}
-                <Grid item xs={12} lg={6}>
-                  <Paper sx={{ p: 2, borderRadius: 2 }}>
-                    <Typography variant="h6" sx={{ mb: 0.5 }}>Avg Scan Gap Per Show (Trend)</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
-                      Avg seconds between scans per show — oldest → newest
-                    </Typography>
-                    {pace.filter(r => r.avgScanGapSeconds != null).length === 0 ? (
-                      <Typography variant="body2" color="text.secondary">No data.</Typography>
-                    ) : (() => {
-                      const paceWithGap = pace.filter(r => r.avgScanGapSeconds != null);
-                      const max = Math.max(1, ...paceWithGap.map(r => r.avgScanGapSeconds ?? 0));
-                      const BAR_W = Math.max(20, Math.min(52, Math.floor(480 / Math.max(paceWithGap.length, 1))));
-                      return (
-                        <Box sx={{ overflowX: "auto" }}>
-                          <Box sx={{ display: "flex", alignItems: "flex-end", gap: "3px", minHeight: 140, pb: 1 }}>
-                            {paceWithGap.map(r => {
-                              const val = r.avgScanGapSeconds ?? 0;
-                              const h = Math.max(4, Math.round((val / max) * 110));
-                              return (
-                                <Box key={r.showId} sx={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: BAR_W }}>
-                                  <Typography variant="caption" sx={{ fontSize: 9, color: "#64748b", mb: 0.3 }}>{fmtSeconds(val)}</Typography>
-                                  <Box
-                                    title={`${r.showName}: avg ${fmtSeconds(val)} between scans`}
-                                    sx={{ width: BAR_W - 4, height: h, bgcolor: "#00838f", borderRadius: "3px 3px 0 0", opacity: 0.85 }}
-                                  />
-                                  <Typography variant="caption" sx={{ fontSize: 9, color: "#94a3b8", mt: 0.3, transform: "rotate(-45deg)", transformOrigin: "top left", whiteSpace: "nowrap", ml: 1 }}>
-                                    {r.showName.length > 12 ? r.showName.slice(0, 12) + "…" : r.showName}
-                                  </Typography>
-                                </Box>
-                              );
-                            })}
-                          </Box>
-                        </Box>
-                      );
-                    })()}
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} lg={6}>
+                        <Typography variant="h6" sx={{ mb: 0.5 }}>Pace By Show</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                          Avg shipments / hour — oldest → newest
+                        </Typography>
+                        <ShowLineChart data={pace} valueKey="avgShipmentsPerHour" color="#ef6c00" fmtVal={v => `${v.toFixed(1)}/hr`} />
+                      </Grid>
+                      <Grid item xs={12} lg={6}>
+                        <Typography variant="h6" sx={{ mb: 0.5 }}>Avg Scan Gap Per Show</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                          Avg seconds between scans — oldest → newest (lower = faster)
+                        </Typography>
+                        <ShowLineChart data={pace.filter(r => r.avgScanGapSeconds != null)} valueKey="avgScanGapSeconds" color="#00838f" fmtVal={v => fmtSeconds(v)} />
+                      </Grid>
+                    </Grid>
                   </Paper>
                 </Grid>
               </Grid>
