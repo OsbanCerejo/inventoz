@@ -25,6 +25,7 @@ import TikTokFulfillment from "./pages/TikTokFulfillment";
 import WhatnotFulfillmentAnalytics from "./pages/WhatnotFulfillmentAnalytics";
 import TikTokFulfillmentAnalytics from "./pages/TikTokFulfillmentAnalytics";
 import TikTokSortingAnalytics from "./pages/TikTokSortingAnalytics";
+import LunchModeAdmin from "./pages/LunchModeAdmin";
 import SortingAnalytics from "./pages/SortingAnalytics";
 import OperationsCost from "./pages/OperationsCost";
 import WalmartIntegration from "./pages/WalmartIntegration";
@@ -505,6 +506,14 @@ function AppContent() {
               element={
                 <ProtectedRoute requireAdmin>
                   <AuditLog />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/lunch-mode"
+              element={
+                <ProtectedRoute requireAdmin>
+                  <LunchModeAdmin />
                 </ProtectedRoute>
               }
             />

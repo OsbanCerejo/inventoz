@@ -31,6 +31,7 @@ import CancelIcon from "@mui/icons-material/Cancel";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { getApiUrl } from "../config/api";
 import { useAuth } from "../context/AuthContext";
+import LunchModeOverlay from "../components/LunchModeOverlay";
 
 interface ShowItem {
   id: number;
@@ -424,6 +425,35 @@ const looksLikeBatchAuctionSticker = (value: string) =>
 
 const TikTokFulfillment = () => {
   const { user } = useAuth();
+
+  // ── Lunch mode ──
+  const [lunchModeActive, setLunchModeActive] = useState(false);
+  const [lunchModeReleaseAt, setLunchModeReleaseAt] = useState<string | null>(null);
+  const [lunchModeSimulate, setLunchModeSimulate] = useState(false);
+
+  // Poll lunch mode status every 30s, and check immediately on mount
+  useEffect(() => {
+    const checkLunchMode = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const params = new URLSearchParams();
+        if (lunchModeSimulate) params.set("simulate", "1");
+        const { data } = await axios.get(
+          getApiUrl(`lunch-mode/status${params.toString() ? `?${params}` : ""}`),
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        );
+        // Only poll-activate (auto-release); never auto-activate from poll — activation happens on shipment close
+        if (lunchModeActive && !data.enabled) {
+          setLunchModeActive(false);
+          setLunchModeReleaseAt(null);
+        }
+      } catch { /* ignore */ }
+    };
+    checkLunchMode();
+    const id = setInterval(checkLunchMode, 30_000);
+    return () => clearInterval(id);
+  }, [lunchModeActive, lunchModeSimulate]);
+
   const [shows, setShows] = useState<ShowItem[]>([]);
   const [showsLoading, setShowsLoading] = useState(false);
   const [selectedShowId, setSelectedShowId] = useState<string>("");
@@ -941,6 +971,23 @@ const TikTokFulfillment = () => {
       setTrackingInput("");
       setSuccess("Shipment closed. Scan next shipping label to continue.");
       await fetchSummary(selectedShowId);
+
+      // Check if lunch mode was enabled while this shipment was being sorted
+      try {
+        const token = localStorage.getItem("token");
+        const params = new URLSearchParams();
+        if (lunchModeSimulate) params.set("simulate", "1");
+        const { data } = await axios.get(
+          getApiUrl(`lunch-mode/status${params.toString() ? `?${params}` : ""}`),
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        );
+        if (data.enabled || data.simulate) {
+          setLunchModeReleaseAt(data.releaseAt);
+          setLunchModeActive(true);
+          return; // don't re-focus tracking — user is locked out
+        }
+      } catch { /* ignore — don't block normal flow */ }
+
       setTimeout(() => trackingRef.current?.focus(), 80);
     } catch (closeError: any) {
       const message = closeError?.response?.data?.error || "Failed to close shipment";
@@ -1967,6 +2014,42 @@ const TikTokFulfillment = () => {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      {/* Lunch Mode Overlay */}
+      {lunchModeActive && (
+        <LunchModeOverlay
+          releaseAt={lunchModeReleaseAt}
+          onUnlocked={() => {
+            setLunchModeActive(false);
+            setLunchModeReleaseAt(null);
+            setTimeout(() => trackingRef.current?.focus(), 80);
+          }}
+        />
+      )}
+
+      {/* Simulate button — dev/test only */}
+      {process.env.NODE_ENV !== "production" && (
+        <Box sx={{ position: "fixed", bottom: 16, left: 16, zIndex: 1300 }}>
+          <Button
+            size="small"
+            variant="outlined"
+            color="warning"
+            onClick={async () => {
+              // Simulate: pretend lunch mode is on and a shipment was just closed
+              const token = localStorage.getItem("token");
+              const { data } = await axios.get(getApiUrl("lunch-mode/status?simulate=1"), {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+              });
+              setLunchModeSimulate(true);
+              setLunchModeReleaseAt(data.releaseAt);
+              setLunchModeActive(true);
+            }}
+            sx={{ opacity: 0.7, fontSize: 11 }}
+          >
+            🧪 Simulate Lunch
+          </Button>
+        </Box>
+      )}
 
     </Box>
   );

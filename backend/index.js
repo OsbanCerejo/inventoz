@@ -186,6 +186,9 @@ app.use("/listing-management/auth", listingManagementAuthRouter);
 const listingManagementWebhookRouter = require("./routes/ListingManagementWebhook");
 app.use("/listing-management/webhook", listingManagementWebhookRouter);
 
+const lunchModeRouter = require("./routes/lunchMode");
+app.use("/lunch-mode", lunchModeRouter);
+
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.static(path.join(__dirname, 'public', 'hba-site')));
