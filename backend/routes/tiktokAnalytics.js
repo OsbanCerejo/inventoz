@@ -2101,8 +2101,26 @@ router.get("/sorting-pace", auth, checkPermission("tiktokSortingAnalytics", "vie
       ) hourly
       JOIN ${TABLES.shows} ts ON ts.id = hourly.tiktokShowId
       GROUP BY hourly.tiktokShowId, ts.name
-      ORDER BY avgShipmentsPerHour DESC
+      ORDER BY hourly.tiktokShowId ASC
     `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+    // Also fetch avg scan gap per show in same range
+    const scanGapRows = await sequelize.query(`
+      SELECT
+        st.tiktokShowId,
+        AVG(st.avgSecondsBetweenScans) AS avgScanGapSeconds
+      FROM ${SORTING_SCAN_TIMING_SUBQUERY} st
+      JOIN ${SORTING_SHIPMENT_SUBQUERY} ss
+        ON ss.tiktokShowId = st.tiktokShowId
+        AND ss.importId    = st.importId
+        AND ss.shipmentId  = st.shipmentId
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from AND ss.closedAt < :to
+        ${showClause}
+      GROUP BY st.tiktokShowId
+    `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+    const gapByShow = Object.fromEntries(scanGapRows.map(r => [Number(r.tiktokShowId), r.avgScanGapSeconds != null ? Math.round(Number(r.avgScanGapSeconds) * 10) / 10 : null]));
 
     return res.json(rows.map(r => ({
       showId: Number(r.showId),
@@ -2110,6 +2128,7 @@ router.get("/sorting-pace", auth, checkPermission("tiktokSortingAnalytics", "vie
       avgShipmentsPerHour: Math.round(Number(r.avgShipmentsPerHour) * 10) / 10,
       activeHours: Number(r.activeHours),
       totalShipments: Number(r.totalShipments),
+      avgScanGapSeconds: gapByShow[Number(r.showId)] ?? null,
     })));
   } catch (err) {
     console.error("TikTok sorting-pace error:", err);

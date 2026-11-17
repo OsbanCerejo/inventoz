@@ -29,7 +29,7 @@ interface ItemTypeRow {
   itemCategory: string; shipmentCount: number; lineCount: number; totalUnits: number;
   avgScanGapSeconds: number | null; avgHandlingMinutes: number | null;
 }
-interface PaceRow { showId: number; showName: string; avgShipmentsPerHour: number; activeHours: number; totalShipments: number; }
+interface PaceRow { showId: number; showName: string; avgShipmentsPerHour: number; activeHours: number; totalShipments: number; avgScanGapSeconds: number | null; }
 interface SizeRow {
   lineCount: number; shipmentCount: number; totalUnits: number;
   avgHandlingMinutes: number | null; avgScanGapSeconds: number | null;
@@ -353,21 +353,6 @@ export default function TikTokSortingAnalytics() {
                   </Paper>
                 </Grid>
 
-                {/* Top days */}
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2, borderRadius: 2 }}>
-                    <Typography variant="h6" sx={{ mb: 1.5 }}>Top Days By Items Sorted</Typography>
-                    <HBar
-                      items={[...daily].sort((a, b) => b.totalUnits - a.totalUnits)}
-                      labelKey="bucket"
-                      valueKey="totalUnits"
-                      color="#2e7d32"
-                      maxItems={10}
-                      fmtVal={v => `${fmt(v)} items`}
-                    />
-                  </Paper>
-                </Grid>
-
                 {/* Sorter share */}
                 <Grid item xs={12} md={6}>
                   <Paper sx={{ p: 2, borderRadius: 2 }}>
@@ -383,47 +368,79 @@ export default function TikTokSortingAnalytics() {
                   </Paper>
                 </Grid>
 
-                {/* Pace per show */}
-                <Grid item xs={12} md={6}>
+                {/* Pace trend per show */}
+                <Grid item xs={12} lg={6}>
                   <Paper sx={{ p: 2, borderRadius: 2 }}>
-                    <Typography variant="h6" sx={{ mb: 0.5 }}>Pace By Show</Typography>
+                    <Typography variant="h6" sx={{ mb: 0.5 }}>Pace By Show (Trend)</Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
-                      Avg shipments closed per active hour
+                      Avg shipments / hour per show — oldest → newest
                     </Typography>
                     {pace.length === 0 ? (
                       <Typography variant="body2" color="text.secondary">No data.</Typography>
-                    ) : (
-                      <HBar
-                        items={pace}
-                        labelKey="showName"
-                        valueKey="avgShipmentsPerHour"
-                        color="#ef6c00"
-                        maxItems={15}
-                        fmtVal={v => `${v.toFixed(1)} / hr`}
-                      />
-                    )}
+                    ) : (() => {
+                      const max = Math.max(1, ...pace.map(r => r.avgShipmentsPerHour));
+                      const BAR_W = Math.max(20, Math.min(52, Math.floor(480 / Math.max(pace.length, 1))));
+                      return (
+                        <Box sx={{ overflowX: "auto" }}>
+                          <Box sx={{ display: "flex", alignItems: "flex-end", gap: "3px", minHeight: 140, pb: 1 }}>
+                            {pace.map(r => {
+                              const h = Math.max(4, Math.round((r.avgShipmentsPerHour / max) * 110));
+                              return (
+                                <Box key={r.showId} sx={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: BAR_W }}>
+                                  <Typography variant="caption" sx={{ fontSize: 9, color: "#64748b", mb: 0.3 }}>{r.avgShipmentsPerHour.toFixed(1)}</Typography>
+                                  <Box
+                                    title={`${r.showName}: ${r.avgShipmentsPerHour.toFixed(1)} shipments/hr over ${r.activeHours} active hr(s)`}
+                                    sx={{ width: BAR_W - 4, height: h, bgcolor: "#ef6c00", borderRadius: "3px 3px 0 0", opacity: 0.85 }}
+                                  />
+                                  <Typography variant="caption" sx={{ fontSize: 9, color: "#94a3b8", mt: 0.3, transform: "rotate(-45deg)", transformOrigin: "top left", whiteSpace: "nowrap", ml: 1 }}>
+                                    {r.showName.length > 12 ? r.showName.slice(0, 12) + "…" : r.showName}
+                                  </Typography>
+                                </Box>
+                              );
+                            })}
+                          </Box>
+                        </Box>
+                      );
+                    })()}
                   </Paper>
                 </Grid>
 
-                {/* Shipment size quick view */}
-                <Grid item xs={12} md={6}>
+                {/* Avg scan gap per show trend */}
+                <Grid item xs={12} lg={6}>
                   <Paper sx={{ p: 2, borderRadius: 2 }}>
-                    <Typography variant="h6" sx={{ mb: 0.5 }}>Avg Handling By Shipment Size</Typography>
+                    <Typography variant="h6" sx={{ mb: 0.5 }}>Avg Scan Gap Per Show (Trend)</Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
-                      How long shipments take based on number of items
+                      Avg seconds between scans per show — oldest → newest
                     </Typography>
-                    {sizeRows.length === 0 ? (
+                    {pace.filter(r => r.avgScanGapSeconds != null).length === 0 ? (
                       <Typography variant="body2" color="text.secondary">No data.</Typography>
-                    ) : (
-                      <HBar
-                        items={sizeRows.filter(r => r.avgHandlingMinutes != null).map(r => ({ ...r, label: `${r.lineCount} item${r.lineCount === 1 ? "" : "s"}` }))}
-                        labelKey="label"
-                        valueKey="avgHandlingMinutes"
-                        color="#2e7d32"
-                        maxItems={15}
-                        fmtVal={v => fmtMinutes(v)}
-                      />
-                    )}
+                    ) : (() => {
+                      const paceWithGap = pace.filter(r => r.avgScanGapSeconds != null);
+                      const max = Math.max(1, ...paceWithGap.map(r => r.avgScanGapSeconds ?? 0));
+                      const BAR_W = Math.max(20, Math.min(52, Math.floor(480 / Math.max(paceWithGap.length, 1))));
+                      return (
+                        <Box sx={{ overflowX: "auto" }}>
+                          <Box sx={{ display: "flex", alignItems: "flex-end", gap: "3px", minHeight: 140, pb: 1 }}>
+                            {paceWithGap.map(r => {
+                              const val = r.avgScanGapSeconds ?? 0;
+                              const h = Math.max(4, Math.round((val / max) * 110));
+                              return (
+                                <Box key={r.showId} sx={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: BAR_W }}>
+                                  <Typography variant="caption" sx={{ fontSize: 9, color: "#64748b", mb: 0.3 }}>{fmtSeconds(val)}</Typography>
+                                  <Box
+                                    title={`${r.showName}: avg ${fmtSeconds(val)} between scans`}
+                                    sx={{ width: BAR_W - 4, height: h, bgcolor: "#00838f", borderRadius: "3px 3px 0 0", opacity: 0.85 }}
+                                  />
+                                  <Typography variant="caption" sx={{ fontSize: 9, color: "#94a3b8", mt: 0.3, transform: "rotate(-45deg)", transformOrigin: "top left", whiteSpace: "nowrap", ml: 1 }}>
+                                    {r.showName.length > 12 ? r.showName.slice(0, 12) + "…" : r.showName}
+                                  </Typography>
+                                </Box>
+                              );
+                            })}
+                          </Box>
+                        </Box>
+                      );
+                    })()}
                   </Paper>
                 </Grid>
               </Grid>
