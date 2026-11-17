@@ -1696,5 +1696,338 @@ router.get("/fulfillment-negative-margin-items", auth, checkPermission("tiktokAn
   }
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// SORTING ANALYTICS
+// ══════════════════════════════════════════════════════════════════════════════
+
+const SORTING_SHIPMENT_SUBQUERY = `
+  (
+    SELECT
+      tsi.tiktokShowId,
+      tsi.importId,
+      tsi.shipmentId,
+      MAX(tsi.closedAt)  AS closedAt,
+      MAX(tsi.closedBy)  AS closedBy,
+      COUNT(*)           AS lineCount,
+      COALESCE(SUM(tsi.expectedQty), 0) AS totalUnits,
+      MAX(CASE WHEN COALESCE(tsi.itemCategory,'others') <> 'random_giveaway' THEN 1 ELSE 0 END) AS hasNonGiveaway,
+      GROUP_CONCAT(DISTINCT COALESCE(tsi.itemCategory,'others') ORDER BY COALESCE(tsi.itemCategory,'others') SEPARATOR ', ') AS categories
+    FROM ${TABLES.shipmentItems} tsi
+    GROUP BY tsi.tiktokShowId, tsi.importId, tsi.shipmentId
+  )
+`;
+
+const SORTING_SCAN_TIMING_SUBQUERY = `
+  (
+    SELECT
+      tss.tiktokShowId,
+      tss.importId,
+      tss.shipmentId,
+      tss.userId,
+      COUNT(*) AS totalScans,
+      MIN(tss.createdAt) AS firstScanAt,
+      MAX(tss.createdAt) AS lastScanAt,
+      CASE
+        WHEN COUNT(*) > 1
+        THEN TIMESTAMPDIFF(SECOND, MIN(tss.createdAt), MAX(tss.createdAt)) / (COUNT(*) - 1)
+        ELSE NULL
+      END AS avgSecondsBetweenScans,
+      CASE
+        WHEN COUNT(*) > 1
+        THEN TIMESTAMPDIFF(SECOND, MIN(tss.createdAt), MAX(tss.createdAt)) / 60.0
+        ELSE 0
+      END AS handlingMinutes
+    FROM ${TABLES.shipmentScans} tss
+    WHERE tss.shipmentId IS NOT NULL AND tss.shipmentId <> ''
+    GROUP BY tss.tiktokShowId, tss.importId, tss.shipmentId, tss.userId
+  )
+`;
+
+// GET /tiktok/analytics/sorting-overview
+router.get("/sorting-overview", auth, checkPermission("tiktokSortingAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) return res.status(400).json({ error: "Invalid date range" });
+  const replacements = { from: range.from, to: range.to };
+
+  try {
+    const [shipRows] = await sequelize.query(`
+      SELECT
+        COUNT(*) AS shipmentsClosed,
+        COALESCE(SUM(ss.totalUnits), 0) AS totalUnits,
+        COUNT(DISTINCT NULLIF(ss.closedBy, '')) AS activeSorters,
+        COUNT(DISTINCT DATE(ss.closedAt)) AS activeDays
+      FROM ${SORTING_SHIPMENT_SUBQUERY} ss
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from AND ss.closedAt < :to
+    `, { replacements });
+
+    const [scanRows] = await sequelize.query(`
+      SELECT
+        COUNT(*) AS totalScans,
+        AVG(st.avgSecondsBetweenScans) AS avgScanGap,
+        AVG(st.handlingMinutes) AS avgHandlingMinutes
+      FROM ${SORTING_SCAN_TIMING_SUBQUERY} st
+      JOIN ${SORTING_SHIPMENT_SUBQUERY} ss
+        ON ss.tiktokShowId = st.tiktokShowId
+        AND ss.importId = st.importId
+        AND ss.shipmentId = st.shipmentId
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from AND ss.closedAt < :to
+    `, { replacements });
+
+    const r = Array.isArray(shipRows) ? shipRows[0] || {} : {};
+    const s = Array.isArray(scanRows) ? scanRows[0] || {} : {};
+    const shipmentsClosed = Number(r.shipmentsClosed || 0);
+    const totalUnits = Number(r.totalUnits || 0);
+    const activeDays = Number(r.activeDays || 0);
+
+    return res.json({
+      shipmentsClosed,
+      totalUnits,
+      activeSorters: Number(r.activeSorters || 0),
+      activeDays,
+      totalScans: Number(s.totalScans || 0),
+      avgScanGapSeconds: s.avgScanGap != null ? Number(Number(s.avgScanGap).toFixed(1)) : null,
+      avgHandlingMinutes: s.avgHandlingMinutes != null ? Number(Number(s.avgHandlingMinutes).toFixed(2)) : null,
+      avgUnitsPerShipment: shipmentsClosed > 0 ? Number((totalUnits / shipmentsClosed).toFixed(2)) : 0,
+      avgShipmentsPerDay: activeDays > 0 ? Number((shipmentsClosed / activeDays).toFixed(2)) : 0,
+    });
+  } catch (err) {
+    console.error("TikTok sorting-overview error:", err);
+    return res.status(500).json({ error: "Failed to fetch sorting overview" });
+  }
+});
+
+// GET /tiktok/analytics/sorting-leaderboard
+router.get("/sorting-leaderboard", auth, checkPermission("tiktokSortingAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) return res.status(400).json({ error: "Invalid date range" });
+  const limit = Math.min(Number(req.query.limit || 50), 200);
+  const replacements = { from: range.from, to: range.to };
+
+  try {
+    const rows = await sequelize.query(`
+      SELECT
+        ss.closedBy AS sorterId,
+        COALESCE(u.name, u.username, CONCAT('User ', ss.closedBy), 'Unknown') AS sorterName,
+        COUNT(*) AS shipmentsClosed,
+        COALESCE(SUM(ss.totalUnits), 0) AS totalUnits,
+        COUNT(DISTINCT DATE(ss.closedAt)) AS activeDays,
+        AVG(st.avgSecondsBetweenScans) AS avgScanGapSeconds,
+        AVG(st.handlingMinutes) AS avgHandlingMinutes,
+        SUM(st.totalScans) AS totalScans,
+        MIN(ss.closedAt) AS firstClosedAt,
+        MAX(ss.closedAt) AS lastClosedAt
+      FROM ${SORTING_SHIPMENT_SUBQUERY} ss
+      LEFT JOIN ${TABLES.users} u ON CAST(u.id AS CHAR) = ss.closedBy
+      LEFT JOIN ${SORTING_SCAN_TIMING_SUBQUERY} st
+        ON st.tiktokShowId = ss.tiktokShowId
+        AND st.importId = ss.importId
+        AND st.shipmentId = ss.shipmentId
+        AND st.userId = ss.closedBy
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from AND ss.closedAt < :to
+        AND ss.closedBy IS NOT NULL AND ss.closedBy <> ''
+      GROUP BY ss.closedBy, u.name, u.username
+      ORDER BY shipmentsClosed DESC
+      LIMIT :limit
+    `, { replacements: { ...replacements, limit }, type: sequelize.QueryTypes.SELECT });
+
+    return res.json(rows.map(r => ({
+      sorterId: r.sorterId,
+      sorterName: r.sorterName,
+      shipmentsClosed: Number(r.shipmentsClosed || 0),
+      totalUnits: Number(r.totalUnits || 0),
+      activeDays: Number(r.activeDays || 0),
+      avgScanGapSeconds: r.avgScanGapSeconds != null ? Number(Number(r.avgScanGapSeconds).toFixed(1)) : null,
+      avgHandlingMinutes: r.avgHandlingMinutes != null ? Number(Number(r.avgHandlingMinutes).toFixed(2)) : null,
+      totalScans: Number(r.totalScans || 0),
+      scansPerShipment: Number(r.shipmentsClosed || 0) > 0 ? Number((Number(r.totalScans || 0) / Number(r.shipmentsClosed)).toFixed(1)) : null,
+      firstClosedAt: r.firstClosedAt || null,
+      lastClosedAt: r.lastClosedAt || null,
+    })));
+  } catch (err) {
+    console.error("TikTok sorting-leaderboard error:", err);
+    return res.status(500).json({ error: "Failed to fetch sorting leaderboard" });
+  }
+});
+
+// GET /tiktok/analytics/sorting-daily
+router.get("/sorting-daily", auth, checkPermission("tiktokSortingAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) return res.status(400).json({ error: "Invalid date range" });
+  const replacements = { from: range.from, to: range.to };
+
+  try {
+    const rows = await sequelize.query(`
+      SELECT
+        DATE(ss.closedAt) AS bucket,
+        COUNT(*) AS shipmentsClosed,
+        COALESCE(SUM(ss.totalUnits), 0) AS totalUnits,
+        COUNT(DISTINCT NULLIF(ss.closedBy, '')) AS activeSorters,
+        AVG(st.avgSecondsBetweenScans) AS avgScanGapSeconds,
+        SUM(st.totalScans) AS totalScans
+      FROM ${SORTING_SHIPMENT_SUBQUERY} ss
+      LEFT JOIN ${SORTING_SCAN_TIMING_SUBQUERY} st
+        ON st.tiktokShowId = ss.tiktokShowId
+        AND st.importId = ss.importId
+        AND st.shipmentId = ss.shipmentId
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from AND ss.closedAt < :to
+      GROUP BY DATE(ss.closedAt)
+      ORDER BY bucket ASC
+    `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+    return res.json(rows.map(r => ({
+      bucket: r.bucket,
+      shipmentsClosed: Number(r.shipmentsClosed || 0),
+      totalUnits: Number(r.totalUnits || 0),
+      activeSorters: Number(r.activeSorters || 0),
+      avgScanGapSeconds: r.avgScanGapSeconds != null ? Number(Number(r.avgScanGapSeconds).toFixed(1)) : null,
+      totalScans: Number(r.totalScans || 0),
+    })));
+  } catch (err) {
+    console.error("TikTok sorting-daily error:", err);
+    return res.status(500).json({ error: "Failed to fetch sorting daily" });
+  }
+});
+
+// GET /tiktok/analytics/sorting-item-types
+router.get("/sorting-item-types", auth, checkPermission("tiktokSortingAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) return res.status(400).json({ error: "Invalid date range" });
+  const replacements = { from: range.from, to: range.to };
+
+  try {
+    const rows = await sequelize.query(`
+      SELECT
+        COALESCE(tsi.itemCategory, 'others') AS itemCategory,
+        COUNT(DISTINCT CONCAT(tsi.tiktokShowId, '-', tsi.importId, '-', tsi.shipmentId)) AS shipmentCount,
+        COUNT(*) AS lineCount,
+        COALESCE(SUM(tsi.expectedQty), 0) AS totalUnits,
+        AVG(st.avgSecondsBetweenScans) AS avgScanGapSeconds,
+        AVG(st.handlingMinutes) AS avgHandlingMinutes
+      FROM ${TABLES.shipmentItems} tsi
+      JOIN ${SORTING_SHIPMENT_SUBQUERY} ss
+        ON ss.tiktokShowId = tsi.tiktokShowId
+        AND ss.importId = tsi.importId
+        AND ss.shipmentId = tsi.shipmentId
+      LEFT JOIN ${SORTING_SCAN_TIMING_SUBQUERY} st
+        ON st.tiktokShowId = tsi.tiktokShowId
+        AND st.importId = tsi.importId
+        AND st.shipmentId = tsi.shipmentId
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from AND ss.closedAt < :to
+      GROUP BY COALESCE(tsi.itemCategory, 'others')
+      ORDER BY totalUnits DESC
+    `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+    return res.json(rows.map(r => ({
+      itemCategory: r.itemCategory,
+      shipmentCount: Number(r.shipmentCount || 0),
+      lineCount: Number(r.lineCount || 0),
+      totalUnits: Number(r.totalUnits || 0),
+      avgScanGapSeconds: r.avgScanGapSeconds != null ? Number(Number(r.avgScanGapSeconds).toFixed(1)) : null,
+      avgHandlingMinutes: r.avgHandlingMinutes != null ? Number(Number(r.avgHandlingMinutes).toFixed(2)) : null,
+    })));
+  } catch (err) {
+    console.error("TikTok sorting-item-types error:", err);
+    return res.status(500).json({ error: "Failed to fetch sorting item types" });
+  }
+});
+
+// GET /tiktok/analytics/sorting-heatmap
+router.get("/sorting-heatmap", auth, checkPermission("tiktokSortingAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) return res.status(400).json({ error: "Invalid date range" });
+  const replacements = { from: range.from, to: range.to };
+
+  try {
+    const rows = await sequelize.query(`
+      SELECT
+        WEEKDAY(ss.closedAt) AS dayIndex,
+        HOUR(ss.closedAt)    AS hourOfDay,
+        COUNT(*) AS shipmentsClosed,
+        COALESCE(SUM(ss.totalUnits), 0) AS totalUnits
+      FROM ${SORTING_SHIPMENT_SUBQUERY} ss
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from AND ss.closedAt < :to
+      GROUP BY WEEKDAY(ss.closedAt), HOUR(ss.closedAt)
+      ORDER BY dayIndex ASC, hourOfDay ASC
+    `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+    return res.json(rows.map(r => ({
+      dayIndex: Number(r.dayIndex),
+      hourOfDay: Number(r.hourOfDay),
+      shipmentsClosed: Number(r.shipmentsClosed || 0),
+      totalUnits: Number(r.totalUnits || 0),
+    })));
+  } catch (err) {
+    console.error("TikTok sorting-heatmap error:", err);
+    return res.status(500).json({ error: "Failed to fetch sorting heatmap" });
+  }
+});
+
+// GET /tiktok/analytics/sorting-shipments
+router.get("/sorting-shipments", auth, checkPermission("tiktokSortingAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) return res.status(400).json({ error: "Invalid date range" });
+  const limit = Math.min(Number(req.query.limit || 100), 500);
+  const sorterId = req.query.sorterId ? String(req.query.sorterId).trim() : null;
+  const replacements = { from: range.from, to: range.to, limit, sorterId };
+
+  try {
+    const rows = await sequelize.query(`
+      SELECT
+        ss.tiktokShowId AS showId,
+        ss.importId,
+        ss.shipmentId,
+        ss.closedAt,
+        ss.closedBy AS sorterId,
+        COALESCE(u.name, u.username, CONCAT('User ', ss.closedBy), 'Unknown') AS sorterName,
+        ss.totalUnits,
+        ss.lineCount,
+        ss.categories,
+        st.totalScans,
+        st.avgSecondsBetweenScans,
+        st.handlingMinutes,
+        st.firstScanAt,
+        st.lastScanAt
+      FROM ${SORTING_SHIPMENT_SUBQUERY} ss
+      LEFT JOIN ${TABLES.users} u ON CAST(u.id AS CHAR) = ss.closedBy
+      LEFT JOIN ${SORTING_SCAN_TIMING_SUBQUERY} st
+        ON st.tiktokShowId = ss.tiktokShowId
+        AND st.importId = ss.importId
+        AND st.shipmentId = ss.shipmentId
+        AND st.userId = ss.closedBy
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from AND ss.closedAt < :to
+        AND (:sorterId IS NULL OR ss.closedBy = :sorterId)
+      ORDER BY ss.closedAt DESC
+      LIMIT :limit
+    `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+    return res.json(rows.map(r => ({
+      showId: Number(r.showId || 0),
+      importId: Number(r.importId || 0),
+      shipmentId: r.shipmentId,
+      closedAt: r.closedAt,
+      sorterId: r.sorterId,
+      sorterName: r.sorterName,
+      totalUnits: Number(r.totalUnits || 0),
+      lineCount: Number(r.lineCount || 0),
+      categories: r.categories || '',
+      totalScans: r.totalScans != null ? Number(r.totalScans) : null,
+      avgScanGapSeconds: r.avgSecondsBetweenScans != null ? Number(Number(r.avgSecondsBetweenScans).toFixed(1)) : null,
+      handlingMinutes: r.handlingMinutes != null ? Number(Number(r.handlingMinutes).toFixed(2)) : null,
+      firstScanAt: r.firstScanAt || null,
+      lastScanAt: r.lastScanAt || null,
+    })));
+  } catch (err) {
+    console.error("TikTok sorting-shipments error:", err);
+    return res.status(500).json({ error: "Failed to fetch sorting shipments" });
+  }
+});
+
 module.exports = router;
 
