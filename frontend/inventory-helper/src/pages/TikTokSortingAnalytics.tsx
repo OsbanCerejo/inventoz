@@ -10,6 +10,7 @@ import { getApiUrl } from "../config/api";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+interface ShowOption { showId: number; showName: string; }
 interface Overview {
   shipmentsClosed: number; totalUnits: number; activeSorters: number;
   activeDays: number; totalScans: number; avgScanGapSeconds: number | null;
@@ -120,6 +121,8 @@ export default function TikTokSortingAnalytics() {
   const [from, setFrom] = useState(fmtDate(thirtyDaysAgo));
   const [to, setTo] = useState(fmtDate(now));
   const [selectedSorterId, setSelectedSorterId] = useState("");
+  const [selectedShowId, setSelectedShowId] = useState("");
+  const [shows, setShows] = useState<ShowOption[]>([]);
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +137,8 @@ export default function TikTokSortingAnalytics() {
   const params = useMemo(() => ({
     from, to,
     ...(selectedSorterId ? { sorterId: selectedSorterId } : {}),
-  }), [from, to, selectedSorterId]);
+    ...(selectedShowId ? { showId: selectedShowId } : {}),
+  }), [from, to, selectedSorterId, selectedShowId]);
 
   const headers = useMemo(() => {
     const token = localStorage.getItem("token");
@@ -144,6 +148,7 @@ export default function TikTokSortingAnalytics() {
   useEffect(() => {
     const run = async () => {
       setLoading(true); setError(null);
+      const dateParams = { from, to };
       const results = await Promise.allSettled([
         axios.get(API("sorting-overview"), { params, headers }),
         axios.get(API("sorting-leaderboard"), { params: { ...params, limit: 50 }, headers }),
@@ -151,14 +156,16 @@ export default function TikTokSortingAnalytics() {
         axios.get(API("sorting-item-types"), { params, headers }),
         axios.get(API("sorting-heatmap"), { params, headers }),
         axios.get(API("sorting-shipments"), { params: { ...params, limit: 150 }, headers }),
+        axios.get(API("sorting-shows"), { params: dateParams, headers }),
       ]);
-      const [ov, lb, dy, it, hm, sh] = results;
+      const [ov, lb, dy, it, hm, sh, sw] = results;
       if (ov.status === "fulfilled") setOverview(ov.value.data);
       if (lb.status === "fulfilled") setLeaderboard(lb.value.data || []);
       if (dy.status === "fulfilled") setDaily(dy.value.data || []);
       if (it.status === "fulfilled") setItemTypes(it.value.data || []);
       if (hm.status === "fulfilled") setHeatmap(hm.value.data || []);
       if (sh.status === "fulfilled") setShipments(sh.value.data || []);
+      if (sw.status === "fulfilled") setShows(sw.value.data || []);
       const failed = [
         { n: "overview", r: ov }, { n: "leaderboard", r: lb }, { n: "daily", r: dy },
         { n: "item-types", r: it }, { n: "heatmap", r: hm }, { n: "shipments", r: sh },
@@ -202,18 +209,27 @@ export default function TikTokSortingAnalytics() {
         {/* Filters */}
         <Paper sx={{ p: 2, borderRadius: 2 }}>
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={4} md={3}>
               <TextField fullWidth label="From" type="date" value={from} onChange={e => setFrom(e.target.value)} InputLabelProps={{ shrink: true }} />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={4} md={3}>
               <TextField fullWidth label="To" type="date" value={to} onChange={e => setTo(e.target.value)} InputLabelProps={{ shrink: true }} />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={4} md={3}>
               <FormControl fullWidth>
                 <InputLabel>Sorter</InputLabel>
                 <Select value={selectedSorterId} label="Sorter" onChange={e => setSelectedSorterId(String(e.target.value || ""))}>
                   <MenuItem value="">All Sorters</MenuItem>
                   {sorterOptions.map(s => <MenuItem key={s.sorterId} value={s.sorterId}>{s.sorterName}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={4} md={3}>
+              <FormControl fullWidth>
+                <InputLabel>Show</InputLabel>
+                <Select value={selectedShowId} label="Show" onChange={e => setSelectedShowId(String(e.target.value || ""))}>
+                  <MenuItem value="">All Shows</MenuItem>
+                  {shows.map(s => <MenuItem key={s.showId} value={String(s.showId)}>{s.showName}</MenuItem>)}
                 </Select>
               </FormControl>
             </Grid>

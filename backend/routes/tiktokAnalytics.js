@@ -1743,11 +1743,42 @@ const SORTING_SCAN_TIMING_SUBQUERY = `
   )
 `;
 
+// Helper: build a show filter clause + replacement key
+function sortingShowFilter(showId) {
+  if (!showId) return { clause: "", extra: {} };
+  return { clause: "AND ss.tiktokShowId = :showId", extra: { showId: Number(showId) } };
+}
+
+// GET /tiktok/analytics/sorting-shows
+router.get("/sorting-shows", auth, checkPermission("tiktokSortingAnalytics", "view"), async (req, res) => {
+  const range = parseDateRange(req.query);
+  if (!range) return res.status(400).json({ error: "Invalid date range" });
+  try {
+    const rows = await sequelize.query(`
+      SELECT DISTINCT ts.id AS showId, ts.name AS showName
+      FROM ${TABLES.shows} ts
+      JOIN ${TABLES.shipmentItems} tsi ON tsi.tiktokShowId = ts.id
+      JOIN ${SORTING_SHIPMENT_SUBQUERY} ss
+        ON ss.tiktokShowId = tsi.tiktokShowId
+        AND ss.importId = tsi.importId
+        AND ss.shipmentId = tsi.shipmentId
+      WHERE ss.closedAt IS NOT NULL
+        AND ss.closedAt >= :from AND ss.closedAt < :to
+      ORDER BY ts.name ASC
+    `, { replacements: { from: range.from, to: range.to }, type: sequelize.QueryTypes.SELECT });
+    return res.json(rows.map(r => ({ showId: Number(r.showId), showName: r.showName })));
+  } catch (err) {
+    console.error("TikTok sorting-shows error:", err);
+    return res.status(500).json({ error: "Failed to fetch shows" });
+  }
+});
+
 // GET /tiktok/analytics/sorting-overview
 router.get("/sorting-overview", auth, checkPermission("tiktokSortingAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
-  const replacements = { from: range.from, to: range.to };
+  const { clause: showClause, extra: showExtra } = sortingShowFilter(req.query.showId);
+  const replacements = { from: range.from, to: range.to, ...showExtra };
 
   try {
     const [shipRows] = await sequelize.query(`
@@ -1759,6 +1790,7 @@ router.get("/sorting-overview", auth, checkPermission("tiktokSortingAnalytics", 
       FROM ${SORTING_SHIPMENT_SUBQUERY} ss
       WHERE ss.closedAt IS NOT NULL
         AND ss.closedAt >= :from AND ss.closedAt < :to
+        ${showClause}
     `, { replacements });
 
     const [scanRows] = await sequelize.query(`
@@ -1773,6 +1805,7 @@ router.get("/sorting-overview", auth, checkPermission("tiktokSortingAnalytics", 
         AND ss.shipmentId = st.shipmentId
       WHERE ss.closedAt IS NOT NULL
         AND ss.closedAt >= :from AND ss.closedAt < :to
+        ${showClause}
     `, { replacements });
 
     const r = Array.isArray(shipRows) ? shipRows[0] || {} : {};
@@ -1803,7 +1836,8 @@ router.get("/sorting-leaderboard", auth, checkPermission("tiktokSortingAnalytics
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
   const limit = Math.min(Number(req.query.limit || 50), 200);
-  const replacements = { from: range.from, to: range.to };
+  const { clause: showClause, extra: showExtra } = sortingShowFilter(req.query.showId);
+  const replacements = { from: range.from, to: range.to, ...showExtra };
 
   try {
     const rows = await sequelize.query(`
@@ -1828,6 +1862,7 @@ router.get("/sorting-leaderboard", auth, checkPermission("tiktokSortingAnalytics
       WHERE ss.closedAt IS NOT NULL
         AND ss.closedAt >= :from AND ss.closedAt < :to
         AND ss.closedBy IS NOT NULL AND ss.closedBy <> ''
+        ${showClause}
       GROUP BY ss.closedBy, u.name, u.username
       ORDER BY shipmentsClosed DESC
       LIMIT :limit
@@ -1856,7 +1891,8 @@ router.get("/sorting-leaderboard", auth, checkPermission("tiktokSortingAnalytics
 router.get("/sorting-daily", auth, checkPermission("tiktokSortingAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
-  const replacements = { from: range.from, to: range.to };
+  const { clause: showClause, extra: showExtra } = sortingShowFilter(req.query.showId);
+  const replacements = { from: range.from, to: range.to, ...showExtra };
 
   try {
     const rows = await sequelize.query(`
@@ -1874,6 +1910,7 @@ router.get("/sorting-daily", auth, checkPermission("tiktokSortingAnalytics", "vi
         AND st.shipmentId = ss.shipmentId
       WHERE ss.closedAt IS NOT NULL
         AND ss.closedAt >= :from AND ss.closedAt < :to
+        ${showClause}
       GROUP BY DATE(ss.closedAt)
       ORDER BY bucket ASC
     `, { replacements, type: sequelize.QueryTypes.SELECT });
@@ -1896,7 +1933,8 @@ router.get("/sorting-daily", auth, checkPermission("tiktokSortingAnalytics", "vi
 router.get("/sorting-item-types", auth, checkPermission("tiktokSortingAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
-  const replacements = { from: range.from, to: range.to };
+  const { clause: showClause, extra: showExtra } = sortingShowFilter(req.query.showId);
+  const replacements = { from: range.from, to: range.to, ...showExtra };
 
   try {
     const rows = await sequelize.query(`
@@ -1918,6 +1956,7 @@ router.get("/sorting-item-types", auth, checkPermission("tiktokSortingAnalytics"
         AND st.shipmentId = tsi.shipmentId
       WHERE ss.closedAt IS NOT NULL
         AND ss.closedAt >= :from AND ss.closedAt < :to
+        ${showClause}
       GROUP BY COALESCE(tsi.itemCategory, 'others')
       ORDER BY totalUnits DESC
     `, { replacements, type: sequelize.QueryTypes.SELECT });
@@ -1940,7 +1979,8 @@ router.get("/sorting-item-types", auth, checkPermission("tiktokSortingAnalytics"
 router.get("/sorting-heatmap", auth, checkPermission("tiktokSortingAnalytics", "view"), async (req, res) => {
   const range = parseDateRange(req.query);
   if (!range) return res.status(400).json({ error: "Invalid date range" });
-  const replacements = { from: range.from, to: range.to };
+  const { clause: showClause, extra: showExtra } = sortingShowFilter(req.query.showId);
+  const replacements = { from: range.from, to: range.to, ...showExtra };
 
   try {
     const rows = await sequelize.query(`
@@ -1952,6 +1992,7 @@ router.get("/sorting-heatmap", auth, checkPermission("tiktokSortingAnalytics", "
       FROM ${SORTING_SHIPMENT_SUBQUERY} ss
       WHERE ss.closedAt IS NOT NULL
         AND ss.closedAt >= :from AND ss.closedAt < :to
+        ${showClause}
       GROUP BY WEEKDAY(ss.closedAt), HOUR(ss.closedAt)
       ORDER BY dayIndex ASC, hourOfDay ASC
     `, { replacements, type: sequelize.QueryTypes.SELECT });
@@ -1974,7 +2015,8 @@ router.get("/sorting-shipments", auth, checkPermission("tiktokSortingAnalytics",
   if (!range) return res.status(400).json({ error: "Invalid date range" });
   const limit = Math.min(Number(req.query.limit || 100), 500);
   const sorterId = req.query.sorterId ? String(req.query.sorterId).trim() : null;
-  const replacements = { from: range.from, to: range.to, limit, sorterId };
+  const { clause: showClause, extra: showExtra } = sortingShowFilter(req.query.showId);
+  const replacements = { from: range.from, to: range.to, limit, sorterId, ...showExtra };
 
   try {
     const rows = await sequelize.query(`
@@ -2003,6 +2045,7 @@ router.get("/sorting-shipments", auth, checkPermission("tiktokSortingAnalytics",
       WHERE ss.closedAt IS NOT NULL
         AND ss.closedAt >= :from AND ss.closedAt < :to
         AND (:sorterId IS NULL OR ss.closedBy = :sorterId)
+        ${showClause}
       ORDER BY ss.closedAt DESC
       LIMIT :limit
     `, { replacements, type: sequelize.QueryTypes.SELECT });
