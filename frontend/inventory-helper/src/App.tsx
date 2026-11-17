@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import Home from "./pages/Home";
@@ -146,16 +146,13 @@ function BuildUpdateBanner() {
   );
 }
 
-// Global lunch mode poller — shows overlay on every page except /tiktok-fulfillment
-// (TikTok Fulfillment manages its own overlay, waiting for shipment close)
+// Global lunch mode gate — fires on every page, no exceptions
 function LunchModeGate() {
   const { isAuthenticated } = useAuth();
-  const location = useLocation();
   const [active, setActive] = useState(false);
   const [releaseAt, setReleaseAt] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const isTikTokFulfillment = location.pathname === "/tiktok-fulfillment";
+  const keepaliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -167,7 +164,7 @@ function LunchModeGate() {
           getApiUrl("lunch-mode/status"),
           { headers: token ? { Authorization: `Bearer ${token}` } : {} }
         );
-        if (data.shouldShow && !isTikTokFulfillment) {
+        if (data.shouldShow) {
           setReleaseAt(data.releaseAt);
           setActive(true);
         } else if (!data.enabled) {
@@ -180,7 +177,25 @@ function LunchModeGate() {
     check();
     intervalRef.current = setInterval(check, 30_000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [isAuthenticated, isTikTokFulfillment]);
+  }, [isAuthenticated]);
+
+  // While overlay is active, refresh the auth token every 4 minutes so the
+  // session doesn't expire while the user is locked out
+  useEffect(() => {
+    if (!active) {
+      if (keepaliveRef.current) { clearInterval(keepaliveRef.current); keepaliveRef.current = null; }
+      return;
+    }
+    const refreshToken = async () => {
+      try {
+        const { data } = await axios.post(getApiUrl("auth/refresh"), {}, { withCredentials: true });
+        if (data?.token) localStorage.setItem("token", data.token);
+      } catch { /* ignore */ }
+    };
+    refreshToken();
+    keepaliveRef.current = setInterval(refreshToken, 4 * 60 * 1000);
+    return () => { if (keepaliveRef.current) clearInterval(keepaliveRef.current); };
+  }, [active]);
 
   if (!active) return null;
   return (

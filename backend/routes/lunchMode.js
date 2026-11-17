@@ -66,8 +66,8 @@ router.get("/status", auth, async (req, res) => {
     }
 
     const enabled = simulate ? true : user.lunchModeEnabled;
-    // shouldShow = enabled AND it's past 1:30 PM EST (lunch window open)
-    const shouldShow = enabled && isLunchWindowOpen(simulate);
+    // shouldShow = enabled — manager decides when to fire it, no time restriction
+    const shouldShow = enabled;
 
     return res.json({
       enabled,

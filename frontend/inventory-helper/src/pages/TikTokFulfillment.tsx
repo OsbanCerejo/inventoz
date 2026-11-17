@@ -31,7 +31,6 @@ import CancelIcon from "@mui/icons-material/Cancel";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { getApiUrl } from "../config/api";
 import { useAuth } from "../context/AuthContext";
-import LunchModeOverlay from "../components/LunchModeOverlay";
 
 interface ShowItem {
   id: number;
@@ -425,38 +424,6 @@ const looksLikeBatchAuctionSticker = (value: string) =>
 
 const TikTokFulfillment = () => {
   const { user } = useAuth();
-
-  // ── Lunch mode ──
-  const [lunchModeActive, setLunchModeActive] = useState(false);
-  const [lunchModeReleaseAt, setLunchModeReleaseAt] = useState<string | null>(null);
-  const [lunchModeSimulate, setLunchModeSimulate] = useState(false);
-
-  // Poll lunch mode status every 30s
-  useEffect(() => {
-    const checkLunchMode = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const params = new URLSearchParams();
-        if (lunchModeSimulate) params.set("simulate", "1");
-        const { data } = await axios.get(
-          getApiUrl(`lunch-mode/status${params.toString() ? `?${params}` : ""}`),
-          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-        );
-        if (data.shouldShow && !activeShipment && !lunchModeActive) {
-          // No open shipment and lunch window is open — show immediately
-          setLunchModeReleaseAt(data.releaseAt);
-          setLunchModeActive(true);
-        } else if (lunchModeActive && !data.enabled) {
-          // Auto-release at 2 PM
-          setLunchModeActive(false);
-          setLunchModeReleaseAt(null);
-        }
-      } catch { /* ignore */ }
-    };
-    checkLunchMode();
-    const id = setInterval(checkLunchMode, 30_000);
-    return () => clearInterval(id);
-  }, [lunchModeActive, lunchModeSimulate, activeShipment]);
 
   const [shows, setShows] = useState<ShowItem[]>([]);
   const [showsLoading, setShowsLoading] = useState(false);
@@ -975,22 +942,6 @@ const TikTokFulfillment = () => {
       setTrackingInput("");
       setSuccess("Shipment closed. Scan next shipping label to continue.");
       await fetchSummary(selectedShowId);
-
-      // Check if lunch mode was enabled while this shipment was being sorted
-      try {
-        const token = localStorage.getItem("token");
-        const params = new URLSearchParams();
-        if (lunchModeSimulate) params.set("simulate", "1");
-        const { data } = await axios.get(
-          getApiUrl(`lunch-mode/status${params.toString() ? `?${params}` : ""}`),
-          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-        );
-        if (data.shouldShow) {
-          setLunchModeReleaseAt(data.releaseAt);
-          setLunchModeActive(true);
-          return; // don't re-focus tracking — user is locked out
-        }
-      } catch { /* ignore — don't block normal flow */ }
 
       setTimeout(() => trackingRef.current?.focus(), 80);
     } catch (closeError: any) {
@@ -2019,47 +1970,6 @@ const TikTokFulfillment = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Lunch Mode Overlay */}
-      {lunchModeActive && (
-        <LunchModeOverlay
-          releaseAt={lunchModeReleaseAt}
-          onUnlocked={() => {
-            setLunchModeActive(false);
-            setLunchModeReleaseAt(null);
-            setTimeout(() => trackingRef.current?.focus(), 80);
-          }}
-        />
-      )}
-
-      {/* Simulate button — dev/test only */}
-      {process.env.NODE_ENV !== "production" && (
-        <Box sx={{ position: "fixed", bottom: 16, left: 16, zIndex: 1300 }}>
-          <Button
-            size="small"
-            variant="outlined"
-            color="warning"
-            onClick={async () => {
-              const token = localStorage.getItem("token");
-              const { data } = await axios.get(getApiUrl("lunch-mode/status?simulate=1"), {
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
-              });
-              setLunchModeSimulate(true);
-              if (!activeShipment) {
-                // No open shipment — show immediately
-                setLunchModeReleaseAt(data.releaseAt);
-                setLunchModeActive(true);
-              }
-              // If a shipment is open, lunchModeSimulate=true means the post-close check
-              // will fire after the user closes it
-            }}
-            sx={{ opacity: 0.7, fontSize: 11 }}
-          >
-            {lunchModeSimulate && activeShipment
-              ? "🧪 Fires on Next Close"
-              : "🧪 Simulate Lunch"}
-          </Button>
-        </Box>
-      )}
 
     </Box>
   );
