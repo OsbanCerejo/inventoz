@@ -157,17 +157,24 @@ async function getInventory(accessToken, shopCipher, skuIds) {
 // TikTok requires the SKU's existing identifier_codes to be passed through unchanged,
 // so we fetch the product detail first to extract them.
 async function updateInventory(accessToken, shopCipher, productId, skuId, warehouseId, quantity) {
-  const inventoryEntry = warehouseId
-    ? { warehouse_id: warehouseId, quantity }
-    : { quantity };
-
-  // Fetch product to get identifier_codes for this SKU
+  const qty = parseInt(quantity, 10);
+  let resolvedWarehouseId = warehouseId || null;
   let identifierCodes;
+
+  // Single product fetch: resolves missing warehouseId AND gets identifier_codes
   try {
     const product = await getProduct(accessToken, shopCipher, productId);
     const skus = product?.skus || product?.sku_list || [];
     const matchedSku = skus.find(s => s.id === skuId);
     console.log(`[updateInventory] SKU ${skuId} raw:`, JSON.stringify(matchedSku));
+
+    if (!resolvedWarehouseId) {
+      const inv = matchedSku?.inventory || matchedSku?.stock_infos || [];
+      if (inv.length > 0) {
+        resolvedWarehouseId = inv[0].warehouse_id;
+        console.log(`[updateInventory] Resolved missing warehouseId → ${resolvedWarehouseId} for SKU ${skuId}`);
+      }
+    }
     if (matchedSku?.identifier_codes?.length > 0) {
       identifierCodes = matchedSku.identifier_codes;
     } else if (matchedSku?.identifier_code) {
@@ -176,6 +183,10 @@ async function updateInventory(accessToken, shopCipher, productId, skuId, wareho
   } catch (e) {
     console.error('[updateInventory] Failed to fetch product detail:', e.message);
   }
+
+  const inventoryEntry = resolvedWarehouseId
+    ? { warehouse_id: resolvedWarehouseId, quantity: qty, available_quantity: qty }
+    : { quantity: qty, available_quantity: qty };
 
   const skuPayload = { id: skuId, inventory: [inventoryEntry] };
   if (identifierCodes && identifierCodes.length > 0) {
