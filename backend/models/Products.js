@@ -157,9 +157,21 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         defaultValue: null,
       },
+      isActive: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+      },
     },
     {
       timestamps: false,
+      defaultScope: {
+        where: { isActive: true },
+      },
+      scopes: {
+        all: {},
+        inactive: { where: { isActive: false } },
+      },
     }
   );
 

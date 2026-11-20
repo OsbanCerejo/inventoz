@@ -3,7 +3,7 @@ module.exports = (sequelize, DataTypes) => {
     id: { type: DataTypes.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
     sku: { type: DataTypes.STRING(191), allowNull: false, unique: true },
     isGenericAuction: { type: DataTypes.BOOLEAN, defaultValue: false },
-    syncEnabled: { type: DataTypes.BOOLEAN, defaultValue: false },
+    syncEnabled: { type: DataTypes.BOOLEAN, defaultValue: true },
     addedBy: { type: DataTypes.INTEGER, allowNull: true },
     addedAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     notes: { type: DataTypes.TEXT, allowNull: true },

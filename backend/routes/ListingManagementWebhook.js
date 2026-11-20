@@ -12,13 +12,13 @@ function verifySignature(req) {
 
   const timestamp = req.headers['x-tts-timestamp'] || req.headers['timestamp'] || '';
   const nonce = req.headers['x-nonce'] || req.headers['nonce'] || '';
-  const bodyStr = JSON.stringify(req.body);
+  // Use raw body bytes so signature matches what TikTok signed
+  const bodyStr = req.rawBody || JSON.stringify(req.body);
 
   // TikTok signs: timestamp + "\n" + nonce + "\n" + body + "\n"
   const input = `${timestamp}\n${nonce}\n${bodyStr}\n`;
   const expected = crypto.createHmac('sha256', APP_SECRET).update(input).digest('base64');
 
-  // Signature header may be base64 or hex — try both
   if (signature === expected) return true;
   const expectedHex = crypto.createHmac('sha256', APP_SECRET).update(input).digest('hex');
   if (signature === expectedHex) return true;
@@ -29,7 +29,7 @@ function verifySignature(req) {
 }
 
 // POST /listing-management/webhook/tiktok
-router.post('/tiktok', express.json(), async (req, res) => {
+router.post('/tiktok', async (req, res) => {
   // Always respond 200 quickly to TikTok — process async
   res.status(200).json({ code: 0, message: 'ok' });
 

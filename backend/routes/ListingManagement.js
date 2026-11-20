@@ -58,6 +58,7 @@ router.get('/skus', auth, async (req, res) => {
           required: false,
         },
       ],
+      order: [['addedAt', 'DESC']],
     });
 
     // Fetch product data separately to avoid association join issues
@@ -125,7 +126,7 @@ router.post('/skus', auth, async (req, res) => {
 
     const [ms, created] = await LmManagedSku.findOrCreate({
       where: { sku },
-      defaults: { sku, isGenericAuction, notes, addedBy: req.user.id },
+      defaults: { sku, isGenericAuction, notes, addedBy: req.user.id, syncEnabled: true },
     });
 
     res.status(created ? 201 : 200).json(ms);

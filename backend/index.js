@@ -15,6 +15,15 @@ const { refreshExpiringTokens } = require("./cron/lmTokenRefresh");
 const { runInventorySync } = require("./cron/lmInventorySync");
 const path = require("path");
 
+// Capture raw body for TikTok webhook signature verification BEFORE json parsing
+app.use('/listing-management/webhook', express.raw({ type: 'application/json', limit: '5mb' }), (req, res, next) => {
+  if (Buffer.isBuffer(req.body)) {
+    req.rawBody = req.body.toString('utf8');
+    try { req.body = JSON.parse(req.rawBody); } catch { req.body = {}; }
+  }
+  next();
+});
+
 app.use(express.json({ limit: '5mb' }));
 
 const validateCriticalEnv = () => {

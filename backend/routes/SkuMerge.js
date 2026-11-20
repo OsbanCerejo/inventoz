@@ -69,8 +69,8 @@ router.get('/preview', auth, adminOnly, async (req, res) => {
     if (source === target) return res.status(400).json({ error: 'source and target must be different' });
 
     const [sourceProduct, targetProduct] = await Promise.all([
-      Products.findOne({ where: { sku: source }, attributes: ['sku', 'brand', 'itemName', 'category', 'image'] }),
-      Products.findOne({ where: { sku: target }, attributes: ['sku', 'brand', 'itemName', 'category', 'image'] }),
+      Products.scope('all').findOne({ where: { sku: source }, attributes: ['sku', 'brand', 'itemName', 'category', 'image'] }),
+      Products.scope('all').findOne({ where: { sku: target }, attributes: ['sku', 'brand', 'itemName', 'category', 'image'] }),
     ]);
 
     if (!sourceProduct) return res.status(404).json({ error: `Source SKU "${source}" not found` });
@@ -94,8 +94,8 @@ router.post('/', auth, adminOnly, async (req, res) => {
   if (source === target) return res.status(400).json({ error: 'source and target must be different' });
 
   const [sourceProduct, targetProduct] = await Promise.all([
-    Products.findOne({ where: { sku: source } }),
-    Products.findOne({ where: { sku: target } }),
+    Products.scope('all').findOne({ where: { sku: source } }),
+    Products.scope('all').findOne({ where: { sku: target } }),
   ]);
   if (!sourceProduct) return res.status(404).json({ error: `Source SKU "${source}" not found` });
   if (!targetProduct) return res.status(404).json({ error: `Target SKU "${target}" not found` });
@@ -222,8 +222,8 @@ router.post('/', auth, adminOnly, async (req, res) => {
       // Merge quantity: re-fetch inside transaction with a row lock to avoid stale reads
       // from concurrent inbound/sales operations modifying quantity between our pre-check and here.
       const [srcProd, tgtProd] = await Promise.all([
-        Products.findOne({ where: { sku: source }, attributes: ['quantity'], lock: t.LOCK.UPDATE, transaction: t }),
-        Products.findOne({ where: { sku: target }, attributes: ['quantity'], lock: t.LOCK.UPDATE, transaction: t }),
+        Products.scope('all').findOne({ where: { sku: source }, attributes: ['quantity'], lock: t.LOCK.UPDATE, transaction: t }),
+        Products.scope('all').findOne({ where: { sku: target }, attributes: ['quantity'], lock: t.LOCK.UPDATE, transaction: t }),
       ]);
       const srcQty = parseInt(srcProd?.quantity ?? 0, 10);
       const tgtQty = parseInt(tgtProd?.quantity ?? 0, 10);

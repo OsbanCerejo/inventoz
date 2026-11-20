@@ -3,7 +3,7 @@ import axios from 'axios';
 import {
   Box, Button, Chip, CircularProgress, Dialog, DialogActions,
   DialogContent, DialogTitle, FormControlLabel, IconButton, Paper,
-  Switch, Table, TableBody, TableCell, TableContainer, TableHead,
+  Switch, Table, TableBody, TableCell, TableHead,
   TableRow, TextField, Tooltip, Typography, Alert, Divider,
   Select, MenuItem, FormControl, InputLabel, InputAdornment,
 } from '@mui/material';
@@ -12,7 +12,6 @@ import {
   Refresh as RefreshIcon,
   Link as LinkIcon,
   CheckCircle as CheckIcon,
-  Error as ErrorIcon,
   Warning as WarningIcon,
   Search as SearchIcon,
   OpenInNew as OpenInNewIcon,
@@ -64,13 +63,6 @@ interface ConnectedShop {
   accessTokenExpiry: string;
 }
 
-function SyncStatusChip({ status }: { status: string | null }) {
-  if (!status) return <Chip label="Never synced" size="small" variant="outlined" />;
-  if (status === 'ok') return <Chip label="Synced" size="small" color="success" icon={<CheckIcon />} />;
-  if (status === 'failed') return <Chip label="Failed" size="small" color="error" icon={<ErrorIcon />} />;
-  if (status === 'pending') return <Chip label="Pending" size="small" color="warning" icon={<SyncIcon />} />;
-  return <Chip label={status} size="small" />;
-}
 
 function StockAlertBadge({ alert }: { alert: boolean }) {
   if (!alert) return null;
@@ -89,6 +81,8 @@ export default function ListingManagement() {
   const [search, setSearch] = useState('');
   const [filterAlert, setFilterAlert] = useState(false);
   const [filterFailed, setFilterFailed] = useState(false);
+  const [sortField, setSortField] = useState<'none' | 'tiktokQty' | 'stock'>('none');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [syncCountdown, setSyncCountdown] = useState(300);
 
   useEffect(() => {
@@ -115,8 +109,8 @@ export default function ListingManagement() {
   const [mapRow, setMapRow] = useState<ManagedSkuRow | null>(null);
   const [tiktokProducts, setTiktokProducts] = useState<any[]>([]);
   const [tiktokLoading, setTiktokLoading] = useState(false);
-  const [tiktokNextPage, setTiktokNextPage] = useState<string | null>(null);
-  const [tiktokLoadingMore, setTiktokLoadingMore] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_tiktokNextPage, setTiktokNextPage] = useState<string | null>(null);
   const [selectedShopId, setSelectedShopId] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedSkuId, setSelectedSkuId] = useState('');
@@ -124,7 +118,6 @@ export default function ListingManagement() {
   const [mapLoading, setMapLoading] = useState(false);
   const [mapError, setMapError] = useState('');
   const [productDetail, setProductDetail] = useState<any>(null);
-  const [productSearch, setProductSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
 
   // Inline editing
@@ -225,7 +218,6 @@ export default function ListingManagement() {
     setProductDetail(null);
     setTiktokProducts([]);
     setTiktokNextPage(null);
-    setProductSearch(row.sku);
     setSearchInput('');
     setMapOpen(true);
     if (shops.length > 0) {
@@ -365,148 +357,207 @@ export default function ListingManagement() {
     }
   };
 
-  const filtered = rows.filter(r => {
-    if (filterAlert && !r.stockAlert) return false;
-    if (filterFailed && r.mapping?.lastSyncStatus !== 'failed') return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return r.sku.toLowerCase().includes(q) || (r.itemName || '').toLowerCase().includes(q);
+  const filtered = (() => {
+    let result = rows.filter(r => {
+      if (filterAlert && !r.stockAlert) return false;
+      if (filterFailed && r.mapping?.lastSyncStatus !== 'failed') return false;
+      if (search) {
+        const q = search.toLowerCase();
+        return r.sku.toLowerCase().includes(q) || (r.itemName || '').toLowerCase().includes(q);
+      }
+      return true;
+    });
+    if (sortField !== 'none') {
+      result = [...result].sort((a, b) => {
+        const aVal = sortField === 'tiktokQty' ? (a.mapping?.currentQty ?? -1) : a.inventozQty;
+        const bVal = sortField === 'tiktokQty' ? (b.mapping?.currentQty ?? -1) : b.inventozQty;
+        return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
+      });
     }
-    return true;
-  });
+    return result;
+  })();
 
   const failedCount = rows.filter(r => r.mapping?.lastSyncStatus === 'failed').length;
   const alertCount = rows.filter(r => r.stockAlert).length;
 
+  const syncedCount = rows.filter(r => r.mapping?.lastSyncStatus === 'ok').length;
+
   return (
     <Box sx={{ p: 3, maxWidth: 1400, mx: 'auto' }}>
-      {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Box>
-          <Typography variant="h5" fontWeight={700}>TikTok Listing Management</Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.3 }}>
-            <Typography variant="body2" color="text.secondary">
-              Manage inventory sync between Inventoz and TikTok Shop listings
-            </Typography>
-            <Chip
-              icon={<SyncIcon sx={{ fontSize: '13px !important' }} />}
-              label={`Next sync in ${Math.floor(syncCountdown / 60)}:${String(syncCountdown % 60).padStart(2, '0')}`}
-              size="small"
-              variant="outlined"
-              color={syncCountdown <= 30 ? 'success' : 'default'}
-              sx={{ fontSize: 11, height: 20 }}
-            />
+
+      {/* ── Toolbar ─────────────────────────────────────────────── */}
+      <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden', mb: 0 }}>
+        {/* Top bar */}
+        <Box sx={{
+          display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.2,
+          borderBottom: '1px solid', borderColor: 'divider', flexWrap: 'wrap',
+        }}>
+          <Typography variant="subtitle1" fontWeight={700} sx={{ mr: 1 }}>
+            TikTok Listing Management
+          </Typography>
+
+          <TextField
+            size="small" placeholder="Search SKU or product…"
+            value={search} onChange={e => setSearch(e.target.value)}
+            sx={{ width: 260 }}
+            InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
+          />
+
+          <Select
+            size="small" value={sortField}
+            onChange={e => setSortField(e.target.value as typeof sortField)}
+            sx={{ fontSize: 13, minWidth: 160 }}
+          >
+            <MenuItem value="none">Sort: newest first</MenuItem>
+            <MenuItem value="stock">Sort: stock</MenuItem>
+            <MenuItem value="tiktokQty">Sort: TikTok qty</MenuItem>
+          </Select>
+
+          {sortField !== 'none' && (
+            <Select
+              size="small" value={sortDir}
+              onChange={e => setSortDir(e.target.value as 'asc' | 'desc')}
+              sx={{ fontSize: 13, minWidth: 120 }}
+            >
+              <MenuItem value="desc">High → Low</MenuItem>
+              <MenuItem value="asc">Low → High</MenuItem>
+            </Select>
+          )}
+
+          <Box sx={{ ml: 'auto', display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Tooltip title="Refresh data">
+              <IconButton size="small" onClick={load}><RefreshIcon sx={{ fontSize: 18 }} /></IconButton>
+            </Tooltip>
+            {failedCount > 0 && (
+              <Button size="small" variant="outlined" color="error" startIcon={<SyncIcon />} onClick={retryFailedJobs}>
+                Retry {failedCount} failed
+              </Button>
+            )}
+            {shops.length === 0 ? (
+              <Button size="small" variant="outlined" startIcon={<OpenInNewIcon />} onClick={connectTikTok}>
+                Connect TikTok Shop
+              </Button>
+            ) : (
+              <>
+                {shops.map(s => (
+                  <Chip key={s.shopId} label={s.shopName || s.shopId} color="success" size="small"
+                    onDelete={() => disconnectShop(s.shopId)}
+                    deleteIcon={<Tooltip title="Disconnect"><span style={{ fontSize: 14 }}>×</span></Tooltip>}
+                  />
+                ))}
+                <Button size="small" variant="outlined" startIcon={<OpenInNewIcon />} onClick={connectTikTok}>Add shop</Button>
+                <Button size="small" variant="outlined" onClick={refreshCipher}>Refresh cipher</Button>
+              </>
+            )}
+            <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
+              Add SKU
+            </Button>
           </Box>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={load}>Refresh</Button>
-          {failedCount > 0 && (
-            <Button variant="outlined" color="error" startIcon={<SyncIcon />} onClick={retryFailedJobs}>
-              Retry {failedCount} Failed
-            </Button>
-          )}
-          {shops.length === 0 ? (
-            <Button variant="outlined" startIcon={<OpenInNewIcon />} onClick={connectTikTok}>
-              Connect TikTok Shop
-            </Button>
-          ) : (
-            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
-              {shops.map(s => (
-                <Chip
-                  key={s.shopId}
-                  label={s.shopName || s.shopId}
-                  color="success"
-                  size="small"
-                  onDelete={() => disconnectShop(s.shopId)}
-                  deleteIcon={<Tooltip title="Disconnect this shop"><span style={{ fontSize: 14, lineHeight: 1 }}>×</span></Tooltip>}
-                />
-              ))}
-              <Button variant="outlined" size="small" startIcon={<OpenInNewIcon />} onClick={connectTikTok}>
-                Add Shop
-              </Button>
+
+        {/* Stats strip */}
+        <Box sx={{
+          display: 'flex', alignItems: 'center', gap: 2.5, px: 2, py: 0.8,
+          bgcolor: 'grey.50', borderBottom: filtered.length > 0 ? '1px solid' : 'none', borderColor: 'divider',
+          flexWrap: 'wrap',
+        }}>
+          {alertCount > 0 && (
+            <Box
+              onClick={() => setFilterAlert(v => !v)}
+              sx={{ display: 'flex', alignItems: 'center', gap: 0.7, cursor: 'pointer',
+                color: filterAlert ? 'error.main' : 'text.secondary',
+                '&:hover': { color: 'error.main' } }}
+            >
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main', flexShrink: 0 }} />
+              <Typography variant="caption" fontWeight={500}>
+                <strong>{alertCount}</strong> stock alert{alertCount > 1 ? 's' : ''}
+              </Typography>
             </Box>
           )}
-          {shops.length > 0 && (
-            <Button variant="outlined" size="small" onClick={refreshCipher} title="Re-sync shop cipher from TikTok">
-              Refresh Cipher
-            </Button>
-          )}
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
-            Add SKU
-          </Button>
-        </Box>
-      </Box>
-
-      {/* Summary chips */}
-      {(alertCount > 0 || failedCount > 0) && (
-        <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-          {alertCount > 0 && (
-            <Chip
-              label={`${alertCount} stock protection alert${alertCount > 1 ? 's' : ''}`}
-              color="warning" icon={<WarningIcon />} clickable
-              onClick={() => setFilterAlert(v => !v)}
-              variant={filterAlert ? 'filled' : 'outlined'}
-            />
-          )}
           {failedCount > 0 && (
-            <Chip
-              label={`${failedCount} sync failed`}
-              color="error" icon={<ErrorIcon />} clickable
+            <Box
               onClick={() => setFilterFailed(v => !v)}
-              variant={filterFailed ? 'filled' : 'outlined'}
-            />
+              sx={{ display: 'flex', alignItems: 'center', gap: 0.7, cursor: 'pointer',
+                color: filterFailed ? 'warning.main' : 'text.secondary',
+                '&:hover': { color: 'warning.main' } }}
+            >
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'warning.main', flexShrink: 0 }} />
+              <Typography variant="caption" fontWeight={500}>
+                <strong>{failedCount}</strong> failed sync
+              </Typography>
+            </Box>
           )}
+          {syncedCount > 0 && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.7, color: 'text.secondary' }}>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'success.main', flexShrink: 0 }} />
+              <Typography variant="caption" fontWeight={500}>
+                <strong>{syncedCount}</strong> synced
+              </Typography>
+            </Box>
+          )}
+          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.disabled' }}>
+            <SyncIcon sx={{ fontSize: 12 }} />
+            <Typography variant="caption">
+              Next sync in {Math.floor(syncCountdown / 60)}:{String(syncCountdown % 60).padStart(2, '0')}
+            </Typography>
+          </Box>
         </Box>
-      )}
 
-      {/* Search */}
-      <TextField
-        size="small" placeholder="Search by SKU or product name…"
-        value={search} onChange={e => setSearch(e.target.value)}
-        sx={{ mb: 2, width: 320 }}
-        InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
-      />
-
-      {/* Table */}
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
-      ) : filtered.length === 0 ? (
-        <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 2 }}>
-          <Typography color="text.secondary">
-            {rows.length === 0 ? 'No SKUs enrolled yet. Click "+ Add SKU" to get started.' : 'No results match your filters.'}
-          </Typography>
-        </Paper>
-      ) : (
-        <TableContainer component={Paper} sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+        {/* Table */}
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
+        ) : filtered.length === 0 ? (
+          <Box sx={{ p: 6, textAlign: 'center' }}>
+            <Typography color="text.secondary">
+              {rows.length === 0 ? 'No SKUs enrolled yet. Click "+ Add SKU" to get started.' : 'No results match your filters.'}
+            </Typography>
+          </Box>
+        ) : (
           <Table size="small">
             <TableHead>
-              <TableRow sx={{ '& th': { fontWeight: 600, fontSize: 12, color: 'text.secondary', bgcolor: 'grey.50', borderBottom: '1px solid', borderColor: 'divider', py: 1.2 } }}>
-                <TableCell>SKU & Product</TableCell>
+              <TableRow sx={{
+                '& th': {
+                  fontWeight: 600, fontSize: 11, color: 'text.secondary', bgcolor: 'grey.50',
+                  textTransform: 'uppercase', letterSpacing: '0.05em',
+                  borderBottom: '1px solid', borderColor: 'divider', py: 1,
+                }
+              }}>
+                <TableCell sx={{ pl: 2 }}>Product</TableCell>
                 <TableCell align="center">Stock</TableCell>
                 <TableCell align="center">Pending</TableCell>
                 <TableCell align="center">Avail.</TableCell>
-                <TableCell align="center">Next Sync</TableCell>
+                <TableCell align="center">Delta</TableCell>
                 <TableCell align="center">TikTok Qty</TableCell>
-                <TableCell align="center">TikTok Price</TableCell>
+                <TableCell align="center">Price</TableCell>
                 <TableCell align="center">Status</TableCell>
+                <TableCell align="center">Sync</TableCell>
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {filtered.map(row => {
                 const isEditing = row.mapping && editingMappingId === row.mapping.id;
+                const isOverListed = row.stockAlert && row.mapping;
                 return (
-                  <TableRow key={row.id} hover sx={{ opacity: row.isGenericAuction ? 0.6 : 1, '& td': { py: 1.2 } }}>
-                    {/* SKU + Product */}
-                    <TableCell sx={{ minWidth: 240 }}>
-                      <Typography variant="body2" fontWeight={600} fontFamily="monospace" fontSize={12}>
+                  <TableRow
+                    key={row.id}
+                    hover
+                    sx={{
+                      opacity: row.isGenericAuction ? 0.6 : 1,
+                      '& td': { py: 1, borderBottom: '1px solid', borderColor: 'divider' },
+                      ...(isOverListed ? { bgcolor: 'rgba(211,47,47,0.03)' } : {}),
+                    }}
+                  >
+                    {/* Product */}
+                    <TableCell sx={{ pl: 2, minWidth: 230 }}>
+                      <Typography variant="body2" fontWeight={600} fontSize={12}>
+                        {row.itemName || <em style={{ opacity: 0.5 }}>No name</em>}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" fontFamily="monospace">
                         {row.sku}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary" fontSize={12} sx={{ lineHeight: 1.3 }}>
-                        {[row.brand, row.itemName].filter(Boolean).join(' · ') || <em>No product data</em>}
-                      </Typography>
                       {(row.strength || row.sizeOz || row.sizeMl) && (
-                        <Typography variant="caption" color="text.disabled" sx={{ lineHeight: 1.3 }}>
+                        <Typography variant="caption" color="text.disabled" display="block" sx={{ lineHeight: 1.3 }}>
                           {[row.strength, row.sizeOz ? `${row.sizeOz} oz` : null, row.sizeMl ? `${row.sizeMl} ml` : null].filter(Boolean).join(' · ')}
                         </Typography>
                       )}
@@ -545,12 +596,8 @@ export default function ListingManagement() {
                         const delta = row.inventozQty - m.lastConfirmedQty;
                         if (delta === 0) return <Typography variant="body2" color="text.disabled">—</Typography>;
                         return (
-                          <Chip
-                            label={delta > 0 ? `+${delta}` : `${delta}`}
-                            size="small"
-                            color={delta > 0 ? 'success' : 'error'}
-                            sx={{ fontSize: 11, fontWeight: 600 }}
-                          />
+                          <Chip label={delta > 0 ? `+${delta}` : `${delta}`} size="small"
+                            color={delta > 0 ? 'success' : 'error'} sx={{ fontSize: 11, fontWeight: 600 }} />
                         );
                       })()}
                     </TableCell>
@@ -565,14 +612,22 @@ export default function ListingManagement() {
                           inputProps={{ style: { textAlign: 'center', fontFamily: 'monospace', fontSize: 13, padding: '5px 6px' } }}
                         />
                       ) : row.mapping ? (
-                        <Typography variant="body2" fontWeight={500}>{row.mapping.currentQty}</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                          <Typography variant="body2" fontWeight={600}
+                            color={isOverListed ? 'error.main' : 'inherit'}>
+                            {row.mapping.currentQty}
+                          </Typography>
+                          {isOverListed && (
+                            <Typography variant="caption" color="error.main" fontWeight={600}>▲</Typography>
+                          )}
+                        </Box>
                       ) : (
                         <Typography variant="body2" color="text.disabled">—</Typography>
                       )}
                     </TableCell>
 
                     {/* TikTok Price — inline edit */}
-                    <TableCell align="center" sx={{ minWidth: 100 }}>
+                    <TableCell align="center" sx={{ minWidth: 90 }}>
                       {isEditing ? (
                         <TextField
                           size="small" type="number" value={editPrice}
@@ -591,20 +646,36 @@ export default function ListingManagement() {
                     {/* Status */}
                     <TableCell align="center">
                       {row.mapping ? (
-                        <Chip
-                          label={row.mapping.listingStatus || 'linked'}
-                          size="small"
-                          color={row.mapping.listingStatus === 'active' ? 'success' : 'default'}
-                          sx={{ fontSize: 11 }}
-                        />
+                        row.stockAlert ? (
+                          <Chip label="Alert" size="small" color="error" sx={{ fontSize: 11 }} />
+                        ) : row.mapping.lastSyncStatus === 'failed' ? (
+                          <Chip label="Failed" size="small" color="warning" sx={{ fontSize: 11 }} />
+                        ) : row.mapping.lastSyncStatus === 'ok' ? (
+                          <Chip label="Synced" size="small" color="success" sx={{ fontSize: 11 }} />
+                        ) : (
+                          <Chip label={row.mapping.listingStatus || 'linked'} size="small" sx={{ fontSize: 11 }} />
+                        )
                       ) : (
                         <Chip label="Not linked" size="small" variant="outlined" sx={{ fontSize: 11, color: 'text.disabled' }} />
                       )}
                     </TableCell>
 
+                    {/* Sync toggle — inline */}
+                    <TableCell align="center">
+                      <Tooltip title={row.syncEnabled ? 'Auto-sync on' : 'Auto-sync off'}>
+                        <Switch
+                          size="small"
+                          checked={row.syncEnabled}
+                          onChange={() => toggleSync(row)}
+                          disabled={row.isGenericAuction || !row.mapping}
+                          color="success"
+                        />
+                      </Tooltip>
+                    </TableCell>
+
                     {/* Actions */}
                     <TableCell align="center">
-                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center', alignItems: 'center' }}>
+                      <Box sx={{ display: 'flex', gap: 0.3, justifyContent: 'center', alignItems: 'center' }}>
                         {!row.mapping && (
                           <Tooltip title="Link to TikTok listing">
                             <IconButton size="small" onClick={() => openMapDialog(row)} color="primary" disabled={linkingRowId === row.id}>
@@ -651,8 +722,8 @@ export default function ListingManagement() {
               })}
             </TableBody>
           </Table>
-        </TableContainer>
-      )}
+        )}
+      </Paper>
 
       {/* Listing Settings Dialog */}
       <Dialog open={!!settingsRow} onClose={() => setSettingsRow(null)} maxWidth="xs" fullWidth>

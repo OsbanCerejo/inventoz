@@ -1286,16 +1286,15 @@ router.delete("/delete/:id", auth, checkPermission('products', 'delete'), async 
   try {
     const id = req.params.id;
 
-    const currentProduct = await Products.findOne({ where: { sku: id } });
+    const currentProduct = await Products.scope('all').findOne({ where: { sku: id } });
     if (!currentProduct) {
       return res.status(404).json({ error: "Product not found" });
     }
+    if (!currentProduct.isActive) {
+      return res.status(400).json({ error: "Product is already deactivated" });
+    }
 
-    const status = await Products.destroy({
-      where: {
-        sku: id,
-      },
-    });
+    await Products.update({ isActive: false }, { where: { sku: id } });
 
     try {
       await Logs.create({
@@ -1306,16 +1305,16 @@ router.delete("/delete/:id", auth, checkPermission('products', 'delete'), async 
         userId: req.user.id.toString(),
         changes: [],
         previousState: currentProduct.toJSON(),
-        newState: [],
+        newState: { isActive: false },
         metaData: {
-          message: "Product has been deleted",
+          message: "Product has been deactivated (soft delete)",
         }
       });
     } catch (logError) {
       console.error("Failed to create product delete log:", logError);
     }
 
-    res.json(status);
+    res.json({ success: true });
   } catch (error) {
     console.error("Error deleting product:", error);
     res.status(500).json({ error: "Failed to delete product" });
