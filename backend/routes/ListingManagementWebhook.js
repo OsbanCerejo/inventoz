@@ -7,25 +7,94 @@ const APP_SECRET = process.env.TIKTOK_APP_SECRET;
 
 // TikTok webhook signature: HMAC-SHA256(APP_SECRET, timestamp + nonce + body_string)
 function verifySignature(req) {
-  const signature = req.headers['x-tts-signature'] || req.headers['x-tiktok-signature'];
-  if (!signature) return false;
+  // ── FULL HEADER DUMP ──────────────────────────────────────────────────────
+  console.log('[LM Webhook SIG] ALL headers:', JSON.stringify(req.headers));
 
-  const timestamp = req.headers['x-tts-timestamp'] || req.headers['timestamp'] || '';
-  const nonce = req.headers['x-nonce'] || req.headers['nonce'] || '';
-  // Use raw body bytes so signature matches what TikTok signed
+  // Pick signature from whatever header TikTok sent
+  const sigHeader = Object.keys(req.headers).find(k =>
+    k === 'x-tts-signature' || k === 'x-tiktok-signature' ||
+    k.includes('signature') || k.includes('sign')
+  );
+  const signature = sigHeader ? req.headers[sigHeader] : undefined;
+  console.log('[LM Webhook SIG] signature header key:', sigHeader, '| value:', signature);
+  if (!signature) {
+    console.warn('[LM Webhook SIG] No signature header found — rejecting');
+    return false;
+  }
+
+  // Pick timestamp
+  const tsHeader = Object.keys(req.headers).find(k =>
+    k === 'x-tts-timestamp' || k === 'timestamp' || k.includes('timestamp')
+  );
+  const timestamp = tsHeader ? req.headers[tsHeader] : '';
+  console.log('[LM Webhook SIG] timestamp header key:', tsHeader, '| value:', timestamp);
+
+  // Pick nonce
+  const nonceHeader = Object.keys(req.headers).find(k =>
+    k === 'x-nonce' || k === 'nonce' || k.includes('nonce')
+  );
+  const nonce = nonceHeader ? req.headers[nonceHeader] : '';
+  console.log('[LM Webhook SIG] nonce header key:', nonceHeader, '| value:', nonce);
+
+  // Raw body info
+  const rawBodyPresent = !!req.rawBody;
   const bodyStr = req.rawBody || JSON.stringify(req.body);
+  console.log('[LM Webhook SIG] rawBody present:', rawBodyPresent, '| bodyStr length:', bodyStr.length);
+  console.log('[LM Webhook SIG] bodyStr snippet:', bodyStr.slice(0, 200));
 
-  // TikTok signs: timestamp + "\n" + nonce + "\n" + body + "\n"
-  const input = `${timestamp}\n${nonce}\n${bodyStr}\n`;
-  const expected = crypto.createHmac('sha256', APP_SECRET).update(input).digest('base64');
+  console.log('[LM Webhook SIG] APP_SECRET length:', APP_SECRET ? APP_SECRET.length : 'MISSING');
 
-  if (signature === expected) return true;
-  const expectedHex = crypto.createHmac('sha256', APP_SECRET).update(input).digest('hex');
-  if (signature === expectedHex) return true;
+  // ── ATTEMPT ALL KNOWN SIGNING FORMATS ────────────────────────────────────
 
-  // Fallback: body-only signing (older format)
-  const bodyOnly = crypto.createHmac('sha256', APP_SECRET).update(bodyStr).digest('hex');
-  return signature === bodyOnly;
+  // Format 1: timestamp\nnonce\nbody\n  → base64
+  const input1 = `${timestamp}\n${nonce}\n${bodyStr}\n`;
+  const h1b64 = crypto.createHmac('sha256', APP_SECRET).update(input1).digest('base64');
+  const h1hex = crypto.createHmac('sha256', APP_SECRET).update(input1).digest('hex');
+  console.log('[LM Webhook SIG] Format1 (ts\\nnonce\\nbody\\n) base64:', h1b64);
+  console.log('[LM Webhook SIG] Format1 (ts\\nnonce\\nbody\\n) hex:   ', h1hex);
+  if (signature === h1b64 || signature === h1hex) {
+    console.log('[LM Webhook SIG] MATCHED Format1');
+    return true;
+  }
+
+  // Format 2: body only → hex
+  const h2hex = crypto.createHmac('sha256', APP_SECRET).update(bodyStr).digest('hex');
+  console.log('[LM Webhook SIG] Format2 (body only) hex:', h2hex);
+  if (signature === h2hex) {
+    console.log('[LM Webhook SIG] MATCHED Format2');
+    return true;
+  }
+
+  // Format 3: timestamp + body (no nonce, no newlines) → hex
+  const input3 = `${timestamp}${bodyStr}`;
+  const h3hex = crypto.createHmac('sha256', APP_SECRET).update(input3).digest('hex');
+  console.log('[LM Webhook SIG] Format3 (ts+body) hex:', h3hex);
+  if (signature === h3hex) {
+    console.log('[LM Webhook SIG] MATCHED Format3');
+    return true;
+  }
+
+  // Format 4: nonce + timestamp + body (alternative order) → hex
+  const input4 = `${nonce}${timestamp}${bodyStr}`;
+  const h4hex = crypto.createHmac('sha256', APP_SECRET).update(input4).digest('hex');
+  console.log('[LM Webhook SIG] Format4 (nonce+ts+body) hex:', h4hex);
+  if (signature === h4hex) {
+    console.log('[LM Webhook SIG] MATCHED Format4');
+    return true;
+  }
+
+  // Format 5: timestamp\nnonce\nbody (no trailing newline) → hex / base64
+  const input5 = `${timestamp}\n${nonce}\n${bodyStr}`;
+  const h5hex = crypto.createHmac('sha256', APP_SECRET).update(input5).digest('hex');
+  const h5b64 = crypto.createHmac('sha256', APP_SECRET).update(input5).digest('base64');
+  console.log('[LM Webhook SIG] Format5 (ts\\nnonce\\nbody no trail) hex:', h5hex);
+  if (signature === h5hex || signature === h5b64) {
+    console.log('[LM Webhook SIG] MATCHED Format5');
+    return true;
+  }
+
+  console.warn('[LM Webhook SIG] NO FORMAT MATCHED — received signature:', signature);
+  return false;
 }
 
 // POST /listing-management/webhook/tiktok
@@ -35,8 +104,7 @@ router.post('/tiktok', async (req, res) => {
 
   try {
     if (APP_SECRET && !verifySignature(req)) {
-      console.warn('[LM Webhook] Invalid signature — all headers:', JSON.stringify(req.headers));
-      console.warn('[LM Webhook] Body:', JSON.stringify(req.body).slice(0, 300));
+      console.warn('[LM Webhook] Signature verification failed — see SIG logs above');
       return;
     }
 
