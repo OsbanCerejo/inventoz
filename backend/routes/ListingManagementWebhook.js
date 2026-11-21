@@ -93,6 +93,60 @@ function verifySignature(req) {
     return true;
   }
 
+  // Format 6: APP_SECRET decoded as hex bytes → raw binary key, body only
+  // TikTok app secrets are hex strings; HMAC key should be raw bytes, not ASCII
+  try {
+    const secretBytes = Buffer.from(APP_SECRET.trim(), 'hex');
+    const h6hex = crypto.createHmac('sha256', secretBytes).update(bodyStr).digest('hex');
+    console.log('[LM Webhook SIG] Format6 (hex-decoded key, body only) hex:', h6hex);
+    if (signature === h6hex) {
+      console.log('[LM Webhook SIG] MATCHED Format6 — secret should be used as decoded hex bytes');
+      return true;
+    }
+
+    // Format 7: hex-decoded key + Format1 input
+    const h7hex = crypto.createHmac('sha256', secretBytes).update(input1).digest('hex');
+    console.log('[LM Webhook SIG] Format7 (hex-decoded key, ts\\nnonce\\nbody\\n) hex:', h7hex);
+    if (signature === h7hex) {
+      console.log('[LM Webhook SIG] MATCHED Format7');
+      return true;
+    }
+  } catch (e) {
+    console.log('[LM Webhook SIG] Format6/7 skipped — APP_SECRET is not valid hex:', e.message);
+  }
+
+  // Format 8: trimmed APP_SECRET (in case of whitespace in env var), body only
+  const trimmedSecret = (APP_SECRET || '').trim();
+  if (trimmedSecret !== APP_SECRET) {
+    const h8hex = crypto.createHmac('sha256', trimmedSecret).update(bodyStr).digest('hex');
+    console.log('[LM Webhook SIG] Format8 (trimmed secret, body only) hex:', h8hex);
+    if (signature === h8hex) {
+      console.log('[LM Webhook SIG] MATCHED Format8 — APP_SECRET has whitespace!');
+      return true;
+    }
+  }
+
+  // Format 9: use timestamp from inside body JSON (TikTok may not send it as a header)
+  try {
+    const bodyTimestamp = String(req.body?.timestamp || '');
+    if (bodyTimestamp) {
+      const input9a = `${bodyTimestamp}\n${bodyStr}\n`;
+      const h9a = crypto.createHmac('sha256', APP_SECRET).update(input9a).digest('hex');
+      console.log('[LM Webhook SIG] Format9a (body.timestamp\\nbody\\n) hex:', h9a);
+      if (signature === h9a) { console.log('[LM Webhook SIG] MATCHED Format9a'); return true; }
+
+      const input9b = `${bodyTimestamp}${bodyStr}`;
+      const h9b = crypto.createHmac('sha256', APP_SECRET).update(input9b).digest('hex');
+      console.log('[LM Webhook SIG] Format9b (body.timestamp+body) hex:', h9b);
+      if (signature === h9b) { console.log('[LM Webhook SIG] MATCHED Format9b'); return true; }
+
+      const input9c = `${bodyTimestamp}\n\n${bodyStr}\n`;
+      const h9c = crypto.createHmac('sha256', APP_SECRET).update(input9c).digest('hex');
+      console.log('[LM Webhook SIG] Format9c (body.timestamp\\n\\nbody\\n) hex:', h9c);
+      if (signature === h9c) { console.log('[LM Webhook SIG] MATCHED Format9c'); return true; }
+    }
+  } catch (_) {}
+
   console.warn('[LM Webhook SIG] NO FORMAT MATCHED — received signature:', signature);
   return false;
 }
