@@ -4,8 +4,10 @@ const crypto = require('crypto');
 const { sequelize, Products, LmTiktokOrder, LmMarketplaceMapping, LmManagedSku, LmInventoryEvent, LmSyncJob } = require('../models');
 
 const APP_SECRET = process.env.TIKTOK_APP_SECRET;
+const APP_KEY = process.env.TIKTOK_APP_KEY;
 
-// TikTok webhook signature: HMAC-SHA256(APP_SECRET, timestamp + nonce + body_string)
+// TikTok webhook signature: HMAC-SHA256(key=APP_SECRET, msg=APP_KEY+raw_body) → lowercase hex
+// Source: TikTok Shop webhook configuration guide (Step 3)
 function verifySignature(req) {
   // ── FULL HEADER DUMP ──────────────────────────────────────────────────────
   console.log('[LM Webhook SIG] ALL headers:', JSON.stringify(req.headers));
@@ -62,6 +64,15 @@ function verifySignature(req) {
   console.log('[LM Webhook SIG] Format2 (body only) hex:', h2hex);
   if (signature === h2hex) {
     console.log('[LM Webhook SIG] MATCHED Format2');
+    return true;
+  }
+
+  // Format 2b: CORRECT per TikTok docs — HMAC-SHA256(APP_SECRET, APP_KEY + raw_body) → hex
+  const correctInput = (APP_KEY || '') + bodyStr;
+  const h2b = crypto.createHmac('sha256', APP_SECRET).update(correctInput).digest('hex');
+  console.log('[LM Webhook SIG] Format2b (APP_KEY+body, correct per docs) hex:', h2b);
+  if (signature === h2b) {
+    console.log('[LM Webhook SIG] MATCHED Format2b — THIS IS THE CORRECT FORMAT');
     return true;
   }
 
@@ -147,6 +158,38 @@ function verifySignature(req) {
     }
   } catch (_) {}
 
+  // Format 10: HMAC-SHA256 keyed with APP_KEY (not APP_SECRET), body only
+  if (APP_KEY) {
+    const h10 = crypto.createHmac('sha256', APP_KEY).update(bodyStr).digest('hex');
+    console.log('[LM Webhook SIG] Format10 (APP_KEY as key, body) hex:', h10);
+    if (signature === h10) { console.log('[LM Webhook SIG] MATCHED Format10 — KEY is APP_KEY not APP_SECRET'); return true; }
+
+    // Format 11: HMAC-SHA256 keyed with APP_KEY+APP_SECRET concatenation
+    const combinedKey = APP_KEY + APP_SECRET;
+    const h11 = crypto.createHmac('sha256', combinedKey).update(bodyStr).digest('hex');
+    console.log('[LM Webhook SIG] Format11 (APP_KEY+APP_SECRET, body) hex:', h11);
+    if (signature === h11) { console.log('[LM Webhook SIG] MATCHED Format11'); return true; }
+  }
+
+  // Format 12: plain SHA256 (no key) of APP_SECRET+body concatenation
+  const h12a = crypto.createHash('sha256').update(APP_SECRET + bodyStr).digest('hex');
+  console.log('[LM Webhook SIG] Format12a (SHA256 no-key, secret+body) hex:', h12a);
+  if (signature === h12a) { console.log('[LM Webhook SIG] MATCHED Format12a'); return true; }
+
+  const h12b = crypto.createHash('sha256').update(bodyStr + APP_SECRET).digest('hex');
+  console.log('[LM Webhook SIG] Format12b (SHA256 no-key, body+secret) hex:', h12b);
+  if (signature === h12b) { console.log('[LM Webhook SIG] MATCHED Format12b'); return true; }
+
+  // Format 13: aggressive whitespace strip of APP_SECRET (all unicode whitespace)
+  const strippedSecret = (APP_SECRET || '').replace(/\s/g, '');
+  if (strippedSecret !== APP_SECRET) {
+    const h13 = crypto.createHmac('sha256', strippedSecret).update(bodyStr).digest('hex');
+    console.log('[LM Webhook SIG] Format13 (whitespace-stripped secret, body) hex:', h13);
+    if (signature === h13) { console.log('[LM Webhook SIG] MATCHED Format13 — secret has hidden whitespace!'); return true; }
+  }
+
+  console.log('[LM Webhook SIG] APP_KEY value in use:', APP_KEY || 'MISSING', '| APP_SECRET length:', APP_SECRET ? APP_SECRET.length : 'MISSING');
+  console.log('[LM Webhook SIG] Full bodyStr for manual verification:', bodyStr);
   console.warn('[LM Webhook SIG] NO FORMAT MATCHED — received signature:', signature);
   return false;
 }
