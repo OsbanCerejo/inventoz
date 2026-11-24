@@ -4,7 +4,6 @@ const { Products, ProductDetails, WhatnotLog, WhatnotShow } = require('../models
 const { auth } = require('../middleware/auth');
 const { checkPermission } = require('../middleware/permissions');
 const { Op } = require('sequelize');
-const StockUpdateService = require('../Services/StockUpdateService');
 
 const MONTH_NAME_TO_INDEX = {
   january: 0,
@@ -108,157 +107,14 @@ router.post('/shows', auth, checkPermission('whatnot', 'create'), async (req, re
   }
 });
 
-// Helper function to determine search type
-const determineSearchType = async (barcode) => {
-  // First check if this barcode exists as a UPC
-  const upcProduct = await Products.findOne({
-    where: { upc: barcode }
+// Old Whatnot barcode scan (C-3, approved 2026-11-24): the page is no longer used, so the scan no longer changes stock.
+// It lowered stock by 1 per scan from an unlocked read and wrote the result as an absolute value, which could lose
+// concurrent deductions. Whatnot sales are handled by Whatnot fulfillment.
+router.post('/search-barcode', auth, checkPermission('whatnot', 'view'), (req, res) => {
+  res.status(410).json({
+    success: false,
+    message: 'The old Whatnot barcode scan has been turned off and no longer changes stock. Use Whatnot fulfillment.',
   });
-  
-  if (upcProduct) {
-    return 'UPC';
-  }
-
-  // Then check if it exists as a SKU
-  const skuProduct = await Products.findOne({
-    where: { sku: barcode }
-  });
-
-  return skuProduct ? 'SKU' : null;
-};
-
-// Search product by barcode
-router.post('/search-barcode', auth, checkPermission('whatnot', 'view'), async (req, res) => {
-  try {
-    const { barcode, reduceQuantity, isMultipleSelection, showId } = req.body;
-    if (!barcode) {
-      return res.status(400).json({ success: false, message: 'Barcode is required' });
-    }
-    if (!showId) {
-      return res.status(400).json({ success: false, message: 'Please select a show before scanning' });
-    }
-
-    const selectedShow = await WhatnotShow.findOne({
-      where: {
-        id: showId,
-        isActive: true
-      }
-    });
-
-    if (!selectedShow) {
-      return res.status(400).json({ success: false, message: 'Selected show is invalid or inactive' });
-    }
-
-    // Search for products with matching UPC or SKU
-    const products = await Products.findAll({
-      where: {
-        [Op.or]: [
-          { upc: barcode },
-          { sku: barcode }
-        ]
-      }
-    });
-
-    // Create initial log entry
-    const logEntry = await WhatnotLog.create({
-      barcode,
-      searchType: isMultipleSelection ? 'UPC' : await determineSearchType(barcode),
-      status: products.length === 0 ? 'not_found' : products.length === 1 ? 'found' : 'multiple_found',
-      sku: products.length > 0 ? products[0].sku : null,
-      userId: req.user.id.toString(),
-      whatnotShowId: selectedShow.id
-    });
-
-    if (products.length === 0) {
-      return res.json({ 
-        success: true,
-        found: false, 
-        message: 'No products found with this barcode' 
-      });
-    }
-
-    // If reduceQuantity is true, reduce the quantity for the product with matching SKU
-    if (reduceQuantity) {
-      const product = products.find(p => p.sku === barcode);
-      if (product) {
-        const previousQuantity = product.quantity;
-        const newQuantity = Math.max(-9999, previousQuantity - 1);
-        
-        try {
-          await StockUpdateService.updateProductQuantity(product.sku, newQuantity);
-          
-          // Get updated product details
-          const updatedProduct = await Products.findByPk(product.sku);
-          
-          // Update log with quantity changes
-          await logEntry.update({
-            previousQuantity,
-            newQuantity,
-            sku: product.sku
-          });
-          
-          return res.json({
-            success: true,
-            found: true,
-            product: updatedProduct
-          });
-        } catch (error) {
-          // Update log with error
-          await logEntry.update({
-            errors: error.message
-          });
-          
-          console.error('Error updating quantity:', error);
-          return res.status(500).json({ success: false, message: 'Error updating quantity' });
-        }
-      }
-    }
-
-    if (products.length === 1) {
-      const product = products[0];
-      const previousQuantity = product.quantity;
-      const newQuantity = Math.max(-9999, previousQuantity - 1);
-      
-      try {
-        await StockUpdateService.updateProductQuantity(product.sku, newQuantity);
-        
-        // Get updated product details
-        const updatedProduct = await Products.findByPk(product.sku);
-        
-        // Update log with quantity changes
-        await logEntry.update({
-          previousQuantity,
-          newQuantity,
-          sku: product.sku
-        });
-        
-        return res.json({
-          success: true,
-          found: true,
-          product: updatedProduct
-        });
-      } catch (error) {
-        // Update log with error
-        await logEntry.update({
-          errors: error.message
-        });
-        
-        console.error('Error updating quantity:', error);
-        return res.status(500).json({ success: false, message: 'Error updating quantity' });
-      }
-    }
-
-    // If multiple products found, return them all
-    return res.json({
-      success: true,
-      found: true,
-      multiple: true,
-      products: products
-    });
-  } catch (error) {
-    console.error('Error searching barcode:', error);
-    return res.status(500).json({ success: false, message: 'Error searching barcode' });
-  }
 });
 
 // Get Whatnot logs

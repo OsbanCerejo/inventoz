@@ -8,8 +8,13 @@ class StockUpdateService {
     try {
       const transaction = options.transaction;
       const lowStockAlerts = Array.isArray(options.lowStockAlerts) ? options.lowStockAlerts : null;
-      // Get the current product state
-      const currentProduct = await Products.findOne({ where: { sku }, transaction });
+      // Get the current product state. Inside a transaction the row is locked (C-5), so the history row and the
+      // low-stock check use the value this transaction overwrites, and concurrent writers wait instead of interleaving.
+      const currentProduct = await Products.findOne({
+        where: { sku },
+        transaction,
+        ...(transaction ? { lock: transaction.LOCK.UPDATE } : {}),
+      });
       
       if (!currentProduct) {
         throw new Error("Product not found");

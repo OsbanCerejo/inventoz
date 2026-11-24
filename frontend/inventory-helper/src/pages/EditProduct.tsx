@@ -340,24 +340,35 @@ function EditProduct() {
         walmartOneLifeLuxuries: data.walmart === "" ? 0 : Number(data.walmart),
       };
 
-      // Save fragrance notes if Fragrance category
-      if (data.category === 'Fragrance') {
-        const fn = fragranceNotesRef.current;
-        axios.put(getApiUrl(`fragrance-notes/product/${data.sku}`), {
-          top: fn.top.map(n => n.name),
-          middle: fn.middle.map(n => n.name),
-          base: fn.base.map(n => n.name),
-        }).catch(() => {});
-      }
+      // Stock (C-1): sent only when the user changed the Quantity field, together with the stock this form loaded.
+      // Inventoz refuses the save (409) if the stock changed meanwhile, so a stale form never undoes sales.
+      const { quantity: formQuantity, ...productFields } = data;
+      const productPayload =
+        formQuantity === formikInitialValues.quantity
+          ? productFields
+          : { ...productFields, quantity: formQuantity, expectedQuantity: productObject.quantity ?? "" };
 
+      // The product is saved first; product details, listings and fragrance notes only after it succeeded,
+      // so a refused save never leaves the other parts half-saved.
       axios
-        .all([
-          axios.put(getApiUrl('products'), data),
-          axios.put(getApiUrl('productDetails'), data),
-          axios.put(getApiUrl('listings'), listingsObject),
-        ])
+        .put(getApiUrl('products'), productPayload)
+        .then(async (productsRes) => {
+          if (data.category === 'Fragrance') {
+            const fn = fragranceNotesRef.current;
+            axios.put(getApiUrl(`fragrance-notes/product/${data.sku}`), {
+              top: fn.top.map(n => n.name),
+              middle: fn.middle.map(n => n.name),
+              base: fn.base.map(n => n.name),
+            }).catch(() => {});
+          }
+          const [productDetailsRes, listingsRes] = await Promise.all([
+            axios.put(getApiUrl('productDetails'), data),
+            axios.put(getApiUrl('listings'), listingsObject),
+          ]);
+          return [productsRes, productDetailsRes, listingsRes] as const;
+        })
         .then(
-          axios.spread((productsRes, productDetailsRes, listingsRes) => {
+          ([productsRes, productDetailsRes, listingsRes]) => {
             // console.log("Product Updated to: ", productsRes);
             // console.log("Product Details Updated to: ", productDetailsRes);
             
@@ -426,15 +437,23 @@ function EditProduct() {
             navigate(`/products/${data.sku}`, {
               replace: true,
               state: {
-                updatedProduct: productsRes.data, 
+                updatedProduct: productsRes.data,
                 updatedDetails: productDetailsRes.data,
                 updatedListings: listingsRes.data,
               },
             });
-          })
+          }
         )
         .catch((error) => {
           console.error("There was an error updating the product: ", error);
+          const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+          const message = axios.isAxiosError(error) ? error.response?.data?.message : undefined;
+          toast.error(
+            status === 409 || status === 428
+              ? message || "The stock changed while this page was open. Nothing was saved. Reload the page and try again."
+              : "Saving the product failed. Please try again.",
+            { position: "top-right", autoClose: false }
+          );
         });
     },
   });

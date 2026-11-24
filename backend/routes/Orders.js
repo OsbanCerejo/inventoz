@@ -224,6 +224,15 @@ const buildDeductionMaps = (processedItems) => {
   return { skuTotals, skuStoreTotals };
 };
 
+/**
+ * Resolves each requested SKU (or alternative SKU) to its product and computes the new quantities.
+ *
+ * Inside the approve transaction (C-2) the product rows are locked FOR UPDATE, all in one statement ordered by SKU (the
+ * same order every other locking writer uses), and the quantities are computed from the locked values, so a deduction
+ * committed meanwhile by another writer (Listing Management, live close-shipment, receiving) is never overwritten.
+ * Two requested SKUs that resolve to the same product (SKU and alternative SKU in one batch) are deducted cumulatively.
+ * The preview (no transaction) reads without locks, as before.
+ */
 const resolveProductsForSkus = async (skuTotals, options = {}) => {
   const transaction = options.transaction;
   const skuCache = new Map();
@@ -237,22 +246,42 @@ const resolveProductsForSkus = async (skuTotals, options = {}) => {
     return product || null;
   };
 
+  const requestedSkus = [...skuTotals.keys()].sort();
+  const resolved = new Map();
+  for (const requestedSku of requestedSkus) resolved.set(requestedSku, await resolveProduct(requestedSku));
+
+  // Current quantity per product: the locked row inside the transaction, otherwise the plain read.
+  const current = new Map();
+  for (const product of resolved.values()) if (product) current.set(product.sku, toNumber(product.quantity, 0));
+  if (transaction && current.size > 0) {
+    const locked = await Products.findAll({
+      where: { sku: [...current.keys()] },
+      order: [["sku", "ASC"]],
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    for (const row of locked) current.set(row.sku, toNumber(row.quantity, 0));
+  }
+
   const productUpdates = [];
   const missingSkus = [];
-  for (const [requestedSku, qtySold] of skuTotals.entries()) {
-    const product = await resolveProduct(requestedSku);
+  for (const requestedSku of requestedSkus) {
+    const product = resolved.get(requestedSku);
     if (!product) {
       missingSkus.push(requestedSku);
       continue;
     }
 
-    const currentQuantity = toNumber(product.quantity, 0);
+    const qtySold = skuTotals.get(requestedSku);
+    const currentQuantity = current.get(product.sku);
+    const newQuantity = currentQuantity - qtySold;
+    current.set(product.sku, newQuantity);
     productUpdates.push({
       sku: product.sku,
       requestedSku,
       quantitySold: qtySold,
       currentQuantity,
-      newQuantity: currentQuantity - qtySold,
+      newQuantity,
     });
   }
 

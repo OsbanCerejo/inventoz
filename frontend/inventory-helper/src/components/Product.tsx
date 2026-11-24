@@ -33,6 +33,18 @@ import { invalidateProductsCache } from "../utils/productCache";
 
 const HBA_CONDITION_OPTIONS = ["Unboxed", "Sealed", "Damaged", "Old Batch"];
 
+/**
+ * The product-page switches (HBA, Track Quantity, Refill Checklist) save the whole product but never its stock (C-1):
+ * the page may have loaded the stock minutes ago, and sending it back would undo sales deducted since then.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const withoutStock = (product: any) => {
+  const rest = { ...(product ?? {}) };
+  delete rest.quantity;
+  delete rest.expectedQuantity;
+  return rest;
+};
+
 // ── Shared panel styles ──────────────────────────────────────────────────────
 
 const panelSx = {
@@ -414,7 +426,7 @@ function Product() {
     setSavingHba(true);
     try {
       const payload = {
-        ...productObject,
+        ...withoutStock(productObject),
         hbaEnabled,
         hbaQuantity: hbaEnabled ? hbaQuantity : "",
         hbaPrice: hbaEnabled ? hbaPrice : "",
@@ -442,7 +454,7 @@ function Product() {
     setSavingTrackQty(true);
     try {
       const payload = {
-        ...productObject,
+        ...withoutStock(productObject),
         trackQuantity: trackQuantityEnabled,
         minimumQuantity: trackQuantityEnabled ? (minimumQuantity === "" ? null : Number(minimumQuantity)) : null,
       };
@@ -465,7 +477,7 @@ function Product() {
     setRefillChecklistEnabled(val);
     try {
       const { data: updatedProduct } = await axios.put(getApiUrl("products"), {
-        ...productObject,
+        ...withoutStock(productObject),
         refillChecklist: val,
       });
       setProductObject(updatedProduct);
@@ -504,7 +516,7 @@ function Product() {
       // Toggling off — save immediately so the HBA catalog reflects the change
       setSavingHba(true);
       try {
-        const payload = { ...productObject, hbaEnabled: false };
+        const payload = { ...withoutStock(productObject), hbaEnabled: false };
         const { data: updatedProduct } = await axios.put(getApiUrl("products"), payload);
         setProductObject(updatedProduct);
         invalidateProductsCache();

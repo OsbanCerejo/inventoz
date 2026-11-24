@@ -1061,6 +1061,35 @@ router.post("/", auth, checkPermission('products', 'create'), async (req, res) =
   }
 });
 
+// Product edit with a stock precondition (C-1, approved 2026-11-24). The product row is locked for the whole save, and
+// stock is written only when the user really changed it, never from a page that went stale:
+// - a request without `quantity` (the product-page switches) never writes stock;
+// - `expectedQuantity` is the stock the edit form loaded. Unchanged by the user → stock is not written, even if it
+//   changed meanwhile. Changed by the user while stock also changed meanwhile → 409 QUANTITY_CHANGED, nothing saved;
+// - an older page that sends `quantity` without `expectedQuantity`, with a value different from the current stock,
+//   gets 428 QUANTITY_PRECONDITION_REQUIRED (nothing saved; logged). PRODUCT_QTY_PRECONDITION=observe is an
+//   emergency switch that writes it as before and logs it instead.
+const productQtyPreconditionMode = () => (process.env.PRODUCT_QTY_PRECONDITION === "observe" ? "observe" : "enforce");
+const quantityText = (value) => (value === null || value === undefined ? "" : String(value).trim());
+// Stock is stored as text: "10", 10 and " 10" are the same quantity; a blank is only equal to a blank.
+const sameQuantity = (a, b) => {
+  const x = quantityText(a);
+  const y = quantityText(b);
+  if (x === y) return true;
+  if (x === "" || y === "") return false;
+  const nx = Number(x);
+  const ny = Number(y);
+  return Number.isFinite(nx) && Number.isFinite(ny) && nx === ny;
+};
+
+class ProductEditRefused extends Error {
+  constructor(status, body) {
+    super(body.error);
+    this.status = status;
+    this.body = body;
+  }
+}
+
 router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
   const product = req.body;
   // console.log("Edited Product Value in Server : ", product);
@@ -1072,127 +1101,203 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
     const parsed = Number(value);
     return Number.isNaN(parsed) ? null : parsed;
   };
-  
+  const sent = (key) => Object.prototype.hasOwnProperty.call(product, key) && product[key] !== undefined;
+  const lowStockAlerts = [];
+
+  let outcome;
   try {
-    // Get the current product state
-    const currentProduct = await Products.findOne({ where: { sku: product.sku } });
-    
-    if (!currentProduct) {
-      return res.status(404).json({ error: "Product not found" });
-    }
+    outcome = await sequelize.transaction(async (transaction) => {
+      // Get the current product state, locked until the save commits
+      const currentProduct = await Products.findOne({
+        where: { sku: product.sku },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
 
-    const requestedHbaEnabled =
-      product.hbaEnabled !== undefined
-        ? Boolean(product.hbaEnabled)
-        : currentProduct.hbaEnabled;
-    const requestedHbaQuantity =
-      product.hbaQuantity !== undefined
-        ? normalizeNullableInteger(product.hbaQuantity)
-        : currentProduct.hbaQuantity;
-    const requestedHbaPrice =
-      product.hbaPrice !== undefined
-        ? normalizeNullableDecimal(product.hbaPrice)
-        : currentProduct.hbaPrice;
-    const requestedHbaMoq =
-      product.hbaMoq !== undefined
-        ? normalizePositiveInteger(product.hbaMoq)
-        : normalizePositiveInteger(currentProduct.hbaMoq);
-    const requestedHbaStepCount =
-      product.hbaStepCount !== undefined
-        ? normalizePositiveInteger(product.hbaStepCount)
-        : normalizePositiveInteger(currentProduct.hbaStepCount);
-    const requestedHbaCondition =
-      product.hbaCondition !== undefined
-        ? normalizeHbaCondition(product.hbaCondition)
-        : currentProduct.hbaCondition;
-    const requestedHbaNewArrival =
-      product.hbaNewArrival !== undefined
-        ? Boolean(product.hbaNewArrival)
-        : currentProduct.hbaNewArrival;
-
-    const requestedHbaChange =
-      requestedHbaEnabled !== currentProduct.hbaEnabled ||
-      requestedHbaQuantity !== currentProduct.hbaQuantity ||
-      requestedHbaPrice !== currentProduct.hbaPrice ||
-      requestedHbaMoq !== normalizePositiveInteger(currentProduct.hbaMoq) ||
-      requestedHbaStepCount !== normalizePositiveInteger(currentProduct.hbaStepCount) ||
-      requestedHbaCondition !== currentProduct.hbaCondition ||
-      requestedHbaNewArrival !== currentProduct.hbaNewArrival;
-
-    if (requestedHbaChange) {
-      const canEditHbaListing = await PermissionService.hasResourceAction(
-        req.user,
-        "hbaListing",
-        "edit"
-      );
-
-      if (!canEditHbaListing) {
-        return res.status(403).json({
-          error: "Access denied. You do not have permission to edit HBA listing settings.",
-        });
+      if (!currentProduct) {
+        throw new ProductEditRefused(404, { error: "Product not found" });
       }
-    }
 
-    // Store the previous state
-    const previousState = currentProduct.toJSON();
+      const requestedHbaEnabled =
+        product.hbaEnabled !== undefined
+          ? Boolean(product.hbaEnabled)
+          : currentProduct.hbaEnabled;
+      const requestedHbaQuantity =
+        product.hbaQuantity !== undefined
+          ? normalizeNullableInteger(product.hbaQuantity)
+          : currentProduct.hbaQuantity;
+      const requestedHbaPrice =
+        product.hbaPrice !== undefined
+          ? normalizeNullableDecimal(product.hbaPrice)
+          : currentProduct.hbaPrice;
+      const requestedHbaMoq =
+        product.hbaMoq !== undefined
+          ? normalizePositiveInteger(product.hbaMoq)
+          : normalizePositiveInteger(currentProduct.hbaMoq);
+      const requestedHbaStepCount =
+        product.hbaStepCount !== undefined
+          ? normalizePositiveInteger(product.hbaStepCount)
+          : normalizePositiveInteger(currentProduct.hbaStepCount);
+      const requestedHbaCondition =
+        product.hbaCondition !== undefined
+          ? normalizeHbaCondition(product.hbaCondition)
+          : currentProduct.hbaCondition;
+      const requestedHbaNewArrival =
+        product.hbaNewArrival !== undefined
+          ? Boolean(product.hbaNewArrival)
+          : currentProduct.hbaNewArrival;
 
-    // Update the product
-    await Products.update(
-      {
-        brand: product.brand,
-        itemName: product.itemName,
-        location: product.location,
-        sizeOz: product.sizeOz,
-        sizeMl: product.sizeMl,
-        strength: product.strength,
-        shade: product.shade,
-        formulation: product.formulation,
-        category: product.category,
-        type: product.type,
-        upc: product.upc,
-        warehouseLocations: product.warehouseLocations,
-        batch: product.batch,
-        condition: product.condition,
-        verified: product.verified,
-        listed: product.listed,
-        final: product.final,
-        image: product.image,
-        alternativeSku: product.alternativeSku,
-        retailPrice: product.retailPrice !== undefined && product.retailPrice !== '' ? Number(product.retailPrice) : null,
-        trackQuantity: product.trackQuantity !== undefined ? product.trackQuantity : currentProduct.trackQuantity,
-        refillChecklist: product.refillChecklist !== undefined ? product.refillChecklist : currentProduct.refillChecklist,
-        minimumQuantity:
-          product.minimumQuantity !== undefined
-            ? normalizeMinimumQuantity(product.minimumQuantity)
-            : currentProduct.minimumQuantity,
-        hbaEnabled: requestedHbaEnabled,
-        hbaQuantity: requestedHbaQuantity,
-        hbaPrice: requestedHbaPrice,
-        hbaMoq: requestedHbaMoq,
-        hbaStepCount: requestedHbaStepCount,
-        hbaCondition: requestedHbaCondition,
-        hbaNewArrival: requestedHbaNewArrival,
-      },
-      { where: { sku: product.sku } }
-    );
+      const requestedHbaChange =
+        requestedHbaEnabled !== currentProduct.hbaEnabled ||
+        requestedHbaQuantity !== currentProduct.hbaQuantity ||
+        requestedHbaPrice !== currentProduct.hbaPrice ||
+        requestedHbaMoq !== normalizePositiveInteger(currentProduct.hbaMoq) ||
+        requestedHbaStepCount !== normalizePositiveInteger(currentProduct.hbaStepCount) ||
+        requestedHbaCondition !== currentProduct.hbaCondition ||
+        requestedHbaNewArrival !== currentProduct.hbaNewArrival;
 
-    // Get the updated quantity (use new quantity if provided, otherwise keep current)
-    const updatedQuantity = product.quantity !== undefined ? product.quantity : currentProduct.quantity;
+      if (requestedHbaChange) {
+        const canEditHbaListing = await PermissionService.hasResourceAction(
+          req.user,
+          "hbaListing",
+          "edit"
+        );
 
-    // If a quantity is being updated, use the StockUpdateService
-    if (currentProduct.quantity !== product.quantity || product.verified !== currentProduct.verified) {
-      await StockUpdateService.updateProductQuantity(
-          product.sku,
-          updatedQuantity
+        if (!canEditHbaListing) {
+          throw new ProductEditRefused(403, {
+            error: "Access denied. You do not have permission to edit HBA listing settings.",
+          });
+        }
+      }
+
+      // Decide about stock before anything is written, so a refusal saves nothing.
+      let writeQuantity = null; // null = stock is not written
+      let legacyClientWrite = false;
+      if (sent("quantity")) {
+        if (sent("expectedQuantity") && product.expectedQuantity !== null) {
+          if (!sameQuantity(product.quantity, product.expectedQuantity)) {
+            if (!sameQuantity(currentProduct.quantity, product.expectedQuantity)) {
+              throw new ProductEditRefused(409, {
+                error: "QUANTITY_CHANGED",
+                message: `The stock of ${product.sku} changed to ${quantityText(currentProduct.quantity)} while this page was open. Nothing was saved. Reload the page and enter the quantity again.`,
+                currentQuantity: currentProduct.quantity,
+              });
+            }
+            writeQuantity = product.quantity;
+          }
+        } else if (!sameQuantity(product.quantity, currentProduct.quantity)) {
+          if (productQtyPreconditionMode() === "enforce") {
+            throw new ProductEditRefused(428, {
+              error: "QUANTITY_PRECONDITION_REQUIRED",
+              message: "This page is out of date. Reload and re-enter the quantity.",
+              currentQuantity: currentProduct.quantity,
+              requestedQuantity: product.quantity,
+            });
+          }
+          legacyClientWrite = true;
+          writeQuantity = product.quantity;
+        }
+      }
+
+      // Store the previous state
+      const previousState = currentProduct.toJSON();
+
+      // Update the product
+      await Products.update(
+        {
+          brand: product.brand,
+          itemName: product.itemName,
+          location: product.location,
+          sizeOz: product.sizeOz,
+          sizeMl: product.sizeMl,
+          strength: product.strength,
+          shade: product.shade,
+          formulation: product.formulation,
+          category: product.category,
+          type: product.type,
+          upc: product.upc,
+          warehouseLocations: product.warehouseLocations,
+          batch: product.batch,
+          condition: product.condition,
+          verified: product.verified,
+          listed: product.listed,
+          final: product.final,
+          image: product.image,
+          alternativeSku: product.alternativeSku,
+          retailPrice: product.retailPrice !== undefined && product.retailPrice !== '' ? Number(product.retailPrice) : null,
+          trackQuantity: product.trackQuantity !== undefined ? product.trackQuantity : currentProduct.trackQuantity,
+          refillChecklist: product.refillChecklist !== undefined ? product.refillChecklist : currentProduct.refillChecklist,
+          minimumQuantity:
+            product.minimumQuantity !== undefined
+              ? normalizeMinimumQuantity(product.minimumQuantity)
+              : currentProduct.minimumQuantity,
+          hbaEnabled: requestedHbaEnabled,
+          hbaQuantity: requestedHbaQuantity,
+          hbaPrice: requestedHbaPrice,
+          hbaMoq: requestedHbaMoq,
+          hbaStepCount: requestedHbaStepCount,
+          hbaCondition: requestedHbaCondition,
+          hbaNewArrival: requestedHbaNewArrival,
+        },
+        { where: { sku: product.sku }, transaction }
       );
+
+      if (writeQuantity !== null) {
+        await StockUpdateService.updateProductQuantity(product.sku, writeQuantity, { transaction, lowStockAlerts });
+      } else if (product.verified !== undefined && Boolean(product.verified) !== Boolean(currentProduct.verified)) {
+        // The verification switch keeps its stock-history behaviour, with the CURRENT locked stock (never the page's).
+        await StockUpdateService.updateProductQuantity(product.sku, currentProduct.quantity, { transaction, lowStockAlerts });
+      }
+
+      return { currentProduct, previousState, writeQuantity, legacyClientWrite };
+    });
+  } catch (error) {
+    if (error instanceof ProductEditRefused) {
+      if (error.status === 428) {
+        // Logged outside the rolled-back transaction, so an admin can follow up (an old edit page shows no message).
+        try {
+          await Logs.create({
+            type: "Product",
+            action: "quantity_precondition_required",
+            entityType: "product",
+            entityId: product.sku,
+            userId: req.user.id.toString(),
+            changes: [],
+            metaData: {
+              message: "Stock save refused: the page was out of date (no expected quantity sent)",
+              requestedQuantity: error.body.requestedQuantity,
+              currentQuantity: error.body.currentQuantity,
+            },
+          });
+        } catch (logError) {
+          console.error("Failed to log a refused product save:", logError);
+        }
+      }
+      return res.status(error.status).json(error.body);
     }
+    console.error("Error updating product:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+
+  try {
+    const { currentProduct, previousState, writeQuantity, legacyClientWrite } = outcome;
+    const LowStockAlertService = require("../Services/LowStockAlertService");
+
+    // Low-stock alerts found while writing stock are sent only after the save committed.
+    for (const alertProduct of lowStockAlerts) {
+      LowStockAlertService.sendEmailAlert(alertProduct).catch(err => {
+        console.error('Failed to send low stock alert email:', err);
+      });
+    }
+
+    // Get the updated product data (its quantity is the stock after this save, whoever wrote it last)
+    const updatedProduct = await Products.findOne({ where: { sku: product.sku } });
+    const updatedQuantity = updatedProduct ? updatedProduct.quantity : currentProduct.quantity;
 
     // If trackQuantity or minimumQuantity changed, handle tracking status
     // This handles: tracking turned on/off, minimum quantity changed
-    if (currentProduct.trackQuantity !== product.trackQuantity || 
+    if (currentProduct.trackQuantity !== product.trackQuantity ||
         currentProduct.minimumQuantity !== product.minimumQuantity) {
-      const LowStockAlertService = require("../Services/LowStockAlertService");
-      
       // If tracking was just turned ON (from OFF), reset the alert flag first
       // This ensures we can send an alert if stock is currently low
       if (!currentProduct.trackQuantity && product.trackQuantity) {
@@ -1200,10 +1305,10 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
           { lowStockAlertSent: false },
           { where: { sku: product.sku } }
         );
-        
+
         // Check if stock is currently low and send alert if needed
         const lowStockCheck = await LowStockAlertService.checkAndHandleLowStock(product.sku, updatedQuantity);
-        
+
         // Send email if needed
         if (lowStockCheck.shouldAlert) {
           const EmailService = require("../Services/EmailService");
@@ -1214,13 +1319,13 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
             });
           }
         }
-      } 
+      }
       // If tracking was turned OFF, the checkAndHandleLowStock will reset the flag
       // But we should also check if tracking is still ON and quantity/minimum changed
       else if (product.trackQuantity) {
         // Tracking is still ON, check low stock status with current quantity
         const lowStockCheck = await LowStockAlertService.checkAndHandleLowStock(product.sku, updatedQuantity);
-        
+
         // Send email if needed
         if (lowStockCheck.shouldAlert) {
           const EmailService = require("../Services/EmailService");
@@ -1236,12 +1341,10 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
       // No need to do anything else here
     }
 
-    // Get the updated product data
-    const updatedProduct = await Products.findOne({ where: { sku: product.sku } });
-    
-    // Calculate changes
+    // Calculate changes (expectedQuantity is part of the request contract, not a product field)
     const changes = [];
     Object.keys(product).forEach(key => {
+      if (key === "expectedQuantity") return;
       if (JSON.stringify(previousState[key]) !== JSON.stringify(product[key])) {
         changes.push({
           field: key,
@@ -1267,10 +1370,26 @@ router.put("/", auth, checkPermission('products', 'edit'), async (req, res) => {
         newState: updatedProduct.toJSON(),
         metaData: {
           message: "Product updated",
-          quantityChanged: currentProduct.quantity !== product.quantity,
-          verificationChanged: currentProduct.verified !== product.verified
+          quantityChanged: writeQuantity !== null,
+          verificationChanged: product.verified !== undefined && Boolean(product.verified) !== Boolean(currentProduct.verified),
+          ...(legacyClientWrite ? { legacyClientQuantityWrite: true } : {}),
         }
       });
+      if (legacyClientWrite) {
+        await Logs.create({
+          type: "Product",
+          action: "legacy_client_quantity_write",
+          entityType: "product",
+          entityId: product.sku,
+          userId: req.user.id.toString(),
+          changes: [],
+          metaData: {
+            message: "Stock written from a page that sent no expected quantity (observe mode)",
+            previousQuantity: currentProduct.quantity,
+            newQuantity: writeQuantity,
+          },
+        });
+      }
     } catch (logError) {
       console.error("Failed to create product update log:", logError);
     }
@@ -1337,53 +1456,13 @@ router.get("/findAndCount/:skuPrefix", auth, checkPermission('products', 'view')
   res.json(count + 1);
 });
 
-router.post("/updateQuantities", auth, checkPermission('products', 'edit'), async (req, res) => {
-  const skusToUpdate = req.body;
-
-  try {
-    const skipped = [];
-    const updates = await Promise.all(skusToUpdate.map(async (skuUpdate) => {
-      let product = await Products.findOne({ where: { sku: skuUpdate.sku } });
-
-      if (!product) {
-        product = await Products.findOne({ where: { alternativeSku: skuUpdate.sku } });
-        if (product) {
-          return {
-            sku: product.sku,
-            newQuantity: product.quantity - skuUpdate.quantitySold,
-            originalRequestedSku: skuUpdate.sku
-          };
-        }
-      }
-      
-      if (!product) {
-        skipped.push(skuUpdate.sku);
-        return null; // skip this one
-      }
-      
-      return {
-        sku: skuUpdate.sku,
-        newQuantity: product.quantity - skuUpdate.quantitySold
-      };
-    }));
-
-    // Filter out nulls (skipped)
-    const validUpdates = updates.filter(Boolean);
-    const result = await StockUpdateService.updateMultipleProductQuantities(validUpdates);
-
-    res.json({
-      success: true,
-      message: "Quantities updated successfully",
-      result,
-      skipped,
-    });
-  } catch (error) {
-    console.error("Error updating quantities:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
+// Retired (C-4, approved 2026-11-24): no Inventoz screen called it, and it computed "quantity − sold" from unlocked
+// reads and wrote absolute values, which could overwrite concurrent stock changes. Use the Orders page approval instead.
+router.post("/updateQuantities", auth, checkPermission('products', 'edit'), (req, res) => {
+  res.status(410).json({
+    success: false,
+    error: "This endpoint has been retired. Stock is deducted through the Orders page approval.",
+  });
 });
 
 // Get low stock products (admin only)

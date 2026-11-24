@@ -259,8 +259,9 @@ const Whatnot: React.FC = () => {
           playInterventionSound();
         }
       }
-    } catch {
-      setError('Error searching product');
+    } catch (error) {
+      const message = axios.isAxiosError(error) ? error.response?.data?.message : undefined;
+      setError(message || 'Error searching product');
     } finally {
       setBarcode('');
       if (barcodeInputRef.current) {
@@ -315,7 +316,8 @@ const Whatnot: React.FC = () => {
       }
     } catch (error) {
       console.error('Error updating product:', error);
-      setError('Error updating product quantity');
+      const message = axios.isAxiosError(error) ? error.response?.data?.message : undefined;
+      setError(message || 'Error updating product quantity');
       setSearchResult(prev => prev ? { ...prev } : null);
     } finally {
       setLoading(false);
