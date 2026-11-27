@@ -138,15 +138,6 @@ app.use("/tiktok", tiktokRouter);
 const tiktokFulfillmentRouter = require("./routes/tiktokFulfillment");
 app.use("/tiktok/fulfillment", tiktokFulfillmentRouter);
 
-const walmartIntegrationRouter = require("./routes/WalmartIntegration");
-app.use("/walmart-integration", walmartIntegrationRouter);
-
-const walmartOrdersRouter = require("./routes/WalmartOrders");
-app.use("/walmart-orders", walmartOrdersRouter);
-
-const walmartProductsRouter = require("./routes/WalmartProducts");
-app.use("/walmart-products", walmartProductsRouter);
-
 const priceListRouter = require("./routes/priceList");
 app.use("/api/price-list", priceListRouter);
 

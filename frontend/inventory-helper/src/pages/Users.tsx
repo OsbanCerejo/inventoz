@@ -191,17 +191,6 @@ const MODULE_CONFIG: Record<string, ModuleConfig> = {
       delete: { label: 'Delete', description: 'Delete TikTok fulfillment records' },
     },
   },
-  walmart: {
-    label: 'Walmart',
-    resources: ['walmartIntegration', 'walmartOrders'],
-    menuLabel: 'Show Walmart in menu',
-    actions: {
-      view:   { label: 'View',   description: 'View Walmart integration, catalog, and orders' },
-      create: { label: 'Create', description: 'Create Walmart records' },
-      edit:   { label: 'Edit',   description: 'Update Walmart records' },
-      delete: { label: 'Delete', description: 'Delete Walmart records' },
-    },
-  },
   hba: {
     label: 'HBA',
     resources: ['hbaOrders', 'hbaListing', 'hbaAnalytics'],
@@ -309,7 +298,6 @@ for (const [moduleKey, config] of Object.entries(MODULE_CONFIG)) {
 // whatnotAnalytics is NOT here — it has its own menu toggle inside the Whatnot sub-section.
 const MERGED_MENU_KEYS = new Set<string>([
   'whatnotFulfillment',  // shown under 'whatnot' module (merged with main)
-  'walmartOrders',       // shown under 'walmart' module
   'hbaAnalytics',        // shown under 'hba' module
 ]);
 

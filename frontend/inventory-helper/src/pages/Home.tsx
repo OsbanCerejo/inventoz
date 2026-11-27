@@ -15,7 +15,6 @@ import {
   WarningAmber as LowStockIcon,
   PointOfSale as SalesIcon,
   ReceiptLong as InvoiceTrackerIcon,
-  Storefront as WalmartIcon,
   BrandingWatermark as BrandsIcon,
   QrCodeScanner as PriceScannerIcon,
   AssignmentTurnedIn as HbaOrdersIcon,
@@ -158,27 +157,6 @@ function Home() {
       icon: <BrandsIcon sx={{ fontSize: 40, color: '#283593' }} />,
       path: "/brands",
       color: "#e8eaf6"
-    },
-    walmartIntegration: {
-      title: "Walmart Integration",
-      description: "Monitor Walmart connection health and sync items, orders, inventory, and pricing",
-      icon: <WalmartIcon sx={{ fontSize: 40, color: '#2e7d32' }} />,
-      path: "/walmart-integration",
-      color: "#e8f5e9"
-    },
-    walmartProductCatalog: {
-      title: "Walmart Product Catalog",
-      description: "Browse synced Walmart SKUs, mapping status, price, and inventory",
-      icon: <WalmartIcon sx={{ fontSize: 40, color: '#1565c0' }} />,
-      path: "/walmart-product-catalog",
-      color: "#e8f1ff"
-    },
-    walmartOrders: {
-      title: "Walmart Orders",
-      description: "Review read-only Walmart orders pulled into Inventoz",
-      icon: <WalmartIcon sx={{ fontSize: 40, color: '#1565c0' }} />,
-      path: "/walmart-orders",
-      color: "#e8f1ff"
     }
   };
 
@@ -191,9 +169,6 @@ function Home() {
     "packingAnalytics",
     "whatnotAnalytics",
     "sortingAnalytics",
-    "walmartProductCatalog",
-    "walmartIntegration",
-    "walmartOrders",
     "whatnotFulfillment",
     "pricelist",
     "priceScanner",

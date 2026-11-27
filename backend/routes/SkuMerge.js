@@ -5,7 +5,6 @@ const { sequelize, Products, ProductDetails, Sales, MarketplaceSale, SkuSalesSum
   ProductVendorPrice, EbayOrders, WhatnotLog, StockUpdateHistory,
   HbaOrderItem, HbaTrackingEvent, SalesOrderItem,
   Listings, ProductFragranceNote, TikTokShipmentScan, WhatnotShipmentScan,
-  WalmartProductMapping,
 } = require('../models');
 const { auth } = require('../middleware/auth');
 const { QueryTypes } = require('sequelize');
@@ -24,7 +23,7 @@ async function buildCounts(sku) {
     invoiceInboundRows, invoiceItems, invoiceShipmentItems,
     vendorPrices, ebayOrders, whatnotLogs, stockHistory,
     hbaOrderItems, hbaTrackingEvents, salesOrderItems,
-    listings, fragranceNotes, tiktokScans, whatnotScans, walmartMappings,
+    listings, fragranceNotes, tiktokScans, whatnotScans,
     productDetails,
   ] = await Promise.all([
     q(Sales, 'sku'), q(MarketplaceSale, 'sku'), q(SkuSalesSummary, 'sku'), q(Inbound, 'sku'),
@@ -32,7 +31,7 @@ async function buildCounts(sku) {
     q(ProductVendorPrice, 'sku'), q(EbayOrders, 'sku'), q(WhatnotLog, 'sku'), q(StockUpdateHistory, 'sku'),
     q(HbaOrderItem, 'sku'), q(HbaTrackingEvent, 'sku'), q(SalesOrderItem, 'sku'),
     q(Listings, 'sku'), q(ProductFragranceNote, 'productSku'), q(TikTokShipmentScan, 'productSku'),
-    q(WhatnotShipmentScan, 'productSku'), q(WalmartProductMapping, 'localSku'),
+    q(WhatnotShipmentScan, 'productSku'),
     q(ProductDetails, 'sku'),
   ]);
 
@@ -55,7 +54,6 @@ async function buildCounts(sku) {
     'Fragrance Notes': fragranceNotes,
     'TikTok Scans': tiktokScans,
     'Whatnot Scans': whatnotScans,
-    'Walmart Mappings': walmartMappings,
     'Product Details': productDetails,
   };
 }
@@ -122,7 +120,6 @@ router.post('/', auth, adminOnly, async (req, res) => {
       moved['Sales Order Items'] = (await up(SalesOrderItem, 'sku'))[0];
       moved['TikTok Scans'] = (await up(TikTokShipmentScan, 'productSku'))[0];
       moved['Whatnot Scans'] = (await up(WhatnotShipmentScan, 'productSku'))[0];
-      moved['Walmart Mappings'] = (await up(WalmartProductMapping, 'localSku'))[0];
 
       // ProductFragranceNote: composite PK (productSku, noteId, tier)
       // Delete source rows that already exist on target (same noteId+tier) to avoid PK collision,

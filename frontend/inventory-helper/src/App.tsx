@@ -29,9 +29,6 @@ import LunchModeAdmin from "./pages/LunchModeAdmin";
 import LunchModeOverlay from "./components/LunchModeOverlay";
 import SortingAnalytics from "./pages/SortingAnalytics";
 import OperationsCost from "./pages/OperationsCost";
-import WalmartIntegration from "./pages/WalmartIntegration";
-import WalmartOrders from "./pages/WalmartOrders";
-import WalmartProductCatalog from "./pages/WalmartProductCatalog";
 import PriceList from "./pages/PriceList";
 import PriceScanner from "./pages/PriceScanner";
 import Users from "./pages/Users";
@@ -391,38 +388,6 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="operationsCost" action="view" menuItem="operationsCost">
                   <OperationsCost />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/walmart-product-catalog"
-              element={
-                <ProtectedRoute
-                  resource="walmartIntegration"
-                  action="view"
-                  menuItem="walmartIntegration"
-                >
-                  <WalmartProductCatalog />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/walmart-integration"
-              element={
-                <ProtectedRoute
-                  resource="walmartIntegration"
-                  action="view"
-                  menuItem="walmartIntegration"
-                >
-                  <WalmartIntegration />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/walmart-orders"
-              element={
-                <ProtectedRoute resource="walmartOrders" action="view" menuItem="walmartOrders">
-                  <WalmartOrders />
                 </ProtectedRoute>
               }
             />
