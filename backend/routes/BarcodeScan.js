@@ -41,6 +41,15 @@ const parseDateRange = (query) => {
   return { from, to };
 };
 
+// Live-show shipments imported more than this many days ago are not checked.
+const FULFILLMENT_CHECK_DAYS = 10;
+// Whatnot shipments are not checked for now (owner decision 2026-11-27).
+// Set this to true to check Whatnot shipments again.
+const CHECK_WHATNOT_FULFILLMENT = false;
+const NOT_FOUND_MESSAGE = CHECK_WHATNOT_FULFILLMENT
+  ? "Tracking not found in Whatnot or TikTok fulfillment."
+  : "Tracking not found in TikTok fulfillment.";
+
 const normalizeTracking = (value) => String(value || "").trim();
 
 const buildTrackingCandidates = (value) => {
@@ -115,24 +124,26 @@ const buildFulfillmentCheck = async (tracking) => {
       tracking: normalizedTracking,
       status: "not_found",
       alert: false,
-      message: "Tracking not found in Whatnot or TikTok fulfillment.",
+      message: NOT_FOUND_MESSAGE,
       sources: [],
     };
   }
 
-  // Only check imports created within the last 30 days — packages older than
-  // that will never be in-flight, and excluding stale imports prevents false
+  // Only check imports created within the last FULFILLMENT_CHECK_DAYS days — packages
+  // older than that will never be in-flight, and excluding stale imports prevents false
   // positives from abandoned/superseded CSV uploads.
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const cutoff = new Date(Date.now() - FULFILLMENT_CHECK_DAYS * 24 * 60 * 60 * 1000);
 
   let [whatnotRows, tiktokRows] = await Promise.all([
-    WhatnotShipmentItem.findAll({
-      where: { ...trackingWhere, createdAt: { [Op.gte]: thirtyDaysAgo } },
-      attributes: ["shipmentId", "tracking", "closedAt"],
-      raw: true,
-    }),
+    CHECK_WHATNOT_FULFILLMENT
+      ? WhatnotShipmentItem.findAll({
+          where: { ...trackingWhere, createdAt: { [Op.gte]: cutoff } },
+          attributes: ["shipmentId", "tracking", "closedAt"],
+          raw: true,
+        })
+      : Promise.resolve([]),
     TikTokShipmentItem.findAll({
-      where: { ...trackingWhere, createdAt: { [Op.gte]: thirtyDaysAgo } },
+      where: { ...trackingWhere, createdAt: { [Op.gte]: cutoff } },
       attributes: ["shipmentId", "tracking", "closedAt"],
       raw: true,
     }),
@@ -146,21 +157,27 @@ const buildFulfillmentCheck = async (tracking) => {
   if (whatnotRows.length === 0 && tiktokRows.length === 0) {
     const compact = normalizedTracking.replace(/\s+/g, "");
     if (compact.length > 12) {
-      const [[whatnotSuffix], [tiktokSuffix]] = await Promise.all([
-        sequelize.query(
-          `SELECT shipmentId, tracking, closedAt FROM ${TABLES.whatnotItems}
-           WHERE tracking IS NOT NULL AND tracking != '' AND createdAt >= :cutoff
-           AND LENGTH(tracking) BETWEEN 10 AND 18
-           AND :scanned LIKE CONCAT('%', tracking)`,
-          { replacements: { scanned: compact, cutoff: thirtyDaysAgo }, raw: true }
-        ),
-        sequelize.query(
-          `SELECT shipmentId, tracking, closedAt FROM ${TABLES.tiktokItems}
-           WHERE tracking IS NOT NULL AND tracking != '' AND createdAt >= :cutoff
-           AND LENGTH(tracking) BETWEEN 10 AND 18
-           AND :scanned LIKE CONCAT('%', tracking)`,
-          { replacements: { scanned: compact, cutoff: thirtyDaysAgo }, raw: true }
-        ),
+      const [whatnotSuffix, tiktokSuffix] = await Promise.all([
+        CHECK_WHATNOT_FULFILLMENT
+          ? sequelize
+              .query(
+                `SELECT shipmentId, tracking, closedAt FROM ${TABLES.whatnotItems}
+                 WHERE tracking IS NOT NULL AND tracking != '' AND createdAt >= :cutoff
+                 AND LENGTH(tracking) BETWEEN 10 AND 18
+                 AND :scanned LIKE CONCAT('%', tracking)`,
+                { replacements: { scanned: compact, cutoff }, raw: true }
+              )
+              .then(([rows]) => rows)
+          : Promise.resolve([]),
+        sequelize
+          .query(
+            `SELECT shipmentId, tracking, closedAt FROM ${TABLES.tiktokItems}
+             WHERE tracking IS NOT NULL AND tracking != '' AND createdAt >= :cutoff
+             AND LENGTH(tracking) BETWEEN 10 AND 18
+             AND :scanned LIKE CONCAT('%', tracking)`,
+            { replacements: { scanned: compact, cutoff }, raw: true }
+          )
+          .then(([rows]) => rows),
       ]);
       if (whatnotSuffix && whatnotSuffix.length > 0) whatnotRows = whatnotSuffix;
       if (tiktokSuffix && tiktokSuffix.length > 0) tiktokRows = tiktokSuffix;
@@ -177,7 +194,7 @@ const buildFulfillmentCheck = async (tracking) => {
       tracking: normalizedTracking,
       status: "not_found",
       alert: false,
-      message: "Tracking not found in Whatnot or TikTok fulfillment.",
+      message: NOT_FOUND_MESSAGE,
       sources: [],
     };
   }
