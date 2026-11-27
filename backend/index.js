@@ -159,9 +159,6 @@ app.use("/api/barcode-scan", barcodeScanRouter);
 const productVendorPricesRouter = require("./routes/ProductVendorPrices");
 app.use("/product-vendor-prices", productVendorPricesRouter);
 
-const ticketsRouter = require("./routes/Tickets");
-app.use("/tickets", ticketsRouter);
-
 const invoiceTrackerRouter = require("./routes/InvoiceTracker");
 app.use("/invoice-tracker", invoiceTrackerRouter);
 

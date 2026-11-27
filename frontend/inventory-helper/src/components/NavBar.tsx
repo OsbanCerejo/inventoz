@@ -89,7 +89,6 @@ function NavBar() {
 
   const toolsItems = [
     { key: 'customer-service-tool', permissionKey: 'customerService', label: 'Customer Service', path: '/customer-service' },
-    { key: 'tickets-tool', permissionKey: 'tickets', label: 'Tickets', path: '/tickets' },
     { key: 'invoice-tracker-tool', permissionKey: 'invoiceTracker', label: 'Invoice Tracker', path: '/invoice-tracker' },
     { key: 'sales-tool', permissionKey: 'sales', label: 'Sales Tracker', path: '/sales' },
     { key: 'price-scanner-tool', permissionKey: 'priceScanner', label: 'Price Scanner', path: '/price-scanner' },

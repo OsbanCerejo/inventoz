@@ -268,17 +268,6 @@ const MODULE_CONFIG: Record<string, ModuleConfig> = {
       delete: { label: 'Delete', description: 'Delete invoices' },
     },
   },
-  tickets: {
-    label: 'Reshipment Tickets',
-    resources: ['tickets'],
-    menuLabel: 'Show Reshipment Tickets in menu',
-    actions: {
-      view:   { label: 'View',   description: 'View reshipment tickets' },
-      create: { label: 'Create', description: 'Open new reshipment tickets' },
-      edit:   { label: 'Edit',   description: 'Update ticket details' },
-      delete: { label: 'Delete', description: 'Delete tickets' },
-    },
-  },
   customerService: {
     label: 'Customer Service',
     resources: ['customerService'],

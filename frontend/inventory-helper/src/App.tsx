@@ -38,7 +38,6 @@ import Users from "./pages/Users";
 import BarcodeScan from "./pages/BarcodeScan";
 import PackingAnalytics from "./pages/PackingAnalytics";
 import LabelGenerator from "./pages/LabelGenerator";
-import Tickets from "./pages/Tickets";
 import CustomerService from "./pages/CustomerService";
 import InvoiceTracker from "./pages/InvoiceTracker";
 import Login from "./pages/Login";
@@ -512,14 +511,6 @@ function AppContent() {
               element={
                 <ProtectedRoute resource="labelGenerator" action="view" menuItem="labelGenerator">
                   <LabelGenerator />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/tickets"
-              element={
-                <ProtectedRoute resource="tickets" action="view" menuItem="tickets">
-                  <Tickets />
                 </ProtectedRoute>
               }
             />

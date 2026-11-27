@@ -14,7 +14,6 @@ import {
   QueryStats as PackingAnalyticsIcon,
   WarningAmber as LowStockIcon,
   PointOfSale as SalesIcon,
-  ConfirmationNumber as TicketsIcon,
   ReceiptLong as InvoiceTrackerIcon,
   Storefront as WalmartIcon,
   BrandingWatermark as BrandsIcon,
@@ -146,13 +145,6 @@ function Home() {
       path: "/low-stock",
       color: "#fff3e0"
     },
-    tickets: {
-      title: "Tickets",
-      description: "Customer care reshipment ticket workflow",
-      icon: <TicketsIcon sx={{ fontSize: 40, color: '#c62828' }} />,
-      path: "/tickets",
-      color: "#ffebee"
-    },
     invoiceTracker: {
       title: "Invoice Tracker",
       description: "Track vendor invoices and received shipment lines",
@@ -202,7 +194,6 @@ function Home() {
     "walmartProductCatalog",
     "walmartIntegration",
     "walmartOrders",
-    "tickets",
     "whatnotFulfillment",
     "pricelist",
     "priceScanner",

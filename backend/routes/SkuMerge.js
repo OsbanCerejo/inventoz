@@ -3,7 +3,7 @@ const router = express.Router();
 const { sequelize, Products, ProductDetails, Sales, MarketplaceSale, SkuSalesSummary, Inbound,
   InvoiceTrackerInboundRow, InvoiceTrackerInvoiceItem, InvoiceShipmentItem,
   ProductVendorPrice, EbayOrders, WhatnotLog, StockUpdateHistory,
-  HbaOrderItem, HbaTrackingEvent, ReshipmentTicketItem, SalesOrderItem,
+  HbaOrderItem, HbaTrackingEvent, SalesOrderItem,
   Listings, ProductFragranceNote, TikTokShipmentScan, WhatnotShipmentScan,
   WalmartProductMapping,
 } = require('../models');
@@ -23,14 +23,14 @@ async function buildCounts(sku) {
     sales, marketplaceSales, skuSalesSummary, inbound,
     invoiceInboundRows, invoiceItems, invoiceShipmentItems,
     vendorPrices, ebayOrders, whatnotLogs, stockHistory,
-    hbaOrderItems, hbaTrackingEvents, reshipmentItems, salesOrderItems,
+    hbaOrderItems, hbaTrackingEvents, salesOrderItems,
     listings, fragranceNotes, tiktokScans, whatnotScans, walmartMappings,
     productDetails,
   ] = await Promise.all([
     q(Sales, 'sku'), q(MarketplaceSale, 'sku'), q(SkuSalesSummary, 'sku'), q(Inbound, 'sku'),
     q(InvoiceTrackerInboundRow, 'sku'), q(InvoiceTrackerInvoiceItem, 'sku'), q(InvoiceShipmentItem, 'sku'),
     q(ProductVendorPrice, 'sku'), q(EbayOrders, 'sku'), q(WhatnotLog, 'sku'), q(StockUpdateHistory, 'sku'),
-    q(HbaOrderItem, 'sku'), q(HbaTrackingEvent, 'sku'), q(ReshipmentTicketItem, 'sku'), q(SalesOrderItem, 'sku'),
+    q(HbaOrderItem, 'sku'), q(HbaTrackingEvent, 'sku'), q(SalesOrderItem, 'sku'),
     q(Listings, 'sku'), q(ProductFragranceNote, 'productSku'), q(TikTokShipmentScan, 'productSku'),
     q(WhatnotShipmentScan, 'productSku'), q(WalmartProductMapping, 'localSku'),
     q(ProductDetails, 'sku'),
@@ -50,7 +50,6 @@ async function buildCounts(sku) {
     'Stock History': stockHistory,
     'HBA Order Items': hbaOrderItems,
     'HBA Tracking Events': hbaTrackingEvents,
-    'Reshipment Items': reshipmentItems,
     'Sales Order Items': salesOrderItems,
     'Listings': listings,
     'Fragrance Notes': fragranceNotes,
@@ -120,7 +119,6 @@ router.post('/', auth, adminOnly, async (req, res) => {
       moved['Stock History'] = (await up(StockUpdateHistory, 'sku'))[0];
       moved['HBA Order Items'] = (await up(HbaOrderItem, 'sku'))[0];
       moved['HBA Tracking Events'] = (await up(HbaTrackingEvent, 'sku'))[0];
-      moved['Reshipment Items'] = (await up(ReshipmentTicketItem, 'sku'))[0];
       moved['Sales Order Items'] = (await up(SalesOrderItem, 'sku'))[0];
       moved['TikTok Scans'] = (await up(TikTokShipmentScan, 'productSku'))[0];
       moved['Whatnot Scans'] = (await up(WhatnotShipmentScan, 'productSku'))[0];
